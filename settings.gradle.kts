@@ -36,13 +36,15 @@ include(":taglib")
 //}
 
 
-includeBuild(file("media").toPath().toRealPath().toAbsolutePath().toString()) {
-    dependencySubstitution {
-        substitute(module("androidx.media3:media3-common")).using(project(":lib-common"))
-        substitute(module("androidx.media3:media3-common-ktx")).using(project(":lib-common-ktx"))
-        substitute(module("androidx.media3:media3-datasource-okhttp")).using(project(":lib-datasource-okhttp"))
-        substitute(module("androidx.media3:media3-exoplayer")).using(project(":lib-exoplayer"))
-        substitute(module("androidx.media3:media3-exoplayer-workmanager")).using(project(":lib-exoplayer-workmanager"))
-        substitute(module("androidx.media3:media3-session")).using(project(":lib-session"))
+if (providers.gradleProperty("useLocalMedia3").orNull == "true") {
+    includeBuild(file("media").toPath().toRealPath().toAbsolutePath().toString()) {
+        dependencySubstitution {
+            substitute(module("androidx.media3:media3-common")).using(project(":lib-common"))
+            substitute(module("androidx.media3:media3-common-ktx")).using(project(":lib-common-ktx"))
+            substitute(module("androidx.media3:media3-datasource-okhttp")).using(project(":lib-datasource-okhttp"))
+            substitute(module("androidx.media3:media3-exoplayer")).using(project(":lib-exoplayer"))
+            substitute(module("androidx.media3:media3-exoplayer-workmanager")).using(project(":lib-exoplayer-workmanager"))
+            substitute(module("androidx.media3:media3-session")).using(project(":lib-session"))
+        }
     }
 }

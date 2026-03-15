@@ -165,7 +165,7 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
 
     @Transaction
     fun insert(mediaMetadata: MediaMetadata, block: (SongEntity) -> SongEntity = { it }) {
-        if (insert(mediaMetadata.toSongEntity().let(block)) == -1L) return
+        insert(mediaMetadata.toSongEntity().let(block))
         mediaMetadata.artists.forEachIndexed { index, artist ->
             val artistId = artist.id ?: artistByName(artist.name)?.id ?: ArtistEntity.generateArtistId()
             insert( // TODO: use upsert???

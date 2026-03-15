@@ -12,6 +12,8 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.LibraryAdd
+import androidx.compose.material.icons.rounded.LibraryAddCheck
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Radio
@@ -61,6 +63,7 @@ import com.dd3boh.outertune.utils.syncCoroutine
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.SongItem
 import kotlinx.coroutines.launch
+import java.time.LocalDateTime
 
 @Composable
 fun YouTubeSongMenu(
@@ -205,6 +208,36 @@ fun YouTubeSongMenu(
                 )
             }
         )
+        if (librarySong?.song?.inLibrary != null) {
+            GridMenuItem(
+                icon = Icons.Rounded.LibraryAddCheck,
+                title = R.string.remove_from_library
+            ) {
+                database.transaction {
+                    librarySong?.song?.let { s ->
+                        val updated = s.toggleLibrary()
+                        update(updated)
+                        syncUtils.changeInLibrary(updated)
+                    }
+                }
+            }
+        } else {
+            GridMenuItem(
+                icon = Icons.Rounded.LibraryAdd,
+                title = R.string.add_to_library
+            ) {
+                database.transaction {
+                    val updated = if (librarySong == null) {
+                        insert(song.toMediaMetadata())
+                        song.toMediaMetadata().toSongEntity().copy(inLibrary = LocalDateTime.now())
+                    } else {
+                        librarySong!!.song.toggleLibrary()
+                    }
+                    update(updated)
+                    syncUtils.changeInLibrary(updated)
+                }
+            }
+        }
         if (artists.isNotEmpty()) {
             GridMenuItem(
                 icon = Icons.Rounded.Person,

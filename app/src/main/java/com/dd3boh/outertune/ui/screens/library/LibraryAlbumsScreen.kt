@@ -96,7 +96,7 @@ fun LibraryAlbumsScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    var filter by rememberEnumPreference(AlbumFilterKey, AlbumFilter.LIKED)
+    var filter by rememberEnumPreference(AlbumFilterKey, AlbumFilter.LIBRARY)
     var albumViewType by rememberEnumPreference(AlbumViewTypeKey, LibraryViewType.GRID)
     val libraryViewType by rememberEnumPreference(LibraryViewTypeKey, LibraryViewType.GRID)
     val viewType = if (libraryFilterContent != null) libraryViewType else albumViewType
@@ -113,6 +113,12 @@ fun LibraryAlbumsScreen(
     val lazyGridState = rememberLazyGridState()
 
     LaunchedEffect(Unit) { viewModel.syncAlbums() }
+
+    LaunchedEffect(libraryFilterContent) {
+        if (libraryFilterContent != null && filter == AlbumFilter.LIKED) {
+            filter = AlbumFilter.LIBRARY
+        }
+    }
 
     val filterContent = @Composable {
         var showStoragePerm by remember {

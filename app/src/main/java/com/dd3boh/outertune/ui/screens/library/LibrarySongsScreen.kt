@@ -105,7 +105,7 @@ fun LibrarySongsScreen(
     val playerConnection = LocalPlayerConnection.current ?: return
     val snackbarHostState = LocalSnackbarHostState.current
 
-    var filter by rememberEnumPreference(SongFilterKey, SongFilter.LIKED)
+    var filter by rememberEnumPreference(SongFilterKey, SongFilter.LIBRARY)
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
     val (sortType, onSortTypeChange) = rememberEnumPreference(SongSortTypeKey, SongSortType.CREATE_DATE)
     val (sortDescending, onSortDescendingChange) = rememberPreference(SongSortDescendingKey, true)
@@ -149,6 +149,12 @@ fun LibrarySongsScreen(
             SongFilter.LIKED -> viewModel.syncLikedSongs()
             SongFilter.LIBRARY -> viewModel.syncLibrarySongs()
             else -> return@LaunchedEffect
+        }
+    }
+
+    LaunchedEffect(libraryFilterContent) {
+        if (libraryFilterContent != null && filter == SongFilter.LIKED) {
+            filter = SongFilter.LIBRARY
         }
     }
 

@@ -150,7 +150,8 @@ class SyncUtils @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     fun changeInLibrary(s: SongEntity) {
         scope.launch {
-            // we don't have an api call yet
+            // OuterTune has no stable endpoint for syncing per-song library membership to YTM yet.
+            Log.d(TAG, "changeInLibrary: local-only for now, songId=${s.id}, inLibrary=${s.inLibrary != null}")
         }
     }
 

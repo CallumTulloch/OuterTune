@@ -92,7 +92,7 @@ fun LibraryArtistsScreen(
     val menuState = LocalMenuState.current
     val coroutineScope = rememberCoroutineScope()
 
-    var filter by rememberEnumPreference(ArtistFilterKey, ArtistFilter.LIKED)
+    var filter by rememberEnumPreference(ArtistFilterKey, ArtistFilter.LIBRARY)
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
 
     var artistViewType by rememberEnumPreference(ArtistViewTypeKey, LibraryViewType.GRID)
@@ -110,6 +110,12 @@ fun LibraryArtistsScreen(
     val lazyGridState = rememberLazyGridState()
 
     LaunchedEffect(Unit) { viewModel.syncArtists() }
+
+    LaunchedEffect(libraryFilterContent) {
+        if (libraryFilterContent != null && filter == ArtistFilter.LIKED) {
+            filter = ArtistFilter.LIBRARY
+        }
+    }
 
     val filterContent = @Composable {
         var showStoragePerm by remember {

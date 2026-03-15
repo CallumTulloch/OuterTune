@@ -99,7 +99,7 @@ class LibrarySongsViewModel @Inject constructor(
         return context.dataStore.data
             .map {
                 Triple(
-                    it[SongFilterKey].toEnum(SongFilter.LIKED),
+                    it[SongFilterKey].toEnum(SongFilter.LIBRARY),
                     it[SongSortTypeKey].toEnum(SongSortType.CREATE_DATE),
                     (it[SongSortDescendingKey] != false)
                 )
@@ -174,11 +174,11 @@ class LibraryArtistsViewModel @Inject constructor(
 
     val allArtists = context.dataStore.data
         .map {
-            Triple(
-                it[ArtistFilterKey].toEnum(ArtistFilter.LIKED),
-                it[ArtistSortTypeKey].toEnum(ArtistSortType.CREATE_DATE),
-                it[ArtistSortDescendingKey] ?: true
-            )
+                Triple(
+                    it[ArtistFilterKey].toEnum(ArtistFilter.LIBRARY),
+                    it[ArtistSortTypeKey].toEnum(ArtistSortType.CREATE_DATE),
+                    it[ArtistSortDescendingKey] ?: true
+                )
         }
         .distinctUntilChanged()
         .flatMapLatest { (filter, sortType, descending) ->
@@ -223,11 +223,11 @@ class LibraryAlbumsViewModel @Inject constructor(
 
     val allAlbums = context.dataStore.data
         .map {
-            Triple(
-                it[AlbumFilterKey].toEnum(AlbumFilter.LIKED),
-                it[AlbumSortTypeKey].toEnum(AlbumSortType.CREATE_DATE),
-                it[AlbumSortDescendingKey] ?: true
-            )
+                Triple(
+                    it[AlbumFilterKey].toEnum(AlbumFilter.LIBRARY),
+                    it[AlbumSortTypeKey].toEnum(AlbumSortType.CREATE_DATE),
+                    it[AlbumSortDescendingKey] ?: true
+                )
         }
         .distinctUntilChanged()
         .flatMapLatest { (filter, sortType, descending) ->
@@ -305,8 +305,8 @@ class LibraryViewModel @Inject constructor(
     val isSyncingRemoteArtists = syncUtils.isSyncingRemoteArtists
     val isSyncingRemotePlaylists = syncUtils.isSyncingRemotePlaylists
 
-    var artists = database.artistsBookmarkedAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    var albums = database.albumsLikedAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    var artists = database.artistsInLibraryAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    var albums = database.albumsInLibraryAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     var playlists = database.playlistInLibraryAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val allItems = context.dataStore.data

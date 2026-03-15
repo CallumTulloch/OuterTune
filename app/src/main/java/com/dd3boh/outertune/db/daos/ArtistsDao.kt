@@ -169,9 +169,12 @@ interface ArtistsDao {
         """)
 
         return _getArtists(query).map { artists ->
-            artists
-                .filter { it.artist.isYouTubeArtist || it.artist.isLocal } // TODO: add ui to filter by local or remote or something idk
-                .reversed(descending)
+            val filtered = if (filter == ArtistFilter.LIBRARY) {
+                artists
+            } else {
+                artists.filter { it.artist.isYouTubeArtist || it.artist.isLocal } // TODO: add ui to filter by local or remote or something idk
+            }
+            filtered.reversed(descending)
         }
     }
 
