@@ -126,6 +126,7 @@ import com.dd3boh.outertune.constants.PureBlackKey
 import com.dd3boh.outertune.constants.SlimNavBarKey
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.extensions.tabMode
+import com.dd3boh.outertune.extensions.isInternetConnected
 import com.dd3boh.outertune.playback.DownloadUtil
 import com.dd3boh.outertune.playback.MediaControllerViewModel
 import com.dd3boh.outertune.playback.MusicService
@@ -310,7 +311,9 @@ class MainActivity : ComponentActivity() {
                 // lol
             }
             connectivityObserver = NetworkConnectivityObserver(this@MainActivity)
-            val isNetworkConnected by connectivityObserver.networkStatus.collectAsState(true)
+            val isNetworkConnected by connectivityObserver.networkStatus.collectAsState(
+                this@MainActivity.isInternetConnected()
+            )
 
 
             OuterTuneTheme(

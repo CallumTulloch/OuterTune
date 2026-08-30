@@ -72,6 +72,7 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.dd3boh.outertune.LocalDatabase
 import com.dd3boh.outertune.LocalMenuState
+import com.dd3boh.outertune.LocalNetworkConnected
 import com.dd3boh.outertune.LocalPlayerAwareWindowInsets
 import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.LocalSnackbarHostState
@@ -127,6 +128,7 @@ fun ArtistScreen(
     val menuState = LocalMenuState.current
     val coroutineScope = rememberCoroutineScope()
     val playerConnection = LocalPlayerConnection.current ?: return
+    val isNetworkConnected = LocalNetworkConnected.current
 
     val swipeEnabled by rememberPreference(SwipeToQueueKey, true)
 
@@ -149,9 +151,12 @@ fun ArtistScreen(
         }
     }
 
-    LaunchedEffect(libraryArtist) {
-        // always show local page for local artists. Show local page remote artist when offline
-        showLocal = libraryArtist?.artist?.isLocal == true
+    LaunchedEffect(libraryArtist, isNetworkConnected) {
+        // Local artists and offline sessions can only use the local page. Do not reset a
+        // user's explicit local selection when the library artist arrives asynchronously.
+        if (!isNetworkConnected || libraryArtist?.artist?.isLocal == true) {
+            showLocal = true
+        }
     }
 
     val artistHead = @Composable {
@@ -543,7 +548,7 @@ fun ArtistScreen(
         )
 
         HideOnScrollFAB(
-            visible = librarySongs.isNotEmpty() && libraryArtist?.artist?.isLocal != true,
+            visible = isNetworkConnected && librarySongs.isNotEmpty() && libraryArtist?.artist?.isLocal != true,
             lazyListState = lazyListState,
             icon = if (showLocal) Icons.Rounded.LibraryMusic else Icons.Rounded.Language,
             onClick = {
