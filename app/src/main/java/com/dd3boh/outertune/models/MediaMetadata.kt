@@ -103,7 +103,10 @@ data class MediaMetadata(
         return if (isLocal) {
             LocalArtworkPath(thumbnailUrl ?: localPath, sizeX, sizeY)
         } else {
-            thumbnailUrl
+            thumbnailUrl?.resize(
+                width = sizeX.takeIf { it > 0 },
+                height = sizeY.takeIf { it > 0 }
+            )
         }
     }
 }

@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import coil3.compose.AsyncImage
@@ -55,6 +56,7 @@ fun Thumbnail(
     customMediaMetadata: MediaMetadata? = null
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val currentView = LocalView.current
     val haptic = LocalHapticFeedback.current
     val playerConnection = LocalPlayerConnection.current ?: return
@@ -93,8 +95,11 @@ fun Thumbnail(
                     modifier = Modifier
                         .weight(1f, false)
                 ) {
+                    val thumbnailSize = with(density) {
+                        minOf(maxWidth, maxHeight).roundToPx()
+                    }
                     AsyncImage(
-                        model = mediaMetadata?.getThumbnailModel(),
+                        model = mediaMetadata?.getThumbnailModel(thumbnailSize, thumbnailSize),
                         contentDescription = null,
                         modifier = Modifier
                             .aspectRatio(1f)
