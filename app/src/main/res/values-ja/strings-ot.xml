@@ -254,4 +254,7 @@
     <string name="oobe_welcome_tip">快適に使用するには、テーマ、YouTubeアカウント、端末内メディア、ダウンロードなど自分向けにするための主な設定を簡単に設定することをお勧めします。</string>
     <string name="oobe_cache_subtitle">曲のキャッシュのサイズを選択。ネット接続やYouTube APIの再生に関する問題を軽減します</string>
     <string name="library_filter">ライブラリを絞り込み</string>
+    <string name="lyrics_timing">歌詞のタイミング調整</string>
+    <string name="lyrics_timing_earlier">早める</string>
+    <string name="lyrics_timing_later">遅らせる</string>
 </resources>

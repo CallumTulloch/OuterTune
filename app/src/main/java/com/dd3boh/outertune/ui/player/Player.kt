@@ -64,6 +64,8 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.SyncAlt
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -71,6 +73,7 @@ import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -97,6 +100,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -114,6 +118,7 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
 import com.dd3boh.outertune.LocalMenuState
+import com.dd3boh.outertune.LocalDatabase
 import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.DEFAULT_PLAYER_BACKGROUND
@@ -153,6 +158,7 @@ import com.dd3boh.outertune.utils.rememberPreference
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import kotlin.math.max
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
@@ -553,10 +559,28 @@ fun ActionButtons(
 
     val playerConnection = LocalPlayerConnection.current ?: return
     val menuState = LocalMenuState.current
+    val database = LocalDatabase.current
 
 
     val currentSong by playerConnection.currentSong.collectAsState(initial = null)
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+    val showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
+    var showLyricsTimingMenu by rememberSaveable(mediaMetadata?.id) { mutableStateOf(false) }
+    var displayedLyricsOffset by remember(mediaMetadata?.id) {
+        mutableLongStateOf(currentSong?.song?.lyricsOffsetMs ?: 0L)
+    }
+
+    LaunchedEffect(currentSong?.song?.lyricsOffsetMs) {
+        displayedLyricsOffset = currentSong?.song?.lyricsOffsetMs ?: 0L
+    }
+
+    fun setLyricsOffset(offsetMs: Long) {
+        val songId = mediaMetadata?.id ?: return
+        displayedLyricsOffset = offsetMs.coerceIn(-30_000L, 30_000L)
+        database.query {
+            updateLyricsOffset(songId, displayedLyricsOffset)
+        }
+    }
 
     Spacer(modifier = Modifier.width(10.dp))
 
@@ -575,6 +599,64 @@ fun ActionButtons(
                 .size(24.dp),
             onClick = playerConnection::toggleLike
         )
+    }
+
+    if (showLyrics) {
+        Spacer(modifier = Modifier.width(7.dp))
+
+        Box(
+            modifier = Modifier
+                .offset(y = 5.dp)
+                .size(36.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        ) {
+            ResizableIconButton(
+                icon = Icons.Rounded.SyncAlt,
+                color = MaterialTheme.colorScheme.onPrimary,
+                enabled = currentSong != null,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(24.dp),
+                onClick = { showLyricsTimingMenu = true }
+            )
+            DropdownMenu(
+                expanded = showLyricsTimingMenu,
+                onDismissRequest = { showLyricsTimingMenu = false },
+            ) {
+                Text(
+                    text = stringResource(R.string.lyrics_timing),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
+                    TextButton(onClick = { setLyricsOffset(displayedLyricsOffset - 500L) }) {
+                        Text(stringResource(R.string.lyrics_timing_earlier))
+                    }
+                    Text(
+                        text = String.format(
+                            Locale.getDefault(),
+                            "%+.1f s",
+                            displayedLyricsOffset / 1000.0
+                        ),
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    TextButton(onClick = { setLyricsOffset(displayedLyricsOffset + 500L) }) {
+                        Text(stringResource(R.string.lyrics_timing_later))
+                    }
+                }
+                TextButton(
+                    onClick = { setLyricsOffset(0L) },
+                    enabled = displayedLyricsOffset != 0L,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(stringResource(R.string.reset))
+                }
+            }
+        }
     }
 
     Spacer(modifier = Modifier.width(7.dp))

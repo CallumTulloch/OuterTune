@@ -68,7 +68,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 20
+        const val MUSIC_DATABASE_VERSION = 21
     }
 }
 
@@ -134,6 +134,7 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_14_15)
                     .addMigrations(MIGRATION_15_16)
                     .addMigrations(MIGRATION_16_17)
+                    .addMigrations(MIGRATION_20_21)
                     .build()
             )
 
@@ -145,6 +146,7 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_14_15)
                     .addMigrations(MIGRATION_15_16)
                     .addMigrations(MIGRATION_16_17)
+                    .addMigrations(MIGRATION_20_21)
                     .build()
             )
     }
@@ -479,6 +481,15 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
                 )
             )
         }
+    }
+}
+
+/**
+ * Store a per-song correction for synced lyric timestamps.
+ */
+val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `song` ADD COLUMN `lyricsOffsetMs` INTEGER NOT NULL DEFAULT 0")
     }
 }
 

@@ -131,6 +131,8 @@ fun Lyrics(
     var lyricRefreshRate = lyricsUpdateSpeed.toLrcRefreshMillis()
 
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+    val currentSong by playerConnection.currentSong.collectAsState(initial = null)
+    val lyricsOffsetMs = currentSong?.song?.lyricsOffsetMs ?: 0L
 
     // NOTE: lyricsModel is the current display lyrics that is updated by playerLyrics AND/OR manually
     val playerLyrics by playerConnection.currentLyrics.collectAsState(initial = null)
@@ -190,19 +192,29 @@ fun Lyrics(
     }
     var currentPos by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(lyricsModel) {
+    LaunchedEffect(lyricsModel, lyricsOffsetMs) {
         if (lyricsModel == null || !isSynced || (lyricsModel as SemanticLyrics.SyncedLyrics).text.isEmpty()) {
             currentLineIndex = -1
             return@LaunchedEffect
         }
+
+        fun updateCurrentLyricPosition(playbackPosition: Long) {
+            // A positive offset delays the lyrics; a negative offset advances them.
+            val lyricPosition = (playbackPosition - lyricsOffsetMs).coerceAtLeast(0L)
+            currentLineIndex = findCurrentLineIndex(lines, lyricPosition)
+            currentPos = lyricPosition
+        }
+
+        sliderPositionProvider()?.let(::updateCurrentLyricPosition)
+            ?: updateCurrentLyricPosition(playerConnection.player.currentPosition)
+
         while (isActive) {
             // TODO: likely can improve power usage by disabling lyric refresh
             delay(lyricRefreshRate)
             if (!playerConnection.isPlaying.value) continue
             val sliderPosition = sliderPositionProvider()
             isSeeking = sliderPosition != null
-            currentLineIndex = findCurrentLineIndex(lines, sliderPosition ?: playerConnection.player.currentPosition)
-            currentPos = sliderPosition ?: playerConnection.player.currentPosition
+            updateCurrentLyricPosition(sliderPosition ?: playerConnection.player.currentPosition)
         }
     }
 
@@ -333,7 +345,9 @@ fun Lyrics(
                             )
                             // we allow clicking on blank lyrics, ignore item.isClickable
                             .clickable(enabled = isSynced && lyricsClickable) {
-                                playerConnection.player.seekTo(item.start.toLong())
+                                playerConnection.player.seekTo(
+                                    (item.start.toLong() + lyricsOffsetMs).coerceAtLeast(0L)
+                                )
                                 currentLineIndex = index
                                 currentPos = item.start.toLong()
                                 lastPreviewTime = 0L

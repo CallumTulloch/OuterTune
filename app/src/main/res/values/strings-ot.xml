@@ -360,4 +360,7 @@ while also allowing users to translate our app as well. New, specific strings to
     <string name="speed_medium">Medium</string>
     <string name="speed_fast">Fast</string>
     <string name="speed_very_fast">Very fast</string>
+    <string name="lyrics_timing">Lyrics timing</string>
+    <string name="lyrics_timing_earlier">Earlier</string>
+    <string name="lyrics_timing_later">Later</string>
 </resources>
