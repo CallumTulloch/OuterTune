@@ -85,8 +85,8 @@ import androidx.navigation.NavController
 import com.dd3boh.outertune.LocalDatabase
 import com.dd3boh.outertune.LocalDownloadUtil
 import com.dd3boh.outertune.LocalPlayerConnection
+import com.dd3boh.outertune.LocalShowLyrics
 import com.dd3boh.outertune.R
-import com.dd3boh.outertune.constants.ShowLyricsKey
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.YouTubeQueue
@@ -129,7 +129,7 @@ fun PlayerMenu(
     val downloadUtil = LocalDownloadUtil.current
     val clipboardManager = LocalClipboard.current
 
-    var showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
+    var showLyrics by LocalShowLyrics.current
 
     val playerConnection = LocalPlayerConnection.current ?: return
     val playerVolume = playerConnection.service.playerVolume.collectAsState()

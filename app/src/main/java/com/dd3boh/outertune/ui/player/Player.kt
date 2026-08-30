@@ -120,6 +120,7 @@ import coil3.toBitmap
 import com.dd3boh.outertune.LocalMenuState
 import com.dd3boh.outertune.LocalDatabase
 import com.dd3boh.outertune.LocalPlayerConnection
+import com.dd3boh.outertune.LocalShowLyrics
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.DEFAULT_PLAYER_BACKGROUND
 import com.dd3boh.outertune.constants.DarkMode
@@ -130,7 +131,6 @@ import com.dd3boh.outertune.constants.PlayerHorizontalPadding
 import com.dd3boh.outertune.constants.QueuePeekHeight
 import com.dd3boh.outertune.constants.SeekIncrement
 import com.dd3boh.outertune.constants.SeekIncrementKey
-import com.dd3boh.outertune.constants.ShowLyricsKey
 import com.dd3boh.outertune.constants.SwipeToSkipKey
 import com.dd3boh.outertune.extensions.isPowerSaver
 import com.dd3boh.outertune.extensions.metadata
@@ -187,7 +187,7 @@ fun BottomSheetPlayer(
         if (darkTheme == DarkMode.AUTO) isSystemInDarkTheme else darkTheme == DarkMode.ON
     }
 
-    val showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
+    val showLyrics by LocalShowLyrics.current
 
     val qbInit by playerConnection.service.qbInit.collectAsState()
 
@@ -415,7 +415,7 @@ fun LandscapePlayer(
     val currentMediaIndex = mediaItems.indexOf(mediaMetadata)
 
 
-    val showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
+    val showLyrics by LocalShowLyrics.current
 
     var sliderPosition by remember {
         mutableStateOf<Long?>(null)
@@ -564,7 +564,7 @@ fun ActionButtons(
 
     val currentSong by playerConnection.currentSong.collectAsState(initial = null)
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
-    val showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
+    val showLyrics by LocalShowLyrics.current
     var showLyricsTimingMenu by rememberSaveable(mediaMetadata?.id) { mutableStateOf(false) }
     var displayedLyricsOffset by remember(mediaMetadata?.id) {
         mutableLongStateOf(currentSong?.song?.lyricsOffsetMs ?: 0L)
@@ -723,7 +723,7 @@ fun ControlsContent(
         defaultValue = SeekIncrement.OFF
     )
 
-    val showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
+    val showLyrics by LocalShowLyrics.current
 
     val darkTheme by rememberEnumPreference(DarkModeKey, defaultValue = DarkMode.AUTO)
     val isSystemInDarkTheme = isSystemInDarkTheme()

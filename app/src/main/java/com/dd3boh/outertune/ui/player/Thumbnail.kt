@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -40,12 +41,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import coil3.compose.AsyncImage
 import com.dd3boh.outertune.LocalPlayerConnection
+import com.dd3boh.outertune.LocalShowLyrics
 import com.dd3boh.outertune.constants.PlayerHorizontalPadding
-import com.dd3boh.outertune.constants.ShowLyricsKey
 import com.dd3boh.outertune.constants.ThumbnailCornerRadius
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.ui.component.Lyrics
-import com.dd3boh.outertune.utils.rememberPreference
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
@@ -61,7 +61,7 @@ fun Thumbnail(
     val haptic = LocalHapticFeedback.current
     val playerConnection = LocalPlayerConnection.current ?: return
 
-    var showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
+    var showLyrics by LocalShowLyrics.current
 
     val playerMediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val error by playerConnection.error.collectAsState()
@@ -98,9 +98,25 @@ fun Thumbnail(
                     val thumbnailSize = with(density) {
                         minOf(maxWidth, maxHeight).roundToPx()
                     }
+                    val resizedThumbnail = mediaMetadata?.getThumbnailModel(thumbnailSize, thumbnailSize)
+                    val originalThumbnail = mediaMetadata?.getThumbnailModel()
+                    var useOriginalThumbnail by remember(
+                        mediaMetadata?.id,
+                        mediaMetadata?.thumbnailUrl,
+                        thumbnailSize
+                    ) {
+                        mutableStateOf(false)
+                    }
                     AsyncImage(
-                        model = mediaMetadata?.getThumbnailModel(thumbnailSize, thumbnailSize),
+                        model = if (useOriginalThumbnail) originalThumbnail else resizedThumbnail,
                         contentDescription = null,
+                        onError = {
+                            // Some older videos do not have maxresdefault. Retry the stored
+                            // thumbnail instead of leaving the player artwork empty.
+                            if (!useOriginalThumbnail && resizedThumbnail != originalThumbnail) {
+                                useOriginalThumbnail = true
+                            }
+                        },
                         modifier = Modifier
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(ThumbnailCornerRadius * 2))

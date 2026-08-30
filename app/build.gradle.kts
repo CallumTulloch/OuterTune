@@ -261,6 +261,8 @@ dependencies {
     // misc
     implementation(libs.aboutlibraries.compose.m3)
 
+    testImplementation(libs.junit)
+
     // sdk24 support
     // Support for N is officially unsupported even it the app should still work. Leave this outside of the version catalog.
     implementation("androidx.webkit:webkit:1.14.0")
