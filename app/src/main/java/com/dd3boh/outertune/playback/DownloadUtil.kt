@@ -64,6 +64,7 @@ import java.io.IOException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -80,7 +81,7 @@ class DownloadUtil @Inject constructor(
 
     private val connectivityManager = context.getSystemService<ConnectivityManager>()!!
     private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
-    private val songUrlCache = HashMap<String, Pair<String, Long>>()
+    private val songUrlCache = ConcurrentHashMap<String, Pair<String, Long>>()
     private val dataSourceFactory = ResolvingDataSource.Factory(
         CacheDataSource.Factory()
             .setCache(playerCache)
@@ -102,38 +103,8 @@ class DownloadUtil @Inject constructor(
             return@Factory dataSpec.withUri(it.first.toUri())
         }
 
-        val playbackData = runBlocking(Dispatchers.IO) {
-            YTPlayerUtils.playerResponseForPlayback(
-                mediaId,
-                audioQuality = audioQuality,
-                connectivityManager = connectivityManager,
-            )
-        }.getOrThrow()
-        val format = playbackData.format
-
-        database.query {
-            upsert(
-                FormatEntity(
-                    id = mediaId,
-                    itag = format.itag,
-                    mimeType = format.mimeType.split(";")[0],
-                    codecs = format.mimeType.split("codecs=")[1].removeSurrounding("\""),
-                    bitrate = format.bitrate,
-                    sampleRate = format.audioSampleRate,
-                    contentLength = format.contentLength!!,
-                    loudnessDb = playbackData.audioConfig?.loudnessDb,
-                    playbackTrackingUrl = playbackData.playbackTracking?.videostatsPlaybackUrl?.baseUrl
-                )
-            )
-        }
-
-        val streamUrl = playbackData.streamUrl.let {
-            // Specify range to avoid YouTube's throttling
-            "${it}&range=0-${format.contentLength ?: 10000000}"
-        }
-
-        songUrlCache[mediaId] = streamUrl to System.currentTimeMillis() + (playbackData.streamExpiresInSeconds * 1000L)
-        dataSpec.withUri(streamUrl.toUri())
+        val playbackData = resolvePlaybackData(mediaId)
+        dataSpec.withUri(playbackData.streamUrl.toUri())
     }
     val downloadNotificationHelper = DownloadNotificationHelper(context, ExoDownloadService.CHANNEL_ID)
     val downloadManager: DownloadManager =
@@ -173,16 +144,60 @@ class DownloadUtil @Inject constructor(
 
     private fun downloadSong(id: String, title: String) {
         if (downloads.value[id] != null) return
-        val downloadRequest = DownloadRequest.Builder(id, id.toUri())
-            .setCustomCacheKey(id)
-            .setData(title.toByteArray())
-            .build()
-        DownloadService.sendAddDownload(
-            context,
-            ExoDownloadService::class.java,
-            downloadRequest,
-            false
-        )
+        CoroutineScope(dlCoroutine).launch {
+            runCatching {
+                val playbackData = resolvePlaybackData(id)
+                val contentLength = playbackData.format.contentLength
+                    ?: error("Missing content length for $id")
+                val downloadRequest = DownloadRequest.Builder(id, id.toUri())
+                    .setCustomCacheKey(id)
+                    .setData(title.toByteArray())
+                    .setByteRange(0, contentLength)
+                    .build()
+                DownloadService.sendAddDownload(
+                    context,
+                    ExoDownloadService::class.java,
+                    downloadRequest,
+                    false
+                )
+            }.onFailure {
+                reportException(it)
+                Log.e(TAG, "Unable to resolve download: $id", it)
+            }
+        }
+    }
+
+    private fun resolvePlaybackData(mediaId: String): YTPlayerUtils.PlaybackData {
+        val playbackData = runBlocking(Dispatchers.IO) {
+            YTPlayerUtils.playerResponseForPlayback(
+                mediaId,
+                audioQuality = audioQuality,
+                connectivityManager = connectivityManager,
+            )
+        }.getOrThrow()
+        val format = playbackData.format
+
+        database.query {
+            upsert(
+                FormatEntity(
+                    id = mediaId,
+                    itag = format.itag,
+                    mimeType = format.mimeType.split(";")[0],
+                    codecs = format.mimeType.split("codecs=")[1].removeSurrounding("\""),
+                    bitrate = format.bitrate,
+                    sampleRate = format.audioSampleRate,
+                    contentLength = format.contentLength!!,
+                    loudnessDb = playbackData.audioConfig?.loudnessDb,
+                    playbackTrackingUrl = playbackData.playbackTracking?.videostatsPlaybackUrl?.baseUrl
+                )
+            )
+        }
+
+        // Keep the signed stream URL unchanged. Media3 sends byte ranges through the
+        // HTTP Range header; appending query parameters can invalidate the CDN request.
+        songUrlCache[mediaId] = playbackData.streamUrl to
+                (System.currentTimeMillis() + playbackData.streamExpiresInSeconds * 1000L)
+        return playbackData
     }
 
     fun resumeDownloadsOnStart() {

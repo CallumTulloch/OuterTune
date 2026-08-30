@@ -14,6 +14,16 @@ data class YouTubeClient(
     val useSignatureTimestamp: Boolean = false,
     val useWebPoTokens: Boolean = false,
     val isEmbedded: Boolean = false,
+    val apiUrl: String = API_URL_YOUTUBE_MUSIC,
+    val apiFormatVersion: String = "1",
+    val requiresFreshVisitorData: Boolean = false,
+    val useContentPlaybackNonce: Boolean = false,
+    val sendMusicHeaders: Boolean = true,
+    val clientScreen: String? = null,
+    val platform: String? = null,
+    val deviceMake: String? = null,
+    val deviceModel: String? = null,
+    val osName: String? = null,
     // val origin: String? = null,
     // val referer: String? = null,
 ) {
@@ -24,7 +34,13 @@ data class YouTubeClient(
             osVersion = osVersion,
             gl = locale.gl,
             hl = locale.hl,
-            visitorData = visitorData
+            visitorData = visitorData,
+            clientScreen = clientScreen,
+            platform = platform,
+            deviceMake = deviceMake,
+            deviceModel = deviceModel,
+            osName = osName,
+            utcOffsetMinutes = if (requiresFreshVisitorData) 0 else null,
         ),
         user = Context.User(
             onBehalfOfUser = if (loginSupported) dataSyncId else null
@@ -40,6 +56,7 @@ data class YouTubeClient(
         const val ORIGIN_YOUTUBE_MUSIC = "https://music.youtube.com"
         const val REFERER_YOUTUBE_MUSIC = "$ORIGIN_YOUTUBE_MUSIC/"
         const val API_URL_YOUTUBE_MUSIC = "$ORIGIN_YOUTUBE_MUSIC/youtubei/v1/"
+        const val API_URL_YOUTUBE = "https://www.youtube.com/youtubei/v1/"
 
         val WEB = YouTubeClient(
             clientName = "WEB",
@@ -95,6 +112,24 @@ data class YouTubeClient(
             clientId = "5",
             userAgent = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
             osVersion = "18.3.2.22D82",
+        )
+
+        val VISIONOS = YouTubeClient(
+            clientName = "VISIONOS",
+            clientVersion = "1.04",
+            clientId = "101",
+            userAgent = "com.google.visionos.youtube/1.04 (RealityDevice17,1; U; CPU visionOS 26_6_0 like Mac OS X; JP)",
+            osVersion = "26.6.0.23O770",
+            apiUrl = API_URL_YOUTUBE,
+            apiFormatVersion = "2",
+            requiresFreshVisitorData = true,
+            useContentPlaybackNonce = true,
+            sendMusicHeaders = false,
+            clientScreen = "WATCH",
+            platform = "MOBILE",
+            deviceMake = "Apple",
+            deviceModel = "RealityDevice17,1",
+            osName = "visionOS",
         )
 
         val ANDROID = YouTubeClient(

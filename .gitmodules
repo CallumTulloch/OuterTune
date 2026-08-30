@@ -3,7 +3,7 @@
 	url = https://github.com/OuterTune/ffMetadataEx
 [submodule "media"]
 	path = media
-	url = https://github.com/nift4/media
+	url = https://github.com/CallumTulloch/media
 [submodule "taglib"]
 	path = taglib
 	url = https://github.com/OuterTune/taglib

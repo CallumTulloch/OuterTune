@@ -36,7 +36,9 @@ include(":taglib")
 //}
 
 
-if (providers.gradleProperty("useLocalMedia3").orNull == "true") {
+// OuterTune relies on APIs from the bundled Media3 fork. Use it by default so a
+// normal Gradle invocation remains buildable; opt out only for compatibility tests.
+if (providers.gradleProperty("useLocalMedia3").orNull != "false") {
     includeBuild(file("media").toPath().toRealPath().toAbsolutePath().toString()) {
         dependencySubstitution {
             substitute(module("androidx.media3:media3-common")).using(project(":lib-common"))

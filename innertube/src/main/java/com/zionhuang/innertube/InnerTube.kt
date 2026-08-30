@@ -4,14 +4,17 @@ import com.zionhuang.innertube.models.Context
 import com.zionhuang.innertube.models.YouTubeClient
 import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.innertube.models.body.*
+import com.zionhuang.innertube.models.response.VisitorResponse
 import com.zionhuang.innertube.utils.parseCookieString
 import com.zionhuang.innertube.utils.sha1
 import io.ktor.client.*
+import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.compression.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.util.encodeBase64
@@ -26,6 +29,7 @@ import java.util.*
  */
 class InnerTube {
     private var httpClient = createClient()
+    private val visitorDataByClient = mutableMapOf<String, String>()
 
     var locale = YouTubeLocale(
         gl = Locale.getDefault().country,
@@ -80,11 +84,13 @@ class InnerTube {
     private fun HttpRequestBuilder.ytClient(client: YouTubeClient, setLogin: Boolean = false) {
         contentType(ContentType.Application.Json)
         headers {
-            append("X-Goog-Api-Format-Version", "1")
+            append("X-Goog-Api-Format-Version", client.apiFormatVersion)
             append("X-YouTube-Client-Name", client.clientId /* Not a typo. The Client-Name header does contain the client id. */)
             append("X-YouTube-Client-Version", client.clientVersion)
-            append("X-Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
-            append("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+            if (client.sendMusicHeaders) {
+                append("X-Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                append("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+            }
             if (setLogin && client.loginSupported) {
                 cookie?.let { cookie ->
                     append("cookie", cookie)
@@ -127,11 +133,28 @@ class InnerTube {
         playlistId: String?,
         signatureTimestamp: Int?,
         webPlayerPot: String?,
-    ) = httpClient.post("player") {
-        ytClient(client, setLogin = true)
-        setBody(
-            PlayerBody(
-                context = client.toContext(locale, visitorData, dataSyncId).let {
+    ): HttpResponse {
+        val playerVisitorData = if (client.requiresFreshVisitorData) {
+            visitorDataByClient[client.clientName] ?: httpClient.post("${client.apiUrl}visitor_id") {
+                ytClient(client)
+                setBody(VisitorBody(client.toContext(locale, null, null)))
+            }.body<VisitorResponse>().responseContext.visitorData?.also {
+                visitorDataByClient[client.clientName] = it
+            }
+        } else {
+            visitorData
+        }
+        val contentPlaybackNonce = if (client.useContentPlaybackNonce) {
+            (1..16).map {
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"[Random().nextInt(64)]
+            }.joinToString("")
+        } else null
+
+        return httpClient.post("${client.apiUrl}player") {
+            ytClient(client, setLogin = true)
+            setBody(
+                PlayerBody(
+                    context = client.toContext(locale, playerVisitorData, dataSyncId).let {
                     if (client.isEmbedded) {
                         it.copy(
                             thirdParty = Context.ThirdParty(
@@ -140,20 +163,22 @@ class InnerTube {
                         )
                     } else it
                 },
-                videoId = videoId,
-                playlistId = playlistId,
-                playbackContext = if (client.useSignatureTimestamp && signatureTimestamp != null) {
-                    PlayerBody.PlaybackContext(
-                        PlayerBody.PlaybackContext.ContentPlaybackContext(
-                            signatureTimestamp
+                    videoId = videoId,
+                    playlistId = playlistId,
+                    playbackContext = if (client.useSignatureTimestamp && signatureTimestamp != null) {
+                        PlayerBody.PlaybackContext(
+                            PlayerBody.PlaybackContext.ContentPlaybackContext(
+                                signatureTimestamp
+                            )
                         )
-                    )
-                } else null,
-                serviceIntegrityDimensions = if (client.useWebPoTokens && webPlayerPot != null) {
-                    PlayerBody.ServiceIntegrityDimensions(webPlayerPot)
-                } else null
+                    } else null,
+                    serviceIntegrityDimensions = if (client.useWebPoTokens && webPlayerPot != null) {
+                        PlayerBody.ServiceIntegrityDimensions(webPlayerPot)
+                    } else null,
+                    cpn = contentPlaybackNonce,
+                )
             )
-        )
+        }
     }
 
     suspend fun registerPlayback(
