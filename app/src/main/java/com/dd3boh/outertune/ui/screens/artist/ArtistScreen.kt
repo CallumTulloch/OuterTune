@@ -550,7 +550,7 @@ fun ArtistScreen(
         HideOnScrollFAB(
             visible = isNetworkConnected && librarySongs.isNotEmpty() && libraryArtist?.artist?.isLocal != true,
             lazyListState = lazyListState,
-            icon = if (showLocal) Icons.Rounded.LibraryMusic else Icons.Rounded.Language,
+            icon = if (showLocal) Icons.Rounded.Language else Icons.Rounded.LibraryMusic,
             onClick = {
                 showLocal = showLocal.not()
                 if (!showLocal && artistPage == null) viewModel.fetchArtistsFromYTM()

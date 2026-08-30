@@ -584,26 +584,7 @@ fun ActionButtons(
 
     Spacer(modifier = Modifier.width(10.dp))
 
-    Box(
-        modifier = Modifier
-            .offset(y = 5.dp)
-            .size(36.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.primary)
-    ) {
-        ResizableIconButton(
-            icon = if (currentSong?.song?.liked == true) R.drawable.favorite else R.drawable.favorite_border,
-            color = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(24.dp),
-            onClick = playerConnection::toggleLike
-        )
-    }
-
     if (showLyrics) {
-        Spacer(modifier = Modifier.width(7.dp))
-
         Box(
             modifier = Modifier
                 .offset(y = 5.dp)
@@ -657,6 +638,25 @@ fun ActionButtons(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.width(7.dp))
+    }
+
+    Box(
+        modifier = Modifier
+            .offset(y = 5.dp)
+            .size(36.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.primary)
+    ) {
+        ResizableIconButton(
+            icon = if (currentSong?.song?.liked == true) R.drawable.favorite else R.drawable.favorite_border,
+            color = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(24.dp),
+            onClick = playerConnection::toggleLike
+        )
     }
 
     Spacer(modifier = Modifier.width(7.dp))
