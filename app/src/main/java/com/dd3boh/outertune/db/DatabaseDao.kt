@@ -45,6 +45,9 @@ import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.pages.AlbumPage
 import kotlinx.coroutines.flow.Flow
 
+internal fun resolveAlbumId(metadataAlbumId: String, existingAlbumId: String? = null): String =
+    metadataAlbumId.ifBlank { existingAlbumId ?: AlbumEntity.generateAlbumId() }
+
 @Dao
 interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao {
 
@@ -202,79 +205,55 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
         }
 
         mediaMetadata.album?.let {
-            val album = albumsByName(it.title)
-            val albumId = album?.id ?: GenreEntity.generateGenreId()
-            upsert(
-                AlbumEntity(
-                    id = albumId,
-                    title = it.title,
-                    thumbnailUrl = album?.thumbnailUrl?: mediaMetadata.thumbnailUrl,
-                    songCount = 1,
-                    duration = (album?.duration ?: 0) + mediaMetadata.duration,
-                    isLocal = it.isLocal
+            val albumId = resolveAlbumId(it.id, albumsByName(it.title)?.id)
+            if (albumById(albumId) == null) {
+                insert(
+                    AlbumEntity(
+                        id = albumId,
+                        title = it.title,
+                        thumbnailUrl = mediaMetadata.thumbnailUrl,
+                        songCount = 1,
+                        duration = mediaMetadata.duration,
+                        isLocal = it.isLocal
+                    )
                 )
-            )
+            }
             insert(
                 SongAlbumMap(
                     songId = mediaMetadata.id,
                     albumId = albumId,
-                    index = album?.songCount ?: 0
+                    index = 0
                 )
             )
+            updateSongAlbumIdentity(mediaMetadata.id, albumId, it.title)
         }
     }
 
     @Transaction
     fun insert(albumPage: AlbumPage) {
-        if (insert(AlbumEntity(
-                id = albumPage.album.browseId,
-                playlistId = albumPage.album.playlistId,
-                title = albumPage.album.title,
-                year = albumPage.album.year,
-                thumbnailUrl = albumPage.album.thumbnail,
-                songCount = albumPage.songs.size,
-                duration = albumPage.songs.sumOf { it.duration ?: 0 }
-            )) == -1L
-        ) return
-        albumPage.songs.map(SongItem::toMediaMetadata)
-            .onEach(::insert)
-            .mapIndexed { index, song ->
-                SongAlbumMap(
-                    songId = song.id,
-                    albumId = albumPage.album.browseId,
-                    index = index
-                )
-            }
-            .forEach(::upsert)
-        albumPage.album.artists
-            ?.map { artist ->
-                ArtistEntity(
-                    id = artist.id ?: artistByName(artist.name)?.id ?: ArtistEntity.generateArtistId(),
-                    name = artist.name
-                )
-            }
-            ?.onEach(::insert)
-            ?.mapIndexed { index, artist ->
-                AlbumArtistMap(
-                    albumId = albumPage.album.browseId,
-                    artistId = artist.id,
-                    order = index
-                )
-            }
-            ?.forEach(::insert)
+        upsert(albumPage)
     }
 
     @Transaction
     fun update(album: AlbumEntity, albumPage: AlbumPage) {
-        update(
-            album.copy(
+        upsert(albumPage, album)
+    }
+
+    @Transaction
+    fun upsert(albumPage: AlbumPage, previousAlbum: AlbumEntity? = null) {
+        val currentAlbum = albumById(albumPage.album.browseId)
+        val preservedAlbum = currentAlbum ?: previousAlbum
+        upsert(
+            AlbumEntity(
                 id = albumPage.album.browseId,
                 playlistId = albumPage.album.playlistId,
                 title = albumPage.album.title,
                 year = albumPage.album.year,
                 thumbnailUrl = albumPage.album.thumbnail,
+                themeColor = preservedAlbum?.themeColor,
                 songCount = albumPage.songs.size,
-                duration = albumPage.songs.sumOf { it.duration ?: 0 }
+                duration = albumPage.songs.sumOf { it.duration ?: 0 },
+                bookmarkedAt = preservedAlbum?.bookmarkedAt,
             )
         )
         albumPage.songs.map(SongItem::toMediaMetadata)
@@ -303,6 +282,10 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
                 )
             }
             ?.forEach(::insert)
+
+        previousAlbum
+            ?.takeIf { it.id != albumPage.album.browseId }
+            ?.let { safeDeleteAlbum(it.id) }
     }
 
     @Upsert

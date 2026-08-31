@@ -30,6 +30,7 @@ import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.di.AppModule.PlayerCache
 import com.dd3boh.outertune.di.DownloadCache
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.DownloadUtil.Companion.STATE_DOWNLOADING
 import com.dd3boh.outertune.playback.DownloadUtil.Companion.STATE_INVALID
 import com.dd3boh.outertune.playback.downloadManager.DownloadDirectoryManagerOt
@@ -68,6 +69,22 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
 import javax.inject.Inject
 import javax.inject.Singleton
+
+internal fun mergeResolvedMetadata(
+    original: MediaMetadata,
+    resolved: MediaMetadata,
+): MediaMetadata = original.copy(
+    artists = original.artists.map { artist ->
+        if (artist.id != null) {
+            artist
+        } else {
+            resolved.artists.firstOrNull { it.name == artist.name } ?: artist
+        }
+    },
+    duration = original.duration.takeIf { it > 0 } ?: resolved.duration,
+    thumbnailUrl = original.thumbnailUrl ?: resolved.thumbnailUrl,
+    album = original.album ?: resolved.album,
+)
 
 @Singleton
 class DownloadUtil @Inject constructor(
@@ -131,39 +148,73 @@ class DownloadUtil @Inject constructor(
     fun getDownload(songId: String): Flow<LocalDateTime?> = downloads.map { it[songId] }
 
     fun download(songs: List<MediaMetadata>) {
-        songs.forEach { song -> downloadSong(song.id, song.title) }
+        prepareDownloads(songs)
     }
 
     fun download(song: MediaMetadata) {
-        downloadSong(song.id, song.title)
+        prepareDownloads(listOf(song))
     }
 
     fun download(song: SongEntity) {
-        downloadSong(song.id, song.title)
+        CoroutineScope(dlCoroutine).launch {
+            val metadata = database.song(song.id).first()?.toMediaMetadata()
+            if (metadata != null) {
+                prepareAndDownload(listOf(metadata))
+            } else {
+                downloadSong(song.id, song.title)
+            }
+        }
+    }
+
+    private fun prepareDownloads(songs: List<MediaMetadata>) {
+        CoroutineScope(dlCoroutine).launch {
+            prepareAndDownload(songs)
+        }
+    }
+
+    private suspend fun prepareAndDownload(songs: List<MediaMetadata>) {
+        val songsById = songs.associateBy(MediaMetadata::id)
+        val missingAlbumIds = songs.filter { !it.isLocal && it.album == null }.map(MediaMetadata::id)
+        val queueSongs = missingAlbumIds.chunked(YouTube.MAX_GET_QUEUE_SIZE).flatMap { videoIds ->
+            YouTube.queue(videoIds = videoIds).onFailure {
+                reportException(it)
+                Log.w(TAG, "Unable to resolve album metadata for ${videoIds.size} download(s)", it)
+            }.getOrDefault(emptyList())
+        }.associateBy(SongItem::id)
+
+        songsById.values.forEach { original ->
+            val metadata = queueSongs[original.id]?.let { resolved ->
+                mergeResolvedMetadata(original, resolved.toMediaMetadata())
+            } ?: original
+            database.transaction {
+                insert(metadata)
+            }
+            CoroutineScope(dlCoroutine).launch {
+                downloadSong(metadata.id, metadata.title)
+            }
+        }
     }
 
     private fun downloadSong(id: String, title: String) {
         if (downloads.value[id] != null) return
-        CoroutineScope(dlCoroutine).launch {
-            runCatching {
-                val playbackData = resolvePlaybackData(id)
-                val contentLength = playbackData.format.contentLength
-                    ?: error("Missing content length for $id")
-                val downloadRequest = DownloadRequest.Builder(id, id.toUri())
-                    .setCustomCacheKey(id)
-                    .setData(title.toByteArray())
-                    .setByteRange(0, contentLength)
-                    .build()
-                DownloadService.sendAddDownload(
-                    context,
-                    ExoDownloadService::class.java,
-                    downloadRequest,
-                    false
-                )
-            }.onFailure {
-                reportException(it)
-                Log.e(TAG, "Unable to resolve download: $id", it)
-            }
+        runCatching {
+            val playbackData = resolvePlaybackData(id)
+            val contentLength = playbackData.format.contentLength
+                ?: error("Missing content length for $id")
+            val downloadRequest = DownloadRequest.Builder(id, id.toUri())
+                .setCustomCacheKey(id)
+                .setData(title.toByteArray())
+                .setByteRange(0, contentLength)
+                .build()
+            DownloadService.sendAddDownload(
+                context,
+                ExoDownloadService::class.java,
+                downloadRequest,
+                false
+            )
+        }.onFailure {
+            reportException(it)
+            Log.e(TAG, "Unable to resolve download: $id", it)
         }
     }
 

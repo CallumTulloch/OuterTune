@@ -33,13 +33,12 @@ class AlbumViewModel @Inject constructor(
             val album = database.album(albumId).first()
             if (album?.album?.isLocal == true) return@launch
             YouTube.album(albumId).onSuccess {
-                if (album == null || album.album.songCount == 0) {
-                    database.transaction {
-                        if (album == null) insert(it)
-                        else update(album.album, it)
-                    }
+                database.transaction {
+                    if (album == null) insert(it)
+                    else update(album.album, it)
                 }
                 otherVersions.value = it.otherVersions
+                isLoading.value = false
             }.onFailure {
                 isLoading.value = false
                 reportException(it)

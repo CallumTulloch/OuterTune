@@ -37,7 +37,8 @@ interface AlbumsDao : ArtistsDao {
     @Query("""
         SELECT album.*, count(song.dateDownload) downloadCount
         FROM album
-            LEFT JOIN song ON song.albumId = album.id
+            LEFT JOIN song_album_map ON song_album_map.albumId = album.id
+            LEFT JOIN song ON song.id = song_album_map.songId
         WHERE album.id = :id
         GROUP BY album.id
     """)
@@ -50,7 +51,8 @@ interface AlbumsDao : ArtistsDao {
     @Query("""
         SELECT album.*, count(song.dateDownload) downloadCount
         FROM album
-            LEFT JOIN song ON song.albumId = album.id
+            LEFT JOIN song_album_map ON song_album_map.albumId = album.id
+            LEFT JOIN song ON song.id = song_album_map.songId
         WHERE album.title LIKE '%' || :query || '%' AND (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL)
         GROUP BY album.id
         LIMIT :previewSize
@@ -95,7 +97,8 @@ interface AlbumsDao : ArtistsDao {
     @Query("""
         SELECT album.*, count(song.dateDownload) downloadCount
         FROM album
-            LEFT JOIN song ON song.albumId = album.id
+            LEFT JOIN song_album_map ON song_album_map.albumId = album.id
+            LEFT JOIN song ON song.id = song_album_map.songId
         WHERE album.id = :albumId
         GROUP BY album.id
     """)
@@ -120,12 +123,28 @@ interface AlbumsDao : ArtistsDao {
 
     @Transaction
     @Query("""
-        SELECT album.*, count(song.dateDownload) downloadCount
-        FROM album_artist_map 
-            JOIN album ON album_artist_map.albumId = album.id
-            JOIN song ON album_artist_map.albumId = song.albumId
-        WHERE artistId = :artistId
-            AND (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1)
+        SELECT album.*,
+            COUNT(DISTINCT CASE WHEN song.dateDownload IS NOT NULL THEN song.id END) downloadCount
+        FROM album
+            JOIN song_album_map ON song_album_map.albumId = album.id
+            JOIN song ON song.id = song_album_map.songId
+            LEFT JOIN album_artist_map
+                ON album_artist_map.albumId = album.id
+                AND album_artist_map.artistId = :artistId
+            LEFT JOIN song_artist_map
+                ON song_artist_map.songId = song.id
+                AND song_artist_map.artistId = :artistId
+        WHERE (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1)
+            AND (
+                album_artist_map.artistId IS NOT NULL
+                OR (
+                    NOT EXISTS (
+                        SELECT 1 FROM album_artist_map existing_artist
+                        WHERE existing_artist.albumId = album.id
+                    )
+                    AND song_artist_map.artistId IS NOT NULL
+                )
+            )
         GROUP BY album.id
         LIMIT :previewSize
     """)
@@ -173,6 +192,13 @@ interface AlbumsDao : ArtistsDao {
 
     @Query("SELECT * FROM album WHERE title = :name")
     fun albumsByName(name: String): AlbumEntity?
+
+    @Query("""
+        UPDATE song
+        SET albumId = :albumId, albumName = :albumTitle
+        WHERE id = :songId
+    """)
+    fun updateSongAlbumIdentity(songId: String, albumId: String, albumTitle: String)
 
     @Transaction
     @Query(
