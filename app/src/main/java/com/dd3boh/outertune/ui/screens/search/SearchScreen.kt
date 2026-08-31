@@ -71,6 +71,15 @@ import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.utils.urlEncode
 import com.dd3boh.outertune.youtubeNavigator
 
+internal fun initialSearchSource(
+    route: String?,
+    currentSource: SearchSource,
+): SearchSource = when (route) {
+    Screens.Songs.route -> SearchSource.LOCAL
+    Screens.Home.route -> SearchSource.ONLINE
+    else -> currentSource
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchBarContainer(
@@ -102,6 +111,15 @@ fun SearchBarContainer(
         mutableStateOf(false)
     }
     val onSearchActiveChange: (Boolean) -> Unit = { newActive ->
+        if (newActive) {
+            val currentRoute = navBackStackEntry?.destination?.route
+            val originRoute = if (currentRoute?.startsWith("search") == true) {
+                navController.previousBackStackEntry?.destination?.route
+            } else {
+                currentRoute
+            }
+            searchSource = initialSearchSource(originRoute, searchSource)
+        }
         searchActive = newActive
         if (!newActive) {
             focusManager.clearFocus()

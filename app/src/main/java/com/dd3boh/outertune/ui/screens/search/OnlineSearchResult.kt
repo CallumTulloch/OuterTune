@@ -229,8 +229,10 @@ fun OnlineSearchResult(
     ) {
         if (searchFilter == null) {
             searchSummary?.summaries?.forEach { summary ->
-                item {
-                    NavigationTitle(summary.title)
+                if (summary.title.isNotBlank()) {
+                    item {
+                        NavigationTitle(summary.title)
+                    }
                 }
 
                 items(
