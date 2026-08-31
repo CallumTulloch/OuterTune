@@ -431,6 +431,11 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val showLyricsState = remember { mutableStateOf(false) }
+                    val currentMediaId = playerConnection?.mediaMetadata?.collectAsState()?.value?.id
+
+                    LaunchedEffect(currentMediaId) {
+                        showLyricsState.value = false
+                    }
 
                     CompositionLocalProvider(
                         LocalDatabase provides database,
