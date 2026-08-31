@@ -43,6 +43,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
@@ -78,6 +79,18 @@ internal fun initialSearchSource(
     Screens.Songs.route -> SearchSource.LOCAL
     Screens.Home.route -> SearchSource.ONLINE
     else -> currentSource
+}
+
+internal fun searchQueryForDestination(
+    route: String?,
+    routeQuery: String?,
+    currentQuery: String,
+    searchActive: Boolean,
+    isNavigationRoot: Boolean,
+): String = when {
+    route?.startsWith("search/") == true -> routeQuery ?: currentQuery
+    !searchActive && isNavigationRoot -> ""
+    else -> currentQuery
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -134,7 +147,8 @@ fun SearchBarContainer(
             if (searchSource == SearchSource.LOCAL) {
                 focusManager.clearFocus(true)
             } else {
-                onSearchActiveChange(false)
+                searchActive = false
+                focusManager.clearFocus(true)
                 if (youtubeNavigator(
                         context,
                         navController,
@@ -164,8 +178,25 @@ fun SearchBarContainer(
     }
 
     LaunchedEffect(navBackStackEntry) {
+        val route = navBackStackEntry?.destination?.route
+        val destinationQuery = searchQueryForDestination(
+            route = route,
+            routeQuery = navBackStackEntry?.arguments?.getString("query"),
+            currentQuery = query.text,
+            searchActive = searchActive,
+            isNavigationRoot = navigationItems.fastAny { it.route == route },
+        )
+        if (destinationQuery != query.text) {
+            onQueryChange(
+                TextFieldValue(
+                    text = destinationQuery,
+                    selection = TextRange(destinationQuery.length),
+                )
+            )
+        }
         if (searchActive) {
-            onSearchActiveChange(false)
+            searchActive = false
+            focusManager.clearFocus()
         }
     }
 

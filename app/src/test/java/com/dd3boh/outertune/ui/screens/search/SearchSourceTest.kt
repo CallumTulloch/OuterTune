@@ -29,4 +29,46 @@ class SearchSourceTest {
             initialSearchSource(Screens.Albums.route, SearchSource.LOCAL)
         )
     }
+
+    @Test
+    fun `search result destination restores its query`() {
+        assertEquals(
+            "Quruli",
+            searchQueryForDestination(
+                route = "search/{query}",
+                routeQuery = "Quruli",
+                currentQuery = "",
+                searchActive = false,
+                isNavigationRoot = false,
+            )
+        )
+    }
+
+    @Test
+    fun `returning to a navigation root clears an inactive query`() {
+        assertEquals(
+            "",
+            searchQueryForDestination(
+                route = Screens.Home.route,
+                routeQuery = null,
+                currentQuery = "Quruli",
+                searchActive = false,
+                isNavigationRoot = true,
+            )
+        )
+    }
+
+    @Test
+    fun `opening search on a navigation root keeps the entered query`() {
+        assertEquals(
+            "Quruli",
+            searchQueryForDestination(
+                route = Screens.Home.route,
+                routeQuery = null,
+                currentQuery = "Quruli",
+                searchActive = true,
+                isNavigationRoot = true,
+            )
+        )
+    }
 }
