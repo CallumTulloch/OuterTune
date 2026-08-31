@@ -119,7 +119,14 @@ interface SongsDao {
     fun songsByArtistAsc(): Flow<List<Song>>
 
     @Transaction
-    @Query("SELECT song.* FROM song_artist_map JOIN song ON song_artist_map.songId = song.id WHERE artistId = :artistId AND inLibrary IS NOT NULL LIMIT :previewSize")
+    @Query("""
+        SELECT song.*
+        FROM song_artist_map
+            JOIN song ON song_artist_map.songId = song.id
+        WHERE artistId = :artistId
+            AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
+        LIMIT :previewSize
+    """)
     fun artistSongsPreview(artistId: String, previewSize: Int = 3): Flow<List<Song>>
 
     @RewriteQueriesToDropUnusedColumns

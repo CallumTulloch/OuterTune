@@ -39,7 +39,9 @@ interface ArtistsDao {
             SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
         FROM artist
             LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
-            LEFT JOIN song ON sam.songId = song.id AND song.inLibrary IS NOT NULL
+            LEFT JOIN song ON sam.songId = song.id AND (
+                song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1
+            )
         WHERE artist.id = :id
         GROUP BY artist.id
     """)
@@ -200,11 +202,25 @@ interface ArtistsDao {
 
     // region Artist Songs Sort
     @Transaction
-    @Query("SELECT song.* FROM song_artist_map JOIN song ON song_artist_map.songId = song.id WHERE artistId = :artistId AND inLibrary IS NOT NULL ORDER BY inLibrary")
+    @Query("""
+        SELECT song.*
+        FROM song_artist_map
+            JOIN song ON song_artist_map.songId = song.id
+        WHERE artistId = :artistId
+            AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
+        ORDER BY COALESCE(inLibrary, dateDownload, dateModified, date)
+    """)
     fun artistSongsByCreateDateAsc(artistId: String): Flow<List<Song>>
 
     @Transaction
-    @Query("SELECT song.* FROM song_artist_map JOIN song ON song_artist_map.songId = song.id WHERE artistId = :artistId AND inLibrary IS NOT NULL ORDER BY title COLLATE NOCASE ASC")
+    @Query("""
+        SELECT song.*
+        FROM song_artist_map
+            JOIN song ON song_artist_map.songId = song.id
+        WHERE artistId = :artistId
+            AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
+        ORDER BY title COLLATE NOCASE ASC
+    """)
     fun artistSongsByNameAsc(artistId: String): Flow<List<Song>>
 
     fun artistSongs(artistId: String, sortType: ArtistSongSortType, descending: Boolean) =

@@ -125,6 +125,7 @@ interface AlbumsDao : ArtistsDao {
             JOIN album ON album_artist_map.albumId = album.id
             JOIN song ON album_artist_map.albumId = song.albumId
         WHERE artistId = :artistId
+            AND (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1)
         GROUP BY album.id
         LIMIT :previewSize
     """)
