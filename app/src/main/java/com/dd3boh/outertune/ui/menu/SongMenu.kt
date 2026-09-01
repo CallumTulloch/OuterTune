@@ -100,7 +100,12 @@ fun SongMenu(
 
     val syncMode by rememberEnumPreference(key = YtmSyncModeKey, defaultValue = SyncMode.RW)
 
-    val song = originalSong
+    // MenuState retains the composable passed to it, so the Song instance captured when the
+    // menu was opened does not change when Room emits an updated album/song list. Observe this
+    // song directly so library/like actions are reflected while the menu remains open, matching
+    // YouTubeSongMenu.
+    val librarySong by database.song(originalSong.id).collectAsState(initial = originalSong)
+    val song = librarySong ?: originalSong
     val download by LocalDownloadUtil.current.getDownload(originalSong.id).collectAsState(initial = null)
     val coroutineScope =
         CoroutineScope(syncCoroutine) // rememberCoroutineScope has exception "rememberCoroutineScope left the composition"

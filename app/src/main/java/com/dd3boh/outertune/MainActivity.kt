@@ -78,6 +78,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -334,6 +335,19 @@ class MainActivity : ComponentActivity() {
 
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val initialNavigationRoute = remember(defaultOpenTab) {
+                    Screens.getAllScreens().find { it.route == defaultOpenTab }?.route
+                        ?: Screens.Home.route
+                }
+                var activeNavigationRoute by rememberSaveable {
+                    mutableStateOf(initialNavigationRoute)
+                }
+
+                LaunchedEffect(navBackStackEntry?.destination?.route) {
+                    navigationItems.firstOrNull {
+                        it.route == navBackStackEntry?.destination?.route
+                    }?.let { activeNavigationRoute = it.route }
+                }
 
                 val tabOpenedFromShortcut = remember {
                     // reroute to library page for new layout is handled in NavHost section
@@ -375,6 +389,38 @@ class MainActivity : ComponentActivity() {
                         collapsedBound = bottomInset + MiniPlayerHeight + getNavPadding(),
                         expandedBound = maxHeight,
                     )
+
+                    fun selectNavigationItem(screen: Screens) {
+                        val isAtNavigationRoot =
+                            navBackStackEntry?.destination?.hierarchy?.any {
+                                it.route == screen.route
+                            } == true
+                        val isActiveNavigation =
+                            activeNavigationRoute == screen.route || isAtNavigationRoot
+
+                        activeNavigationRoute = screen.route
+
+                        if (isActiveNavigation) {
+                            if (!isAtNavigationRoot &&
+                                !navController.popBackStack(screen.route, inclusive = false)
+                            ) {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                }
+                            }
+                        } else {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    }
 
                     val playerAwareWindowInsets =
                         remember(
@@ -460,9 +506,7 @@ class MainActivity : ComponentActivity() {
                             val navHost: @Composable() (() -> Unit) = @Composable {
                                 NavHost(
                                     navController = navController,
-                                    startDestination = (Screens.getAllScreens()
-                                        .find { it.route == defaultOpenTab })?.route
-                                        ?: Screens.Home.route,
+                                    startDestination = initialNavigationRoute,
                                     enterTransition = {
                                         val currentRouteIndex = navigationItems.indexOfFirst {
                                             it.route == targetState.destination.route
@@ -783,12 +827,8 @@ class MainActivity : ComponentActivity() {
                                     containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp)
                                 ) {
                                     navigationItems.fastForEach { screen ->
-                                        // TODO: display selection when based on root page user entered
-//                                        val isSelected = navBackStackEntry?.destination?.hierarchy?.any {
-//                                            it.route?.substringBefore("?")?.substringBefore("/") == screen.route
-//                                        } == true
                                         NavigationBarItem(
-                                            selected = navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } == true,
+                                            selected = activeNavigationRoute == screen.route,
                                             icon = {
                                                 Icon(
                                                     screen.icon,
@@ -809,24 +849,7 @@ class MainActivity : ComponentActivity() {
                                                     playerBottomSheetState.collapseSoft()
                                                 }
 
-                                                if (navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } == true) {
-                                                    navBackStackEntry?.savedStateHandle?.set(
-                                                        "scrollToTop",
-                                                        true
-                                                    )
-                                                } else if (navigationItems.none { scr -> navBackStackEntry?.destination?.hierarchy?.any { it.route == scr.route } == true }) {
-                                                    // this eye bleach allows you to navigate back when you tap on the navbar on a non-root page
-                                                    // TODO: nav3 allows us to access back stack... maybe do indicators properly and remove this hack
-                                                    navController.navigateUp()
-                                                } else {
-                                                    navController.navigate(screen.route) {
-                                                        popUpTo(navController.graph.startDestinationId) {
-                                                            saveState = true
-                                                        }
-                                                        launchSingleTop = true
-                                                        restoreState = true
-                                                    }
-                                                }
+                                                selectNavigationItem(screen)
 
                                                 haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                                             }
@@ -884,12 +907,8 @@ class MainActivity : ComponentActivity() {
                                         },
                                 ) {
                                     navigationItems.fastForEach { screen ->
-                                        // TODO: display selection when based on root page user entered
-//                                                val isSelected = navBackStackEntry?.destination?.hierarchy?.any {
-//                                                    it.route?.substringBefore("?")?.substringBefore("/") == screen.route
-//                                                } == true
                                         NavigationRailItem(
-                                            selected = navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } == true,
+                                            selected = activeNavigationRoute == screen.route,
                                             icon = {
                                                 Icon(
                                                     screen.icon,
@@ -909,21 +928,7 @@ class MainActivity : ComponentActivity() {
                                                 if (playerBottomSheetState.isExpanded) {
                                                     playerBottomSheetState.collapseSoft()
                                                 }
-                                                if (navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } == true) {
-                                                    navBackStackEntry?.savedStateHandle?.set(
-                                                        "scrollToTop",
-                                                        true
-                                                    )
-                                                } else {
-                                                    navController.navigate(screen.route) {
-                                                        popUpTo(navController.graph.startDestinationId) {
-                                                            saveState = true
-                                                        }
-
-                                                        launchSingleTop = true
-                                                        restoreState = true
-                                                    }
-                                                }
+                                                selectNavigationItem(screen)
 
                                                 haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                                             }
