@@ -11,6 +11,7 @@ import androidx.room.RenameColumn
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.withTransaction
 import androidx.room.migration.AutoMigrationSpec
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -64,6 +65,17 @@ class MusicDatabase(
             }
         }
     }
+
+    /**
+     * Runs a database transaction and resumes only after it has committed.
+     *
+     * Scanner jobs use this instead of [transaction] so their cleanup and completion state cannot
+     * race ahead of queued writes.
+     */
+    suspend fun awaitTransaction(block: MusicDatabase.() -> Unit) =
+        delegate.withTransaction {
+            block(this@MusicDatabase)
+        }
 
     fun close() = delegate.close()
 

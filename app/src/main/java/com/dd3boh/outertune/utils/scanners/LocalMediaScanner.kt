@@ -280,7 +280,7 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
                 // don't run if we will update these values in rescan anyways
                 // always ensure inLibrary and local path values are valid
                 if (!refreshExisting && (oldSong.inLibrary == null || oldSong.localPath == null)) {
-                    database.transaction {
+                    database.awaitTransaction {
                         update(songToUpdate)
 
                         // update format
@@ -305,7 +305,7 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
                 var albumToDo: Pair<AlbumEntity?, AlbumEntity>? = null
 
                 // update artists and genre
-                database.transaction {
+                database.awaitTransaction {
                     // get any existing matches
                     song.song.artists.forEachIndexed { index, it ->
                         val dbQuery = localArtistsByNameFuzzy(it.name).sortedBy { item -> item.name.length }
@@ -370,7 +370,6 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
                             update(
                                 album.first!!.copy(
                                     thumbnailUrl = album.second.thumbnailUrl,
-                                    songCount = album.first!!.songCount + 1
                                 )
                             )
                             insert(SongAlbumMap(songToUpdate.id, album.first!!.id, album.first!!.songCount))
@@ -381,7 +380,7 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
                 if (SCANNER_DEBUG)
                     Log.v(TAG, "NOT found in database, adding song: ${song.song.title}")
 
-                database.transaction {
+                database.awaitTransaction {
                     insert(song.song.toMediaMetadata())
                     song.format?.let {
                         upsert(it.copy(id = song.song.id))
@@ -911,7 +910,7 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
             if (newSongs.none { it == song.song.localPath }) {
                 if (SCANNER_DEBUG)
                     Log.v(TAG, "Disabling song ${song.song.localPath}")
-                database.transaction {
+                database.awaitTransaction {
                     disableLocalSong(song.song.id)
                 }
             }
@@ -1431,15 +1430,15 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
          * p.s. This is here instead of DatabaseDao because it won't compile there because
          * "oooga boooga error in generated code"
          */
-        fun swapArtists(old: ArtistEntity, new: ArtistEntity, database: MusicDatabase) {
-            database.transaction {
+        suspend fun swapArtists(old: ArtistEntity, new: ArtistEntity, database: MusicDatabase) {
+            database.awaitTransaction {
                 if (artistById(old.id) == null) {
                     reportException(Exception("Attempting to swap with non-existent old artist in database with id: ${old.id}"))
-                    return@transaction
+                    return@awaitTransaction
                 }
                 if (artistById(new.id) == null) {
                     reportException(Exception("Attempting to swap with non-existent new artist in database with id: ${new.id}"))
-                    return@transaction
+                    return@awaitTransaction
                 }
 
                 // update participation(s)
@@ -1451,15 +1450,15 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
             }
         }
 
-        fun swapAlbums(old: AlbumEntity, new: AlbumEntity, database: MusicDatabase) {
-            database.transaction {
+        suspend fun swapAlbums(old: AlbumEntity, new: AlbumEntity, database: MusicDatabase) {
+            database.awaitTransaction {
                 if (albumById(old.id) == null) {
                     reportException(Exception("Attempting to swap with non-existent old album in database with id: ${old.id}"))
-                    return@transaction
+                    return@awaitTransaction
                 }
                 if (albumById(new.id) == null) {
                     reportException(Exception("Attempting to swap with non-existent new album in database with id: ${new.id}"))
-                    return@transaction
+                    return@awaitTransaction
                 }
 
                 // update participation(s)
@@ -1470,15 +1469,15 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
             }
         }
 
-        fun swapGenres(old: GenreEntity, new: GenreEntity, database: MusicDatabase) {
-            database.transaction {
+        suspend fun swapGenres(old: GenreEntity, new: GenreEntity, database: MusicDatabase) {
+            database.awaitTransaction {
                 if (genreById(old.id) == null) {
                     reportException(Exception("Attempting to swap with non-existent old album in database with id: ${old.id}"))
-                    return@transaction
+                    return@awaitTransaction
                 }
                 if (genreById(new.id) == null) {
                     reportException(Exception("Attempting to swap with non-existent new album in database with id: ${new.id}"))
-                    return@transaction
+                    return@awaitTransaction
                 }
 
                 // update participation(s)

@@ -76,9 +76,34 @@ interface AlbumsDao : ArtistsDao {
     LIMIT :previewSize""")
     fun allLocalAlbumsByName(previewSize: Int = Int.MAX_VALUE): List<AlbumEntity>
 
-    @Transaction
+    @Query("""
+        SELECT * FROM album
+        WHERE album.isLocal = 1 AND album.title = :title COLLATE BINARY
+        ORDER BY album.rowId ASC
+        LIMIT 1
+    """)
+    fun localAlbumByTitleExact(title: String): AlbumEntity?
+
     @Query("UPDATE song_album_map SET albumId = :newId WHERE albumId = :oldId")
-    fun updateSongAlbumMap(oldId: String, newId: String)
+    fun updateSongAlbumMapRows(oldId: String, newId: String)
+
+    @Query("""
+        UPDATE song
+        SET albumId = :albumId,
+            albumName = (SELECT title FROM album WHERE id = :albumId)
+        WHERE id IN (
+            SELECT songId FROM song_album_map WHERE albumId = :albumId
+        )
+    """)
+    fun updateSongAlbumIdentityForAlbum(albumId: String)
+
+    @Transaction
+    fun updateSongAlbumMap(oldId: String, newId: String) {
+        updateSongAlbumMapRows(oldId, newId)
+        updateSongAlbumIdentityForAlbum(newId)
+        refreshLocalAlbumStats(oldId)
+        refreshLocalAlbumStats(newId)
+    }
 
     @Query(
         """
@@ -251,7 +276,13 @@ interface AlbumsDao : ArtistsDao {
     fun insert(album: AlbumEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    fun insert(map: SongAlbumMap)
+    fun insertSongAlbumMap(map: SongAlbumMap): Long
+
+    @Transaction
+    fun insert(map: SongAlbumMap) {
+        insertSongAlbumMap(map)
+        refreshLocalAlbumStats(map.albumId)
+    }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insert(map: AlbumArtistMap)
@@ -295,7 +326,30 @@ interface AlbumsDao : ArtistsDao {
     fun upsert(album: AlbumEntity)
 
     @Upsert
-    fun upsert(map: SongAlbumMap)
+    fun upsertSongAlbumMap(map: SongAlbumMap)
+
+    @Transaction
+    fun upsert(map: SongAlbumMap) {
+        upsertSongAlbumMap(map)
+        refreshLocalAlbumStats(map.albumId)
+    }
+
+    @Query("""
+        UPDATE album
+        SET songCount = (
+                SELECT COUNT(*)
+                FROM song_album_map
+                WHERE song_album_map.albumId = :albumId
+            ),
+            duration = COALESCE((
+                SELECT SUM(CASE WHEN song.duration > 0 THEN song.duration ELSE 0 END)
+                FROM song_album_map
+                    JOIN song ON song.id = song_album_map.songId
+                WHERE song_album_map.albumId = :albumId
+            ), 0)
+        WHERE album.id = :albumId AND album.isLocal = 1
+    """)
+    fun refreshLocalAlbumStats(albumId: String)
 
     /**
      * Set artistId
@@ -308,9 +362,18 @@ interface AlbumsDao : ArtistsDao {
     @Query("DELETE FROM song_artist_map WHERE songId = :songID")
     fun unlinkSongArtists(songID: String)
 
-    @Transaction
+    @Query("SELECT albumId FROM song_album_map WHERE songId = :songID")
+    fun albumIdsForSong(songID: String): List<String>
+
     @Query("DELETE FROM song_album_map WHERE songId = :songID")
-    fun unlinkSongAlbums(songID: String)
+    fun deleteSongAlbumMaps(songID: String)
+
+    @Transaction
+    fun unlinkSongAlbums(songID: String) {
+        val albumIds = albumIdsForSong(songID)
+        deleteSongAlbumMaps(songID)
+        albumIds.forEach(::refreshLocalAlbumStats)
+    }
 
     @Transaction
     @Query("DELETE FROM song_genre_map WHERE songId = :songID")

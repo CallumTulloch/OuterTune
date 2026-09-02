@@ -45,8 +45,15 @@ import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.pages.AlbumPage
 import kotlinx.coroutines.flow.Flow
 
-internal fun resolveAlbumId(metadataAlbumId: String, existingAlbumId: String? = null): String =
-    metadataAlbumId.ifBlank { existingAlbumId ?: AlbumEntity.generateAlbumId() }
+internal fun resolveAlbumId(
+    metadataAlbumId: String,
+    isLocal: Boolean,
+    existingLocalAlbumId: String? = null,
+): String = when {
+    isLocal && existingLocalAlbumId != null -> existingLocalAlbumId
+    metadataAlbumId.isNotBlank() -> metadataAlbumId
+    else -> AlbumEntity.generateAlbumId()
+}
 
 @Dao
 interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao {
@@ -205,7 +212,16 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
         }
 
         mediaMetadata.album?.let {
-            val albumId = resolveAlbumId(it.id, albumsByName(it.title)?.id)
+            val isLocalAlbum = mediaMetadata.isLocal
+            val albumId = resolveAlbumId(
+                metadataAlbumId = it.id,
+                isLocal = isLocalAlbum,
+                existingLocalAlbumId = if (isLocalAlbum) {
+                    localAlbumByTitleExact(it.title)?.id
+                } else {
+                    null
+                }
+            )
             if (albumById(albumId) == null) {
                 insert(
                     AlbumEntity(
@@ -214,7 +230,7 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
                         thumbnailUrl = mediaMetadata.thumbnailUrl,
                         songCount = 1,
                         duration = mediaMetadata.duration,
-                        isLocal = it.isLocal
+                        isLocal = isLocalAlbum
                     )
                 )
             }

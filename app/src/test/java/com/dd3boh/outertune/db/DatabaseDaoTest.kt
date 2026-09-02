@@ -9,16 +9,46 @@ class DatabaseDaoTest {
     fun `online album keeps its canonical metadata id`() {
         val albumId = "MPREb_Oo0wRyxtDXp"
 
-        assertEquals(albumId, resolveAlbumId(albumId))
+        assertEquals(
+            albumId,
+            resolveAlbumId(
+                metadataAlbumId = albumId,
+                isLocal = false,
+                existingLocalAlbumId = "LBsameTitle"
+            )
+        )
     }
 
     @Test
-    fun `missing album id reuses a matching local album`() {
-        assertEquals("LBexisting", resolveAlbumId("", "LBexisting"))
+    fun `local album reuses a matching local album instead of its generated id`() {
+        assertEquals(
+            "LBexisting",
+            resolveAlbumId(
+                metadataAlbumId = "LBgenerated",
+                isLocal = true,
+                existingLocalAlbumId = "LBexisting"
+            )
+        )
     }
 
     @Test
-    fun `missing album without a match receives a local album id`() {
-        assertTrue(resolveAlbumId("").startsWith("LB"))
+    fun `first local album keeps its generated id`() {
+        assertEquals(
+            "LBgenerated",
+            resolveAlbumId(
+                metadataAlbumId = "LBgenerated",
+                isLocal = true
+            )
+        )
+    }
+
+    @Test
+    fun `missing album id receives a local album id`() {
+        assertTrue(
+            resolveAlbumId(
+                metadataAlbumId = "",
+                isLocal = true
+            ).startsWith("LB")
+        )
     }
 }
