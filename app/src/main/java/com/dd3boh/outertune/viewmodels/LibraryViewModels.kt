@@ -94,6 +94,11 @@ class LibrarySongsViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) { syncUtils.syncRemoteLikedSongs(bypassCd) }
     }
 
+    fun syncAllSongs(bypassCd: Boolean = false) {
+        syncLibrarySongs(bypassCd)
+        syncLikedSongs(bypassCd)
+    }
+
     private fun getSyncedSongs(context: Context, database: MusicDatabase): StateFlow<List<Song>?> {
 
         return context.dataStore.data
@@ -107,6 +112,7 @@ class LibrarySongsViewModel @Inject constructor(
             .distinctUntilChanged()
             .flatMapLatest { (filter, sortType, descending) ->
                 when (filter) {
+                    SongFilter.ALL -> database.savedSongs(sortType, descending)
                     SongFilter.LIBRARY -> database.songs(sortType, descending)
                     SongFilter.LIKED -> database.likedSongs(sortType, descending)
                     SongFilter.DOWNLOADED -> database.downloadSongs(sortType, descending)

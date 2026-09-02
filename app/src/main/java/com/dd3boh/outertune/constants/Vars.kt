@@ -57,7 +57,8 @@ const val SCANNER_OWNER_DL = 32
 const val SCANNER_OWNER_LM = 1
 const val SCANNER_OWNER_M3U = 2
 
-const val SYNC_CD = 60000 * 30
+// Sync timestamps are stored as epoch seconds.
+const val SYNC_CD = 30 * 60L
 
 const val MAX_PLAYER_CONSECUTIVE_ERR = 3
 

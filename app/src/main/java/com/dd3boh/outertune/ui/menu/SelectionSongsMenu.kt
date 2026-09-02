@@ -112,58 +112,6 @@ fun SelectionMediaMetadataMenu(
             bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         )
     ) {
-        GridMenuItem(
-            icon = R.drawable.play,
-            title = R.string.play
-        ) {
-            onDismiss()
-            playerConnection.playQueue(
-                ListQueue(
-                    title = "Selection",
-                    items = selection
-                )
-            )
-            clearAction()
-        }
-
-        GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
-            title = R.string.play_next,
-        ) {
-            onDismiss()
-            playerConnection.enqueueNext(selection.map { it.toMediaItem() })
-            clearAction()
-        }
-
-        GridMenuItem(
-            icon = R.drawable.shuffle_on,
-            title = R.string.shuffle
-        ) {
-            onDismiss()
-            playerConnection.playQueue(
-                ListQueue(
-                    title = "Selection",
-                    items = selection,
-                    startShuffled = true,
-                )
-            )
-            clearAction()
-        }
-
-        GridMenuItem(
-            icon = R.drawable.queue_music,
-            title = R.string.add_to_queue
-        ) {
-            showChooseQueueDialog = true
-        }
-
-        GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
-            title = R.string.add_to_playlist
-        ) {
-            showChoosePlaylistDialog = true
-        }
-
         if (!allLocal) {
             if (allInLibrary) {
                 GridMenuItem(
@@ -192,6 +140,69 @@ fun SelectionMediaMetadataMenu(
             }
         }
 
+        DownloadGridMenu(
+            state = downloadState,
+            onDownload = {
+                val songs = selection.filterNot { it.isLocal }
+                downloadUtil.download(songs)
+            },
+            onRemoveDownload = {
+                showRemoveDownloadDialog = true
+            }
+        )
+
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+            title = R.string.play_next,
+        ) {
+            onDismiss()
+            playerConnection.enqueueNext(selection.map { it.toMediaItem() })
+            clearAction()
+        }
+
+        GridMenuItem(
+            icon = R.drawable.queue_music,
+            title = R.string.add_to_queue
+        ) {
+            showChooseQueueDialog = true
+        }
+
+        GridMenuItem(
+            icon = R.drawable.play,
+            title = R.string.play
+        ) {
+            onDismiss()
+            playerConnection.playQueue(
+                ListQueue(
+                    title = "Selection",
+                    items = selection
+                )
+            )
+            clearAction()
+        }
+
+        GridMenuItem(
+            icon = R.drawable.shuffle_on,
+            title = R.string.shuffle
+        ) {
+            onDismiss()
+            playerConnection.playQueue(
+                ListQueue(
+                    title = "Selection",
+                    items = selection,
+                    startShuffled = true,
+                )
+            )
+            clearAction()
+        }
+
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+            title = R.string.add_to_playlist
+        ) {
+            showChoosePlaylistDialog = true
+        }
+
         GridMenuItem(
             icon = if (allLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
             tint = { if (allLiked) MaterialTheme.colorScheme.error else LocalContentColor.current },
@@ -217,17 +228,6 @@ fun SelectionMediaMetadataMenu(
                 }
             }
         }
-
-        DownloadGridMenu(
-            state = downloadState,
-            onDownload = {
-                val songs = selection.filterNot { it.isLocal }
-                downloadUtil.download(songs)
-            },
-            onRemoveDownload = {
-                showRemoveDownloadDialog = true
-            }
-        )
 
         if (onRemoveFromHistory != null) {
             GridMenuItem(

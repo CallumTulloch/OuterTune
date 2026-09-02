@@ -128,6 +128,8 @@ fun LibraryScreen(
     val isSyncingRemoteArtists by viewModel.isSyncingRemoteArtists.collectAsState()
     val isSyncingRemoteSongs by viewModel.isSyncingRemoteSongs.collectAsState()
     val isSyncingRemoteLikedSongs by viewModel.isSyncingRemoteLikedSongs.collectAsState()
+    val isRefreshingLibrary = isSyncingRemotePlaylists || isSyncingRemoteAlbums || isSyncingRemoteArtists ||
+            isSyncingRemoteSongs || isSyncingRemoteLikedSongs
     val pullRefreshState = rememberPullToRefreshState()
 
     val likedPlaylist = PlaylistEntity(id = "liked", name = stringResource(id = R.string.liked_songs))
@@ -288,12 +290,17 @@ fun LibraryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pullToRefresh(
-                state = pullRefreshState,
-                isRefreshing = isSyncingRemotePlaylists || isSyncingRemoteAlbums || isSyncingRemoteArtists
-                        || isSyncingRemoteSongs || isSyncingRemoteLikedSongs,
-                onRefresh = {
-                    viewModel.syncAll(true)
+            .then(
+                if (filter == LibraryFilter.ALL) {
+                    Modifier.pullToRefresh(
+                        state = pullRefreshState,
+                        isRefreshing = isRefreshingLibrary,
+                        onRefresh = {
+                            viewModel.syncAll(true)
+                        }
+                    )
+                } else {
+                    Modifier
                 }
             ),
     ) {
@@ -563,13 +570,14 @@ fun LibraryScreen(
             }
         }
 
-        Indicator(
-            isRefreshing = isSyncingRemotePlaylists || isSyncingRemoteAlbums || isSyncingRemoteArtists
-                    || isSyncingRemoteSongs || isSyncingRemoteLikedSongs,
-            state = pullRefreshState,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(LocalPlayerAwareWindowInsets.current.asPaddingValues()),
-        )
+        if (filter == LibraryFilter.ALL) {
+            Indicator(
+                isRefreshing = isRefreshingLibrary,
+                state = pullRefreshState,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(LocalPlayerAwareWindowInsets.current.asPaddingValues()),
+            )
+        }
     }
 }

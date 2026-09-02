@@ -153,61 +153,6 @@ fun YouTubeSongMenu(
             bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         )
     ) {
-        GridMenuItem(
-            icon = Icons.Rounded.Radio,
-            title = R.string.start_radio
-        ) {
-            playerConnection.playQueue(YouTubeQueue.radio(song.toMediaMetadata()), isRadio = true)
-            onDismiss()
-        }
-        GridMenuItem(
-            icon = Icons.Rounded.PlayArrow,
-            title = R.string.play
-        ) {
-            playerConnection.playQueue(
-                queue = ListQueue(
-                    title = song.title,
-                    items = listOf(song.toMediaMetadata())
-                )
-            )
-            onDismiss()
-        }
-        GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
-            title = R.string.play_next
-        ) {
-            playerConnection.enqueueNext(song.toMediaItem())
-            onDismiss()
-        }
-        GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.QueueMusic,
-            title = R.string.add_to_queue
-        ) {
-            showChooseQueueDialog = true
-        }
-        GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
-            title = R.string.add_to_playlist
-        ) {
-            showChoosePlaylistDialog = true
-        }
-        DownloadGridMenu(
-            localDateTime = download,
-            onDownload = {
-                database.transaction {
-                    insert(song.toMediaMetadata())
-                }
-                downloadUtil.download(song.toMediaMetadata())
-            },
-            onRemoveDownload = {
-                DownloadService.sendRemoveDownload(
-                    context,
-                    ExoDownloadService::class.java,
-                    song.id,
-                    false
-                )
-            }
-        )
         if (librarySong?.song?.inLibrary != null) {
             GridMenuItem(
                 icon = Icons.Rounded.LibraryAddCheck,
@@ -238,6 +183,23 @@ fun YouTubeSongMenu(
                 }
             }
         }
+        DownloadGridMenu(
+            localDateTime = download,
+            onDownload = {
+                database.transaction {
+                    insert(song.toMediaMetadata())
+                }
+                downloadUtil.download(song.toMediaMetadata())
+            },
+            onRemoveDownload = {
+                DownloadService.sendRemoveDownload(
+                    context,
+                    ExoDownloadService::class.java,
+                    song.id,
+                    false
+                )
+            }
+        )
         if (artists.isNotEmpty()) {
             GridMenuItem(
                 icon = Icons.Rounded.Person,
@@ -259,6 +221,45 @@ fun YouTubeSongMenu(
                 navController.navigate("album/${album.id}")
                 onDismiss()
             }
+        }
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+            title = R.string.play_next
+        ) {
+            playerConnection.enqueueNext(song.toMediaItem())
+            onDismiss()
+        }
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.QueueMusic,
+            title = R.string.add_to_queue
+        ) {
+            showChooseQueueDialog = true
+        }
+
+        GridMenuItem(
+            icon = Icons.Rounded.Radio,
+            title = R.string.start_radio
+        ) {
+            playerConnection.playQueue(YouTubeQueue.radio(song.toMediaMetadata()), isRadio = true)
+            onDismiss()
+        }
+        GridMenuItem(
+            icon = Icons.Rounded.PlayArrow,
+            title = R.string.play
+        ) {
+            playerConnection.playQueue(
+                queue = ListQueue(
+                    title = song.title,
+                    items = listOf(song.toMediaMetadata())
+                )
+            )
+            onDismiss()
+        }
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+            title = R.string.add_to_playlist
+        ) {
+            showChoosePlaylistDialog = true
         }
         GridMenuItem(
             icon = Icons.Rounded.Share,

@@ -177,6 +177,82 @@ fun SongMenu(
             bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         )
     ) {
+        if (!song.song.isLocal) {
+            if (song.song.inLibrary == null) {
+                GridMenuItem(
+                    icon = Icons.Rounded.LibraryAdd,
+                    title = R.string.add_to_library
+                ) {
+                    database.query {
+                        update(song.song.toggleLibrary())
+                    }
+                }
+            } else {
+                GridMenuItem(
+                    icon = Icons.Rounded.LibraryAddCheck,
+                    title = R.string.remove_from_library
+                ) {
+                    database.query {
+                        update(song.song.toggleLibrary())
+                    }
+                }
+            }
+        }
+
+        if (!song.song.isLocal)
+            DownloadGridMenu(
+                localDateTime = download,
+                onDownload = {
+                    downloadUtil.download(song.toMediaMetadata())
+                },
+                onRemoveDownload = {
+                    if (song.song.localPath != null) {
+                        downloadUtil.delete(song)
+                    } else {
+                        DownloadService.sendRemoveDownload(
+                            context,
+                            ExoDownloadService::class.java,
+                            song.id,
+                            false
+                        )
+                    }
+                }
+            )
+
+        GridMenuItem(
+            icon = R.drawable.artist,
+            title = R.string.view_artist
+        ) {
+            if (song.artists.size == 1) {
+                navController.navigate("artist/${song.artists[0].id}")
+                onDismiss()
+            } else {
+                showSelectArtistDialog = true
+            }
+        }
+        if (song.song.albumId != null && !song.song.isLocal) {
+            GridMenuItem(
+                icon = Icons.Rounded.Album,
+                title = R.string.view_album
+            ) {
+                onDismiss()
+                navController.navigate("album/${song.song.albumId}")
+            }
+        }
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+            title = R.string.play_next
+        ) {
+            onDismiss()
+            playerConnection.enqueueNext(song.toMediaItem())
+        }
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.QueueMusic,
+            title = R.string.add_to_queue
+        ) {
+            showChooseQueueDialog = true
+        }
+
         if (!song.song.isLocal)
             GridMenuItem(
                 icon = Icons.Rounded.Radio,
@@ -199,23 +275,10 @@ fun SongMenu(
             onDismiss()
         }
         GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
-            title = R.string.play_next
-        ) {
-            onDismiss()
-            playerConnection.enqueueNext(song.toMediaItem())
-        }
-        GridMenuItem(
             icon = Icons.Rounded.Edit,
             title = R.string.edit
         ) {
             showEditDialog = true
-        }
-        GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.QueueMusic,
-            title = R.string.add_to_queue
-        ) {
-            showChooseQueueDialog = true
         }
         GridMenuItem(
             icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
@@ -249,48 +312,6 @@ fun SongMenu(
                 onDismiss()
             }
         }
-
-        if (!song.song.isLocal)
-            DownloadGridMenu(
-                localDateTime = download,
-                onDownload = {
-                    downloadUtil.download(song.toMediaMetadata())
-                },
-                onRemoveDownload = {
-                    if (song.song.localPath != null) {
-                        downloadUtil.delete(song)
-                    } else {
-                        DownloadService.sendRemoveDownload(
-                            context,
-                            ExoDownloadService::class.java,
-                            song.id,
-                            false
-                        )
-                    }
-                }
-            )
-
-
-        GridMenuItem(
-            icon = R.drawable.artist,
-            title = R.string.view_artist
-        ) {
-            if (song.artists.size == 1) {
-                navController.navigate("artist/${song.artists[0].id}")
-                onDismiss()
-            } else {
-                showSelectArtistDialog = true
-            }
-        }
-        if (song.song.albumId != null && !song.song.isLocal) {
-            GridMenuItem(
-                icon = Icons.Rounded.Album,
-                title = R.string.view_album
-            ) {
-                onDismiss()
-                navController.navigate("album/${song.song.albumId}")
-            }
-        }
         if (!song.song.isLocal)
             GridMenuItem(
                 icon = Icons.Rounded.Share,
@@ -309,27 +330,6 @@ fun SongMenu(
             title = R.string.details
         ) {
             showDetailsDialog = true
-        }
-        if (!song.song.isLocal) {
-            if (song.song.inLibrary == null) {
-                GridMenuItem(
-                    icon = Icons.Rounded.LibraryAdd,
-                    title = R.string.add_to_library
-                ) {
-                    database.query {
-                        update(song.song.toggleLibrary())
-                    }
-                }
-            } else {
-                GridMenuItem(
-                    icon = Icons.Rounded.LibraryAddCheck,
-                    title = R.string.remove_from_library
-                ) {
-                    database.query {
-                        update(song.song.toggleLibrary())
-                    }
-                }
-            }
         }
         if (event != null) {
             GridMenuItem(

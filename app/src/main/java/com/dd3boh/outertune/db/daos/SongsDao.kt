@@ -84,6 +84,75 @@ interface SongsDao {
     @Query("SELECT * FROM song WHERE liked AND dateDownload IS NULL")
     fun likedSongsNotDownloaded(): Flow<List<Song>>
 
+    // region Saved Songs Sort
+    @Transaction
+    @Query("""
+        SELECT * FROM song
+        WHERE inLibrary IS NOT NULL OR liked OR (isLocal = 0 AND dateDownload IS NOT NULL)
+        ORDER BY COALESCE(inLibrary, likedDate, dateDownload)
+    """)
+    fun savedSongsByCreateDateAsc(): Flow<List<Song>>
+
+    @Transaction
+    @Query("""
+        SELECT * FROM song
+        WHERE inLibrary IS NOT NULL OR liked OR (isLocal = 0 AND dateDownload IS NOT NULL)
+        ORDER BY date
+    """)
+    fun savedSongsByReleaseDateAsc(): Flow<List<Song>>
+
+    @Transaction
+    @Query("""
+        SELECT * FROM song
+        WHERE inLibrary IS NOT NULL OR liked OR (isLocal = 0 AND dateDownload IS NOT NULL)
+        ORDER BY dateModified
+    """)
+    fun savedSongsByDateModifiedAsc(): Flow<List<Song>>
+
+    @Transaction
+    @Query("""
+        SELECT * FROM song
+        WHERE inLibrary IS NOT NULL OR liked OR (isLocal = 0 AND dateDownload IS NOT NULL)
+        ORDER BY title COLLATE NOCASE ASC
+    """)
+    fun savedSongsByNameAsc(): Flow<List<Song>>
+
+    @Transaction
+    @Query("""
+        SELECT * FROM song
+        WHERE inLibrary IS NOT NULL OR liked OR (isLocal = 0 AND dateDownload IS NOT NULL)
+        ORDER BY (
+            SELECT LOWER(GROUP_CONCAT(name, ''))
+            FROM artist
+            WHERE id IN (SELECT artistId FROM song_artist_map WHERE songId = song.id)
+            ORDER BY name
+        ) COLLATE NOCASE
+    """)
+    fun savedSongsByArtistAsc(): Flow<List<Song>>
+
+    @RewriteQueriesToDropUnusedColumns
+    @Transaction
+    @Query("""
+        SELECT song.*, (SELECT SUM(playCount.count)
+            FROM playCount
+            WHERE playCount.song = song.id) AS pc
+        FROM song
+        WHERE inLibrary IS NOT NULL OR liked OR (isLocal = 0 AND dateDownload IS NOT NULL)
+        ORDER BY pc ASC
+    """)
+    fun savedSongsByPlayCountAsc(): Flow<List<Song>>
+
+    fun savedSongs(sortType: SongSortType, descending: Boolean) =
+        when (sortType) {
+            SongSortType.CREATE_DATE -> savedSongsByCreateDateAsc()
+            SongSortType.MODIFIED_DATE -> savedSongsByDateModifiedAsc()
+            SongSortType.RELEASE_DATE -> savedSongsByReleaseDateAsc()
+            SongSortType.NAME -> savedSongsByNameAsc()
+            SongSortType.ARTIST -> savedSongsByArtistAsc()
+            SongSortType.PLAY_COUNT -> savedSongsByPlayCountAsc()
+        }.map { it.reversed(descending) }
+    // endregion
+
     // region Songs Sort
     @Transaction
     @Query("SELECT * FROM song WHERE inLibrary IS NOT NULL ORDER BY rowId")

@@ -90,6 +90,12 @@ import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibrarySongsViewModel
 import kotlin.math.roundToInt
 
+internal fun nextSongFilter(currentFilter: SongFilter, selectedFilter: SongFilter): SongFilter =
+    if (currentFilter == selectedFilter) SongFilter.ALL else selectedFilter
+
+internal fun normalizeEmbeddedSongFilter(filter: SongFilter): SongFilter =
+    if (filter == SongFilter.ALL || filter == SongFilter.LIKED) SongFilter.LIBRARY else filter
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LibrarySongsScreen(
@@ -146,15 +152,19 @@ fun LibrarySongsScreen(
 
     LaunchedEffect(Unit) {
         when (filter) {
+            SongFilter.ALL -> viewModel.syncAllSongs()
             SongFilter.LIKED -> viewModel.syncLikedSongs()
             SongFilter.LIBRARY -> viewModel.syncLibrarySongs()
             else -> return@LaunchedEffect
         }
     }
 
-    LaunchedEffect(libraryFilterContent) {
-        if (libraryFilterContent != null && filter == SongFilter.LIKED) {
-            filter = SongFilter.LIBRARY
+    LaunchedEffect(libraryFilterContent, filter) {
+        if (libraryFilterContent != null) {
+            val normalizedFilter = normalizeEmbeddedSongFilter(filter)
+            if (normalizedFilter != filter) {
+                filter = normalizedFilter
+            }
         }
     }
 
@@ -167,9 +177,14 @@ fun LibrarySongsScreen(
             ),
             currentValue = filter,
             onValueUpdate = {
-                filter = it
-                if (it == SongFilter.LIKED) viewModel.syncLikedSongs()
-                else if (it == SongFilter.LIBRARY) viewModel.syncLibrarySongs()
+                val updatedFilter = nextSongFilter(filter, it)
+                filter = updatedFilter
+                when (updatedFilter) {
+                    SongFilter.ALL -> viewModel.syncAllSongs()
+                    SongFilter.LIKED -> viewModel.syncLikedSongs()
+                    SongFilter.LIBRARY -> viewModel.syncLibrarySongs()
+                    SongFilter.DOWNLOADED -> Unit
+                }
             },
             isLoading = { filter ->
                 (filter == SongFilter.LIKED && isSyncingRemoteLikedSongs) || (filter == SongFilter.LIBRARY && isSyncingRemoteSongs)
@@ -277,6 +292,7 @@ fun LibrarySongsScreen(
                 isRefreshing = isSyncingRemoteLikedSongs || isSyncingRemoteSongs,
                 onRefresh = {
                     when (filter) {
+                        SongFilter.ALL -> viewModel.syncAllSongs(true)
                         SongFilter.LIKED -> viewModel.syncLikedSongs(true)
                         SongFilter.LIBRARY -> viewModel.syncLibrarySongs(true)
                         else -> return@pullToRefresh
