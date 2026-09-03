@@ -20,6 +20,7 @@ import com.dd3boh.outertune.db.entities.AlbumWithSongs
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongAlbumMap
+import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.reversed
 import com.zionhuang.innertube.models.AlbumItem
 import kotlinx.coroutines.flow.Flow
@@ -175,7 +176,15 @@ interface AlbumsDao : ArtistsDao {
     """)
     fun artistAlbumsPreview(artistId: String, previewSize: Int = 6): Flow<List<Album>>
 
-    @RawQuery(observedEntities = [AlbumEntity::class])
+    @RawQuery(
+        observedEntities = [
+            AlbumEntity::class,
+            SongEntity::class,
+            SongAlbumMap::class,
+            ArtistEntity::class,
+            AlbumArtistMap::class,
+        ]
+    )
     fun _getAlbum(query: SupportSQLiteQuery): Flow<List<Album>>
 
     fun albums(filter: AlbumFilter, sortType: AlbumSortType, descending: Boolean): Flow<List<Album>> {
@@ -197,6 +206,7 @@ interface AlbumsDao : ArtistsDao {
             AlbumFilter.DOWNLOADED -> "song.dateDownload IS NOT NULL"
             AlbumFilter.LIBRARY -> "song.inLibrary IS NOT NULL"
             AlbumFilter.LIKED -> "album.bookmarkedAt IS NOT NULL"
+            AlbumFilter.ALL -> "song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL"
         }
 
         val query = SimpleSQLiteQuery("""
@@ -214,6 +224,18 @@ interface AlbumsDao : ArtistsDao {
 
     fun albumsInLibraryAsc() = albums(AlbumFilter.LIBRARY, AlbumSortType.CREATE_DATE, false)
     fun albumsLikedAsc() = albums(AlbumFilter.LIKED, AlbumSortType.CREATE_DATE, false)
+
+    @Transaction
+    @Query("""
+        SELECT album.*, COUNT(song.dateDownload) AS downloadCount
+        FROM album
+            JOIN song_album_map ON album.id = song_album_map.albumId
+            JOIN song ON song.id = song_album_map.songId
+        WHERE song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL
+        GROUP BY album.id
+        ORDER BY album.rowId ASC
+    """)
+    fun savedAlbumsByCreateDateAsc(): Flow<List<Album>>
 
     @Query("SELECT * FROM album WHERE title = :name")
     fun albumsByName(name: String): AlbumEntity?

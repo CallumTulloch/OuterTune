@@ -85,18 +85,47 @@ class LibrarySongsViewModel @Inject constructor(
     val allSongs = getSyncedSongs(context, database)
     val isSyncingRemoteLikedSongs = syncUtils.isSyncingRemoteLikedSongs
     val isSyncingRemoteSongs = syncUtils.isSyncingRemoteSongs
+    val isRefreshingLibrary = syncUtils.isRefreshingLibrary
 
     fun syncLibrarySongs(bypassCd: Boolean = false) {
-        viewModelScope.launch(Dispatchers.IO) { syncUtils.syncRemoteSongs(bypassCd) }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.syncRemoteSongs(true) }
+            } else {
+                syncUtils.syncRemoteSongs()
+            }
+        }
     }
 
     fun syncLikedSongs(bypassCd: Boolean = false) {
-        viewModelScope.launch(Dispatchers.IO) { syncUtils.syncRemoteLikedSongs(bypassCd) }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.syncRemoteLikedSongs(true) }
+            } else {
+                syncUtils.syncRemoteLikedSongs()
+            }
+        }
     }
 
     fun syncAllSongs(bypassCd: Boolean = false) {
-        syncLibrarySongs(bypassCd)
-        syncLikedSongs(bypassCd)
+        if (!bypassCd) {
+            syncLibrarySongs()
+            syncLikedSongs()
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            syncUtils.refreshLibrary {
+                listOf(
+                    syncUtils.syncRemoteSongs(true),
+                    syncUtils.syncRemoteLikedSongs(true),
+                ).all { it }
+            }
+        }
+    }
+
+    fun refreshDownloads() {
+        viewModelScope.launch(Dispatchers.IO) { syncUtils.refreshLibrary() }
     }
 
     private fun getSyncedSongs(context: Context, database: MusicDatabase): StateFlow<List<Song>?> {
@@ -177,11 +206,12 @@ class LibraryArtistsViewModel @Inject constructor(
     private val syncUtils: SyncUtils,
 ) : ViewModel() {
     val isSyncingRemoteArtists = syncUtils.isSyncingRemoteArtists
+    val isRefreshingLibrary = syncUtils.isRefreshingLibrary
 
     val allArtists = context.dataStore.data
         .map {
                 Triple(
-                    it[ArtistFilterKey].toEnum(ArtistFilter.LIBRARY),
+                    it[ArtistFilterKey].toEnum(ArtistFilter.ALL),
                     it[ArtistSortTypeKey].toEnum(ArtistSortType.CREATE_DATE),
                     it[ArtistSortDescendingKey] ?: true
                 )
@@ -193,7 +223,17 @@ class LibraryArtistsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun syncArtists(bypassCd: Boolean = false) {
-        viewModelScope.launch(Dispatchers.IO) { syncUtils.syncRemoteArtists(bypassCd) }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.syncRemoteArtists(true) }
+            } else {
+                syncUtils.syncRemoteArtists()
+            }
+        }
+    }
+
+    fun refreshDownloads() {
+        viewModelScope.launch(Dispatchers.IO) { syncUtils.refreshLibrary() }
     }
 
     init {
@@ -226,11 +266,12 @@ class LibraryAlbumsViewModel @Inject constructor(
     private val syncUtils: SyncUtils,
 ) : ViewModel() {
     val isSyncingRemoteAlbums = syncUtils.isSyncingRemoteAlbums
+    val isRefreshingLibrary = syncUtils.isRefreshingLibrary
 
     val allAlbums = context.dataStore.data
         .map {
                 Triple(
-                    it[AlbumFilterKey].toEnum(AlbumFilter.LIBRARY),
+                    it[AlbumFilterKey].toEnum(AlbumFilter.ALL),
                     it[AlbumSortTypeKey].toEnum(AlbumSortType.CREATE_DATE),
                     it[AlbumSortDescendingKey] ?: true
                 )
@@ -242,7 +283,17 @@ class LibraryAlbumsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun syncAlbums(bypassCd: Boolean = false) {
-        viewModelScope.launch(Dispatchers.IO) { syncUtils.syncRemoteAlbums(bypassCd) }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.syncRemoteAlbums(true) }
+            } else {
+                syncUtils.syncRemoteAlbums()
+            }
+        }
+    }
+
+    fun refreshDownloads() {
+        viewModelScope.launch(Dispatchers.IO) { syncUtils.refreshLibrary() }
     }
 
     init {
@@ -277,6 +328,7 @@ class LibraryPlaylistsViewModel @Inject constructor(
     private val syncUtils: SyncUtils,
 ) : ViewModel() {
     val isSyncingRemotePlaylists = syncUtils.isSyncingRemotePlaylists
+    val isRefreshingLibrary = syncUtils.isRefreshingLibrary
 
     val allPlaylists = context.dataStore.data
         .map {
@@ -293,7 +345,17 @@ class LibraryPlaylistsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun syncPlaylists(bypassCd: Boolean = false) {
-        viewModelScope.launch(Dispatchers.IO) { syncUtils.syncRemotePlaylists(bypassCd) }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.syncRemotePlaylists(true) }
+            } else {
+                syncUtils.syncRemotePlaylists()
+            }
+        }
+    }
+
+    fun refreshDownloads() {
+        viewModelScope.launch(Dispatchers.IO) { syncUtils.refreshLibrary() }
     }
 }
 
@@ -310,9 +372,10 @@ class LibraryViewModel @Inject constructor(
     val isSyncingRemoteAlbums = syncUtils.isSyncingRemoteAlbums
     val isSyncingRemoteArtists = syncUtils.isSyncingRemoteArtists
     val isSyncingRemotePlaylists = syncUtils.isSyncingRemotePlaylists
+    val isRefreshingLibrary = syncUtils.isRefreshingLibrary
 
-    var artists = database.artistsInLibraryAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    var albums = database.albumsInLibraryAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    var artists = database.savedArtistsByCreateDateAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    var albums = database.savedAlbumsByCreateDateAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     var playlists = database.playlistInLibraryAsc().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val allItems = context.dataStore.data
@@ -344,8 +407,44 @@ class LibraryViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    fun syncAlbums(bypassCd: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.syncRemoteAlbums(true) }
+            } else {
+                syncUtils.syncRemoteAlbums()
+            }
+        }
+    }
+
+    fun syncArtists(bypassCd: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.syncRemoteArtists(true) }
+            } else {
+                syncUtils.syncRemoteArtists()
+            }
+        }
+    }
+
+    fun syncPlaylists(bypassCd: Boolean = false) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.syncRemotePlaylists(true) }
+            } else {
+                syncUtils.syncRemotePlaylists()
+            }
+        }
+    }
+
     fun syncAll(bypassCd: Boolean = false) {
-        viewModelScope.launch(Dispatchers.IO) { syncUtils.tryAutoSync(bypassCd) }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (bypassCd) {
+                syncUtils.refreshLibrary { syncUtils.tryAutoSync(true) }
+            } else {
+                syncUtils.tryAutoSync()
+            }
+        }
     }
 }
 

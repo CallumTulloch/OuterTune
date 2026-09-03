@@ -43,11 +43,13 @@ import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.utils.completed
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,6 +66,31 @@ import javax.inject.Singleton
 internal fun isSyncEligible(lastSyncEpochSeconds: Long, currentEpochSeconds: Long): Boolean {
     if (lastSyncEpochSeconds <= 0L) return true
     return currentEpochSeconds - lastSyncEpochSeconds >= SYNC_CD
+}
+
+internal fun <T> combineCompleteRemoteData(results: List<Result<List<T>>>): Result<List<T>> {
+    results.forEach { result ->
+        result.exceptionOrNull()?.let { return Result.failure(it) }
+    }
+    return Result.success(results.flatMap { it.getOrThrow() })
+}
+
+internal class LibraryRefreshCoordinator(
+    private val refreshDownloads: suspend () -> Boolean,
+) {
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    suspend fun refresh(refreshRemote: suspend () -> Boolean = { true }): Boolean {
+        if (!_isRefreshing.compareAndSet(expect = false, update = true)) return false
+
+        return try {
+            if (!refreshDownloads()) return false
+            refreshRemote()
+        } finally {
+            _isRefreshing.value = false
+        }
+    }
 }
 
 /**
@@ -85,6 +112,7 @@ class SyncUtils @Inject constructor(
     private val _isSyncingRemoteArtists = MutableStateFlow(false)
     private val _isSyncingRemotePlaylists = MutableStateFlow(false)
     private val _isSyncingRecentActivity = MutableStateFlow(false)
+    private val libraryRefreshCoordinator = LibraryRefreshCoordinator(downloadUtil::reconcileDownloadIndex)
 
     val isSyncingRemoteLikedSongs: StateFlow<Boolean> = _isSyncingRemoteLikedSongs.asStateFlow()
     val isSyncingRemoteSongs: StateFlow<Boolean> = _isSyncingRemoteSongs.asStateFlow()
@@ -92,32 +120,57 @@ class SyncUtils @Inject constructor(
     val isSyncingRemoteArtists: StateFlow<Boolean> = _isSyncingRemoteArtists.asStateFlow()
     val isSyncingRemotePlaylists: StateFlow<Boolean> = _isSyncingRemotePlaylists.asStateFlow()
     val isSyncingRecentActivity: StateFlow<Boolean> = _isSyncingRecentActivity.asStateFlow()
+    val isRefreshingLibrary: StateFlow<Boolean> = libraryRefreshCoordinator.isRefreshing
 
     companion object {
         const val DEFAULT_SYNC_CONTENT = "ARPLSC"
     }
 
-    suspend fun tryAutoSync(force: Boolean = false) {
+    private enum class SyncStartResult {
+        STARTED,
+        NOT_REQUIRED,
+        BLOCKED,
+    }
+
+    suspend fun refreshLibrary(refreshRemote: suspend () -> Boolean = { true }): Boolean =
+        libraryRefreshCoordinator.refresh(refreshRemote)
+
+    suspend fun tryAutoSync(force: Boolean = false): Boolean {
         if (force) {
             // A user-requested sync must not depend on the automatic-sync preference.
-            if (!context.isUserLoggedIn()) return
+            if (!context.isUserLoggedIn()) return false
         } else if (!context.isAutoSyncEnabled()) {
-            return
+            return false
         }
-        if (!context.isInternetConnected()) return
+        if (!context.isInternetConnected()) return false
 
         Log.d(TAG, "Starting ${if (force) "manual" else "automatic"} sync job")
         if (!force && !checkSyncEligibility(LastFullSyncKey)) {
-            return
+            return true
         }
 
-        syncRemoteLikedSongs(force)
-        syncRemoteSongs(force)
-        syncRemoteAlbums(force)
-        syncRemoteArtists(force)
-        syncRemotePlaylists(force)
+        return try {
+            val allSucceeded = listOf(
+                syncRemoteLikedSongs(force),
+                syncRemoteSongs(force),
+                syncRemoteAlbums(force),
+                syncRemoteArtists(force),
+                syncRemotePlaylists(force),
+            ).all { it }
+
+            if (allSucceeded) updateLastSync(LastFullSyncKey)
+            allSucceeded
+        } catch (throwable: CancellationException) {
+            throw throwable
+        } catch (throwable: Exception) {
+            Log.e(TAG, "Full synchronization failed", throwable)
+            false
+        }
+    }
+
+    private suspend fun updateLastSync(key: Preferences.Key<Long>) {
         context.dataStore.edit { settings ->
-            settings[LastFullSyncKey] = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
+            settings[key] = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
         }
     }
 
@@ -143,14 +196,36 @@ class SyncUtils @Inject constructor(
         lastSyncKey: Preferences.Key<Long>,
         force: Boolean,
         label: String,
-    ): Boolean {
-        if (!checkEnabled(content) || !context.isInternetConnected()) return false
-        if (!force && (!context.isAutoSyncEnabled() || !checkSyncEligibility(lastSyncKey))) return false
+    ): SyncStartResult {
+        if (!checkEnabled(content)) return SyncStartResult.NOT_REQUIRED
+        if (!context.isUserLoggedIn() || !context.isInternetConnected()) return SyncStartResult.BLOCKED
+        if (!force && (!context.isAutoSyncEnabled() || !checkSyncEligibility(lastSyncKey))) {
+            return SyncStartResult.NOT_REQUIRED
+        }
         if (!state.compareAndSet(expect = false, update = true)) {
             Log.i(TAG, "$label synchronization already in progress")
-            return false
+            return SyncStartResult.BLOCKED
         }
-        return true
+        return SyncStartResult.STARTED
+    }
+
+    private suspend fun runStartedSync(
+        state: MutableStateFlow<Boolean>,
+        lastSyncKey: Preferences.Key<Long>,
+        label: String,
+        block: suspend () -> Unit,
+    ): Boolean = try {
+        block()
+        updateLastSync(lastSyncKey)
+        true
+    } catch (throwable: CancellationException) {
+        throw throwable
+    } catch (throwable: Exception) {
+        Log.e(TAG, "$label synchronization failed", throwable)
+        false
+    } finally {
+        state.value = false
+        Log.i(TAG, "$label synchronization ended")
     }
 
     private fun checkOverwrite(item: SyncConflictResolution): Boolean {
@@ -182,28 +257,32 @@ class SyncUtils @Inject constructor(
     /**
      * Singleton syncRemoteLikedSongs
      */
-    suspend fun syncRemoteLikedSongs(bypass: Boolean = false) {
-        if (
-            !tryStartSync(
+    suspend fun syncRemoteLikedSongs(bypass: Boolean = false): Boolean {
+        when (
+            tryStartSync(
                 state = _isSyncingRemoteLikedSongs,
                 content = SyncContent.LIKED_SONGS,
                 lastSyncKey = LastLikeSongSyncKey,
                 force = bypass,
                 label = "Liked songs",
             )
-        ) return
+        ) {
+            SyncStartResult.NOT_REQUIRED -> return true
+            SyncStartResult.BLOCKED -> return false
+            SyncStartResult.STARTED -> Unit
+        }
 
-        try {
+        return runStartedSync(
+            state = _isSyncingRemoteLikedSongs,
+            lastSyncKey = LastLikeSongSyncKey,
+            label = "Liked songs",
+        ) {
             Log.d(TAG, "Liked songs synchronization started")
 
             // Get remote and local liked songs
-            YouTube.playlist("LM").completed().onSuccess { page ->
-                if (!context.isInternetConnected()) {
-                    return
-                }
+            val remoteSongs = YouTube.playlist("LM").completed().getOrThrow().songs.reversed()
 
-                val remoteSongs = page.songs.reversed()
-
+            if (checkOverwrite(SyncConflictResolution.OVERWRITE_WITH_REMOTE)) {
                 // Identify local songs to unlike
                 val songsToUnlike = database.likedSongsByNameAsc().first()
                     .filterNot { it.song.isLocal }
@@ -217,51 +296,52 @@ class SyncUtils @Inject constructor(
                         }
                     }
                 }
+            }
 
-                // Insert or like songs in the database
-                for (remoteSong in remoteSongs) {
-                    val localSong = database.song(remoteSong.id).firstOrNull()
-                    database.transaction {
-                        if (localSong == null) {
-                            insert(remoteSong.toMediaMetadata(), SongEntity::localToggleLike)
-                        } else if (!localSong.song.liked) {
-                            update(localSong.song.localToggleLike())
-                        }
+            // Insert or like songs in the database
+            for (remoteSong in remoteSongs) {
+                val localSong = database.song(remoteSong.id).firstOrNull()
+                database.awaitTransaction {
+                    if (localSong == null) {
+                        insert(remoteSong.toMediaMetadata(), SongEntity::localToggleLike)
+                    } else if (!localSong.song.liked) {
+                        update(localSong.song.localToggleLike())
                     }
                 }
             }
-
-        } finally {
-            context.dataStore.edit { settings ->
-                settings[LastLikeSongSyncKey] = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
-            }
-            Log.i(TAG, "Liked songs synchronization ended")
-            _isSyncingRemoteLikedSongs.value = false
         }
     }
 
     /**
      * Singleton syncRemoteSongs
      */
-    suspend fun syncRemoteSongs(bypass: Boolean = false) {
-        if (
-            !tryStartSync(
+    suspend fun syncRemoteSongs(bypass: Boolean = false): Boolean {
+        when (
+            tryStartSync(
                 state = _isSyncingRemoteSongs,
                 content = SyncContent.PRIVATE_SONGS,
                 lastSyncKey = LastLibSongSyncKey,
                 force = bypass,
                 label = "Library songs",
             )
-        ) return
+        ) {
+            SyncStartResult.NOT_REQUIRED -> return true
+            SyncStartResult.BLOCKED -> return false
+            SyncStartResult.STARTED -> Unit
+        }
 
-        try {
+        return runStartedSync(
+            state = _isSyncingRemoteSongs,
+            lastSyncKey = LastLibSongSyncKey,
+            label = "Library songs",
+        ) {
             Log.i(TAG, "Library songs synchronization started")
 
             // Get remote songs (from library and uploads)
-            val remoteSongs = getRemoteData<SongItem>("FEmusic_liked_videos", "FEmusic_library_privately_owned_tracks")
-            if (!context.isInternetConnected()) {
-                return
-            }
+            val remoteSongs = getRemoteData<SongItem>(
+                "FEmusic_liked_videos",
+                "FEmusic_library_privately_owned_tracks",
+            ).getOrThrow()
 
             if (checkOverwrite(SyncConflictResolution.OVERWRITE_WITH_REMOTE)) {
                 // Identify local songs to remove
@@ -284,7 +364,7 @@ class SyncUtils @Inject constructor(
                 val jobs = remoteSongs.map { song ->
                     launch(Dispatchers.IO) {
                         val dbSong = database.song(song.id).firstOrNull()
-                        database.transaction {
+                        database.awaitTransaction {
                             if (dbSong == null) {
                                 insert(song.toMediaMetadata(), SongEntity::toggleLibrary)
                             } else if (dbSong.song.inLibrary == null) {
@@ -295,38 +375,39 @@ class SyncUtils @Inject constructor(
                 }
                 jobs.joinAll()
             }
-        } finally {
-            context.dataStore.edit { settings ->
-                settings[LastLibSongSyncKey] = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
-            }
-            Log.i(TAG, "Library songs synchronization ended")
-            _isSyncingRemoteSongs.value = false
         }
     }
 
     /**
      * Singleton syncRemoteAlbums
      */
-    suspend fun syncRemoteAlbums(bypass: Boolean = false) {
-        if (
-            !tryStartSync(
+    suspend fun syncRemoteAlbums(bypass: Boolean = false): Boolean {
+        when (
+            tryStartSync(
                 state = _isSyncingRemoteAlbums,
                 content = SyncContent.ALBUMS,
                 lastSyncKey = LastAlbumSyncKey,
                 force = bypass,
                 label = "Library albums",
             )
-        ) return
+        ) {
+            SyncStartResult.NOT_REQUIRED -> return true
+            SyncStartResult.BLOCKED -> return false
+            SyncStartResult.STARTED -> Unit
+        }
 
-        try {
+        return runStartedSync(
+            state = _isSyncingRemoteAlbums,
+            lastSyncKey = LastAlbumSyncKey,
+            label = "Library albums",
+        ) {
             Log.i(TAG, "Library albums synchronization started")
 
             // Get remote albums (from library and uploads)
-            val remoteAlbums =
-                getRemoteData<AlbumItem>("FEmusic_liked_albums", "FEmusic_library_privately_owned_releases")
-            if (!context.isInternetConnected()) {
-                return
-            }
+            val remoteAlbums = getRemoteData<AlbumItem>(
+                "FEmusic_liked_albums",
+                "FEmusic_library_privately_owned_releases",
+            ).getOrThrow()
 
             if (checkOverwrite(SyncConflictResolution.OVERWRITE_WITH_REMOTE)) {
                 // Identify local albums to remove
@@ -360,50 +441,48 @@ class SyncUtils @Inject constructor(
                     }
                 }
             }
-        } finally {
-            context.dataStore.edit { settings ->
-                settings[LastAlbumSyncKey] = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
-            }
-            Log.i(TAG, "Library albums synchronization ended")
-            _isSyncingRemoteAlbums.value = false // Use the correct AtomicBoolean
         }
     }
 
     /**
      * Singleton syncRemoteArtists
      */
-    suspend fun syncRemoteArtists(bypass: Boolean = false) {
-        if (
-            !tryStartSync(
+    suspend fun syncRemoteArtists(bypass: Boolean = false): Boolean {
+        when (
+            tryStartSync(
                 state = _isSyncingRemoteArtists,
                 content = SyncContent.ARTISTS,
                 lastSyncKey = LastArtistSyncKey,
                 force = bypass,
                 label = "Library artists",
             )
-        ) return
+        ) {
+            SyncStartResult.NOT_REQUIRED -> return true
+            SyncStartResult.BLOCKED -> return false
+            SyncStartResult.STARTED -> Unit
+        }
 
-        try {
+        return runStartedSync(
+            state = _isSyncingRemoteArtists,
+            lastSyncKey = LastArtistSyncKey,
+            label = "Library artists",
+        ) {
             Log.i(TAG, "Artist subscriptions synchronization started")
 
             // Get remote artists (from library and uploads)
             val likedArtists = getRemoteData<ArtistItem>(
                 "FEmusic_library_corpus_artists",
                 "FEmusic_library_privately_owned_artists"
-            )
+            ).getOrThrow()
             val trackArtists = getRemoteData<ArtistItem>(
                 "FEmusic_library_corpus_track_artists",
                 "FEmusic_library_privately_owned_artists"
-            )
+            ).getOrThrow()
             val remoteArtists = mutableListOf<ArtistItem>().apply {
                 addAll(likedArtists)
                 addAll(trackArtists.filterNot { trackArtist ->
                     likedArtists.any { it.id == trackArtist.id }
                 })
-            }
-
-            if (!context.isInternetConnected()) {
-                return
             }
 
             if (checkOverwrite(SyncConflictResolution.OVERWRITE_WITH_REMOTE)) {
@@ -429,7 +508,7 @@ class SyncUtils @Inject constructor(
                         val localArtist = database.artist(remoteArtist.id).firstOrNull()
                         val isLikedArtist = likedArtists.contains(remoteArtist)
 
-                        database.transaction {
+                        database.awaitTransaction {
                             if (localArtist == null) {
                                 insert(
                                     ArtistEntity(
@@ -447,195 +526,185 @@ class SyncUtils @Inject constructor(
                     }
                 }
             }
-        } finally {
-            context.dataStore.edit { settings ->
-                settings[LastArtistSyncKey] = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
-            }
-            Log.i(TAG, "Artist subscriptions synchronization ended")
-            _isSyncingRemoteArtists.value = false
         }
     }
 
     /**
      * Singleton syncRemotePlaylists
      */
-    suspend fun syncRemotePlaylists(bypass: Boolean = false) {
-        if (
-            !tryStartSync(
+    suspend fun syncRemotePlaylists(bypass: Boolean = false): Boolean {
+        when (
+            tryStartSync(
                 state = _isSyncingRemotePlaylists,
                 content = SyncContent.PLAYLISTS,
                 lastSyncKey = LastPlaylistSyncKey,
                 force = bypass,
                 label = "Library playlists",
             )
-        ) return
+        ) {
+            SyncStartResult.NOT_REQUIRED -> return true
+            SyncStartResult.BLOCKED -> return false
+            SyncStartResult.STARTED -> Unit
+        }
 
-        try {
+        return runStartedSync(
+            state = _isSyncingRemotePlaylists,
+            lastSyncKey = LastPlaylistSyncKey,
+            label = "Library playlists",
+        ) {
             Log.i(TAG, "Library playlist synchronization started")
 
             // Get remote and local playlists
-            YouTube.library("FEmusic_liked_playlists").completed().onSuccess { page ->
-                if (!context.isInternetConnected()) {
-                    return
-                }
+            val page = YouTube.library("FEmusic_liked_playlists").completed().getOrThrow()
+            val remotePlaylists = page.items.filterIsInstance<PlaylistItem>()
+                .filterNot { it.id == "LM" || it.id == "SE" }
+                .reversed()
 
-                val remotePlaylists = page.items.filterIsInstance<PlaylistItem>()
-                    .filterNot { it.id == "LM" || it.id == "SE" }
-                    .reversed()
+            val localPlaylists = database.playlistInLibraryAsc().first()
 
-                val localPlaylists = database.playlistInLibraryAsc().first()
+            if (checkOverwrite(SyncConflictResolution.OVERWRITE_WITH_REMOTE)) {
+                // Identify playlists to remove
+                val playlistsToRemove = localPlaylists
+                    .filterNot { it.playlist.isLocal }
+                    .filterNot { it.playlist.browseId == null }
+                    .filterNot { localPlaylist -> remotePlaylists.any { it.id == localPlaylist.playlist.browseId } }
 
-                if (checkOverwrite(SyncConflictResolution.OVERWRITE_WITH_REMOTE)) {
-                    // Identify playlists to remove
-                    val playlistsToRemove = localPlaylists
-                        .filterNot { it.playlist.isLocal }
-                        .filterNot { it.playlist.browseId == null }
-                        .filterNot { localPlaylist -> remotePlaylists.any { it.id == localPlaylist.playlist.browseId } }
-
-                    // Remove playlists from the database
-                    runBlocking {
-                        playlistsToRemove.forEach { playlist ->
-                            launch(Dispatchers.IO) {
-                                database.update(playlist.playlist.localToggleLike())
-                            }
-                        }
-                    }
-                }
-
-                // Add or update playlists in the database
+                // Remove playlists from the database
                 runBlocking {
-                    remotePlaylists.forEach { remotePlaylist ->
+                    playlistsToRemove.forEach { playlist ->
                         launch(Dispatchers.IO) {
-                            // forcefully assign isEditable. These playlists are at mercy of YouTube
-                            var localPlaylist =
-                                localPlaylists.find { remotePlaylist.id == it.playlist.browseId }?.playlist
-                                    ?.copy(isEditable = remotePlaylist.isEditable)
-                            if (localPlaylist == null) {
-                                localPlaylist = PlaylistEntity(
-                                    name = remotePlaylist.title,
-                                    browseId = remotePlaylist.id,
-                                    isEditable = remotePlaylist.isEditable,
-                                    bookmarkedAt = LocalDateTime.now(),
-                                    thumbnailUrl = remotePlaylist.thumbnail,
-                                    remoteSongCount = remotePlaylist.songCountText?.let {
-                                        Regex("""\d+""").find(it)?.value?.toIntOrNull()
-                                    },
-                                    playEndpointParams = remotePlaylist.playEndpoint?.params,
-                                    shuffleEndpointParams = remotePlaylist.shuffleEndpoint?.params,
-                                    radioEndpointParams = remotePlaylist.radioEndpoint?.params
-                                )
-                                database.insert(localPlaylist)
-                            } else {
-                                database.update(localPlaylist, remotePlaylist)
-                            }
-
-                            // Fetch the playlist again after potential insertion/update
-                            val updatedPlaylist =
-                                database.playlistByBrowseId(remotePlaylist.id).firstOrNull()
-                            updatedPlaylist?.let {
-                                val playlistSongMaps = database.songMapsToPlaylist(updatedPlaylist.id)
-                                if (updatedPlaylist.playlist.isEditable || playlistSongMaps.isNotEmpty()) {
-                                    syncPlaylist(remotePlaylist.id, updatedPlaylist.id)
-                                }
-                            }
+                            database.update(playlist.playlist.localToggleLike())
                         }
                     }
                 }
             }
-        } finally {
-            context.dataStore.edit { settings ->
-                settings[LastPlaylistSyncKey] = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
-            }
-            _isSyncingRemotePlaylists.value = false
-            Log.i(TAG, "Library playlist synchronization ended")
-        }
-    }
 
-    suspend fun syncPlaylist(browseId: String, playlistId: String) {
-        // this is also used for individual playlist sync
-        if (!context.isInternetConnected()) {
-            return
-        }
-        YouTube.playlist(browseId).completed().onSuccess { playlistPage ->
-            if (!context.isInternetConnected()) {
-                return
-            }
-
-            runBlocking {
-                launch(Dispatchers.IO) {
-                    database.transaction {
-                        clearPlaylist(playlistId)
-                        val songEntities = playlistPage.songs
-                            .map(SongItem::toMediaMetadata)
-                            .onEach { insert(it) }
-
-                        val playlistSongMaps = songEntities.mapIndexed { position, song ->
-                            PlaylistSongMap(
-                                songId = song.id,
-                                playlistId = playlistId,
-                                position = position,
-                                setVideoId = song.setVideoId
+            // Add or update playlists in the database
+            val playlistSyncResults = coroutineScope {
+                remotePlaylists.map { remotePlaylist ->
+                    async(Dispatchers.IO) {
+                        // forcefully assign isEditable. These playlists are at mercy of YouTube
+                        var localPlaylist =
+                            localPlaylists.find { remotePlaylist.id == it.playlist.browseId }?.playlist
+                                ?.copy(isEditable = remotePlaylist.isEditable)
+                        if (localPlaylist == null) {
+                            localPlaylist = PlaylistEntity(
+                                name = remotePlaylist.title,
+                                browseId = remotePlaylist.id,
+                                isEditable = remotePlaylist.isEditable,
+                                bookmarkedAt = LocalDateTime.now(),
+                                thumbnailUrl = remotePlaylist.thumbnail,
+                                remoteSongCount = remotePlaylist.songCountText?.let {
+                                    Regex("""\d+""").find(it)?.value?.toIntOrNull()
+                                },
+                                playEndpointParams = remotePlaylist.playEndpoint?.params,
+                                shuffleEndpointParams = remotePlaylist.shuffleEndpoint?.params,
+                                radioEndpointParams = remotePlaylist.radioEndpoint?.params
                             )
+                            database.insert(localPlaylist)
+                        } else {
+                            database.update(localPlaylist, remotePlaylist)
                         }
-                        playlistSongMaps.forEach { insert(it) }
+
+                        // Fetch the playlist again after potential insertion/update
+                        val updatedPlaylist = database.playlistByBrowseId(remotePlaylist.id).firstOrNull()
+                            ?: return@async false
+                        val playlistSongMaps = database.songMapsToPlaylist(updatedPlaylist.id)
+                        if (updatedPlaylist.playlist.isEditable || playlistSongMaps.isNotEmpty()) {
+                            syncPlaylist(remotePlaylist.id, updatedPlaylist.id)
+                        } else {
+                            true
+                        }
                     }
-                }
+                }.awaitAll()
+            }
+            if (!playlistSyncResults.all { it }) {
+                error("One or more playlist contents could not be synchronized")
             }
         }
     }
 
-    suspend fun syncRecentActivity(bypass: Boolean = false) {
-        if (
-            !tryStartSync(
+    suspend fun syncPlaylist(browseId: String, playlistId: String): Boolean {
+        // this is also used for individual playlist sync
+        if (!context.isInternetConnected()) return false
+
+        return try {
+            val playlistPage = YouTube.playlist(browseId).completed().getOrThrow()
+            database.awaitTransaction {
+                clearPlaylist(playlistId)
+                val songEntities = playlistPage.songs
+                    .map(SongItem::toMediaMetadata)
+                    .onEach { insert(it) }
+
+                val playlistSongMaps = songEntities.mapIndexed { position, song ->
+                    PlaylistSongMap(
+                        songId = song.id,
+                        playlistId = playlistId,
+                        position = position,
+                        setVideoId = song.setVideoId
+                    )
+                }
+                playlistSongMaps.forEach { insert(it) }
+            }
+            true
+        } catch (throwable: CancellationException) {
+            throw throwable
+        } catch (throwable: Exception) {
+            Log.e(TAG, "Playlist content synchronization failed for $browseId", throwable)
+            false
+        }
+    }
+
+    suspend fun syncRecentActivity(bypass: Boolean = false): Boolean {
+        when (
+            tryStartSync(
                 state = _isSyncingRecentActivity,
                 content = SyncContent.RECENT_ACTIVITY,
                 lastSyncKey = LastRecentActivitySyncKey,
                 force = bypass,
                 label = "Recent activity",
             )
-        ) return
+        ) {
+            SyncStartResult.NOT_REQUIRED -> return true
+            SyncStartResult.BLOCKED -> return false
+            SyncStartResult.STARTED -> Unit
+        }
 
-        try {
+        return runStartedSync(
+            state = _isSyncingRecentActivity,
+            lastSyncKey = LastRecentActivitySyncKey,
+            label = "Recent activity",
+        ) {
             Log.i(TAG, "Recent activity synchronization started")
-            YouTube.libraryRecentActivity().onSuccess { page ->
-                val recentActivity = page.items.take(9).drop(1)
+            val page = YouTube.libraryRecentActivity().getOrThrow()
+            val recentActivity = page.items.take(9).drop(1)
 
-                runBlocking {
-                    launch(Dispatchers.IO) {
-                        database.clearRecentActivity()
-
-                        recentActivity.reversed().forEach { database.insertRecentActivityItem(it) }
-                    }
-                }
+            database.awaitTransaction {
+                clearRecentActivity()
+                recentActivity.reversed().forEach { insertRecentActivityItem(it) }
             }
-        } finally {
-            context.dataStore.edit { settings ->
-                settings[LastRecentActivitySyncKey] = LocalDateTime.now().toEpochSecond(ZoneOffset.UTC)
-            }
-            _isSyncingRecentActivity.value = false
-            Log.i(TAG, "Recent activity synchronization ended")
         }
     }
 
-    private suspend inline fun <reified T> getRemoteData(libraryId: String, uploadsId: String): MutableList<T> {
-        val browseIds = mapOf(
+    private suspend inline fun <reified T> getRemoteData(
+        libraryId: String,
+        uploadsId: String,
+    ): Result<List<T>> {
+        val browseIds = listOf(
             libraryId to 0,
             uploadsId to 1
         )
 
-        val remote = mutableListOf<T>()
-        runBlocking {
-            val fetchJobs = browseIds.map { (browseId, tab) ->
+        val results = coroutineScope {
+            browseIds.map { (browseId, tab) ->
                 async {
-                    YouTube.library(browseId, tab).completed().onSuccess { page ->
-                        val data = page.items.filterIsInstance<T>().reversed()
-                        synchronized(remote) { remote.addAll(data) }
+                    YouTube.library(browseId, tab).completed().map { page ->
+                        page.items.filterIsInstance<T>().reversed()
                     }
                 }
-            }
-            fetchJobs.awaitAll()
+            }.awaitAll()
         }
 
-        return remote
+        return combineCompleteRemoteData(results)
     }
 }

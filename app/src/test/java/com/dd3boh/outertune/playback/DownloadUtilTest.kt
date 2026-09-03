@@ -1,9 +1,12 @@
 package com.dd3boh.outertune.playback
 
+import androidx.media3.exoplayer.offline.Download
 import com.dd3boh.outertune.models.MediaMetadata
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.time.Instant
+import java.time.ZoneOffset
 
 class DownloadUtilTest {
     private val original = MediaMetadata(
@@ -40,5 +43,21 @@ class DownloadUtilTest {
         val merged = mergeResolvedMetadata(original, resolved.copy(album = null))
 
         assertNull(merged.album)
+    }
+
+    @Test
+    fun `completed download is persisted with its update time`() {
+        val updateTimeMs = 1_700_000_000_000L
+
+        assertEquals(
+            Instant.ofEpochMilli(updateTimeMs).atZone(ZoneOffset.UTC).toLocalDateTime(),
+            completedAtForDownloadState(Download.STATE_COMPLETED, updateTimeMs),
+        )
+    }
+
+    @Test
+    fun `queued or active download is not persisted as completed`() {
+        assertNull(completedAtForDownloadState(Download.STATE_QUEUED, 1L))
+        assertNull(completedAtForDownloadState(Download.STATE_DOWNLOADING, 1L))
     }
 }

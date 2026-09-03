@@ -81,6 +81,12 @@ import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryAlbumsViewModel
 
+internal fun nextAlbumFilter(currentFilter: AlbumFilter, selectedFilter: AlbumFilter): AlbumFilter =
+    if (currentFilter == selectedFilter) AlbumFilter.ALL else selectedFilter
+
+internal fun normalizeEmbeddedAlbumFilter(filter: AlbumFilter): AlbumFilter =
+    if (filter == AlbumFilter.LIKED) AlbumFilter.ALL else filter
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryAlbumsScreen(
@@ -96,7 +102,7 @@ fun LibraryAlbumsScreen(
 
     val coroutineScope = rememberCoroutineScope()
 
-    var filter by rememberEnumPreference(AlbumFilterKey, AlbumFilter.LIBRARY)
+    var filter by rememberEnumPreference(AlbumFilterKey, AlbumFilter.ALL)
     var albumViewType by rememberEnumPreference(AlbumViewTypeKey, LibraryViewType.GRID)
     val libraryViewType by rememberEnumPreference(LibraryViewTypeKey, LibraryViewType.GRID)
     val viewType = if (libraryFilterContent != null) libraryViewType else albumViewType
@@ -107,6 +113,8 @@ fun LibraryAlbumsScreen(
 
     val albums by viewModel.allAlbums.collectAsState()
     val isSyncingLibraryAlbums by viewModel.isSyncingRemoteAlbums.collectAsState()
+    val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
+    val isRefreshingLibrary = isSyncingLibraryAlbums || isManualLibraryRefresh
     val pullRefreshState = rememberPullToRefreshState()
 
     val lazyListState = rememberLazyListState()
@@ -114,9 +122,12 @@ fun LibraryAlbumsScreen(
 
     LaunchedEffect(Unit) { viewModel.syncAlbums() }
 
-    LaunchedEffect(libraryFilterContent) {
-        if (libraryFilterContent != null && filter == AlbumFilter.LIKED) {
-            filter = AlbumFilter.LIBRARY
+    LaunchedEffect(libraryFilterContent, filter) {
+        if (libraryFilterContent != null) {
+            val normalizedFilter = normalizeEmbeddedAlbumFilter(filter)
+            if (normalizedFilter != filter) {
+                filter = normalizedFilter
+            }
         }
     }
 
@@ -152,11 +163,14 @@ fun LibraryAlbumsScreen(
                     ),
                     currentValue = filter,
                     onValueUpdate = {
-                        filter = it
-                        if (it == AlbumFilter.LIBRARY) viewModel.syncAlbums()
+                        val updatedFilter = nextAlbumFilter(filter, it)
+                        filter = updatedFilter
+                        if (updatedFilter != AlbumFilter.DOWNLOADED) viewModel.syncAlbums()
                     },
                     modifier = Modifier.weight(1f),
-                    isLoading = { filter -> filter == AlbumFilter.LIBRARY && isSyncingLibraryAlbums }
+                    isLoading = { chipFilter ->
+                        chipFilter != AlbumFilter.DOWNLOADED && isSyncingLibraryAlbums
+                    }
                 )
 
                 IconButton(
@@ -248,9 +262,13 @@ fun LibraryAlbumsScreen(
             .fillMaxSize()
             .pullToRefresh(
                 state = pullRefreshState,
-                isRefreshing = isSyncingLibraryAlbums,
+                isRefreshing = isRefreshingLibrary,
                 onRefresh = {
-                    viewModel.syncAlbums(true)
+                    if (filter == AlbumFilter.DOWNLOADED) {
+                        viewModel.refreshDownloads()
+                    } else {
+                        viewModel.syncAlbums(true)
+                    }
                 }
             ),
     ) {
@@ -364,7 +382,7 @@ fun LibraryAlbumsScreen(
         }
 
         Indicator(
-            isRefreshing = isSyncingLibraryAlbums,
+            isRefreshing = isRefreshingLibrary,
             state = pullRefreshState,
             modifier = Modifier
                 .align(Alignment.TopCenter)

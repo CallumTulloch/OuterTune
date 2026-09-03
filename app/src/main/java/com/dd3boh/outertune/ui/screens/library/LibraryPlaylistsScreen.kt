@@ -106,7 +106,6 @@ fun LibraryPlaylistsScreen(
     val coroutineScope = rememberCoroutineScope()
 
     var filter by rememberEnumPreference(PlaylistFilterKey, PlaylistFilter.LIBRARY)
-    libraryFilterContent?.let { filter = PlaylistFilter.LIBRARY }
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
 
     var playlistViewType by rememberEnumPreference(PlaylistViewTypeKey, LibraryViewType.GRID)
@@ -119,6 +118,8 @@ fun LibraryPlaylistsScreen(
 
     val playlists by viewModel.allPlaylists.collectAsState()
     val isSyncingRemotePlaylists by viewModel.isSyncingRemotePlaylists.collectAsState()
+    val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
+    val isRefreshingLibrary = isSyncingRemotePlaylists || isManualLibraryRefresh
     val pullRefreshState = rememberPullToRefreshState()
 
     val likedPlaylist = PlaylistEntity(id = "liked", name = stringResource(id = R.string.liked_songs))
@@ -256,9 +257,13 @@ fun LibraryPlaylistsScreen(
             .fillMaxSize()
             .pullToRefresh(
                 state = pullRefreshState,
-                isRefreshing = isSyncingRemotePlaylists,
+                isRefreshing = isRefreshingLibrary,
                 onRefresh = {
-                    viewModel.syncPlaylists(true)
+                    if (filter == PlaylistFilter.DOWNLOADED) {
+                        viewModel.refreshDownloads()
+                    } else {
+                        viewModel.syncPlaylists(true)
+                    }
                 }
             ),
     ) {
@@ -448,7 +453,7 @@ fun LibraryPlaylistsScreen(
         }
 
         Indicator(
-            isRefreshing = isSyncingRemotePlaylists,
+            isRefreshing = isRefreshingLibrary,
             state = pullRefreshState,
             modifier = Modifier
                 .align(Alignment.TopCenter)

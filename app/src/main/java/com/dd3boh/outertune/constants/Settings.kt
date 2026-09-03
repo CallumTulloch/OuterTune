@@ -213,11 +213,11 @@ enum class SongFilter {
 }
 
 enum class ArtistFilter {
-    LIBRARY, LIKED, DOWNLOADED
+    LIBRARY, LIKED, DOWNLOADED, ALL
 }
 
 enum class AlbumFilter {
-    LIBRARY, LIKED, DOWNLOADED
+    LIBRARY, LIKED, DOWNLOADED, ALL
 }
 
 enum class PlaylistFilter {

@@ -81,6 +81,12 @@ import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryArtistsViewModel
 
+internal fun nextArtistFilter(currentFilter: ArtistFilter, selectedFilter: ArtistFilter): ArtistFilter =
+    if (currentFilter == selectedFilter) ArtistFilter.ALL else selectedFilter
+
+internal fun normalizeEmbeddedArtistFilter(filter: ArtistFilter): ArtistFilter =
+    if (filter == ArtistFilter.LIKED) ArtistFilter.ALL else filter
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryArtistsScreen(
@@ -92,7 +98,7 @@ fun LibraryArtistsScreen(
     val menuState = LocalMenuState.current
     val coroutineScope = rememberCoroutineScope()
 
-    var filter by rememberEnumPreference(ArtistFilterKey, ArtistFilter.LIBRARY)
+    var filter by rememberEnumPreference(ArtistFilterKey, ArtistFilter.ALL)
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
 
     var artistViewType by rememberEnumPreference(ArtistViewTypeKey, LibraryViewType.GRID)
@@ -104,6 +110,8 @@ fun LibraryArtistsScreen(
 
     val artists by viewModel.allArtists.collectAsState()
     val isSyncingRemoteArtists by viewModel.isSyncingRemoteArtists.collectAsState()
+    val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
+    val isRefreshingLibrary = isSyncingRemoteArtists || isManualLibraryRefresh
     val pullRefreshState = rememberPullToRefreshState()
 
     val lazyListState = rememberLazyListState()
@@ -111,9 +119,12 @@ fun LibraryArtistsScreen(
 
     LaunchedEffect(Unit) { viewModel.syncArtists() }
 
-    LaunchedEffect(libraryFilterContent) {
-        if (libraryFilterContent != null && filter == ArtistFilter.LIKED) {
-            filter = ArtistFilter.LIBRARY
+    LaunchedEffect(libraryFilterContent, filter) {
+        if (libraryFilterContent != null) {
+            val normalizedFilter = normalizeEmbeddedArtistFilter(filter)
+            if (normalizedFilter != filter) {
+                filter = normalizedFilter
+            }
         }
     }
 
@@ -150,8 +161,9 @@ fun LibraryArtistsScreen(
                     ),
                     currentValue = filter,
                     onValueUpdate = {
-                        filter = it
-                        if ((it == ArtistFilter.LIBRARY || it == ArtistFilter.LIKED)
+                        val updatedFilter = nextArtistFilter(filter, it)
+                        filter = updatedFilter
+                        if (updatedFilter != ArtistFilter.DOWNLOADED
                             && !isSyncingRemoteArtists
                         ) viewModel.syncArtists()
                     },
@@ -245,9 +257,13 @@ fun LibraryArtistsScreen(
             .fillMaxSize()
             .pullToRefresh(
                 state = pullRefreshState,
-                isRefreshing = isSyncingRemoteArtists,
+                isRefreshing = isRefreshingLibrary,
                 onRefresh = {
-                    viewModel.syncArtists(true)
+                    if (filter == ArtistFilter.DOWNLOADED) {
+                        viewModel.refreshDownloads()
+                    } else {
+                        viewModel.syncArtists(true)
+                    }
                 }
             ),
     ) {
@@ -357,7 +373,7 @@ fun LibraryArtistsScreen(
         }
 
         Indicator(
-            isRefreshing = isSyncingRemoteArtists,
+            isRefreshing = isRefreshingLibrary,
             state = pullRefreshState,
             modifier = Modifier
                 .align(Alignment.TopCenter)

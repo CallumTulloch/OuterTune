@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AddCircleOutline
@@ -87,6 +88,7 @@ import com.dd3boh.outertune.LocalDownloadUtil
 import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.LocalShowLyrics
 import com.dd3boh.outertune.R
+import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.YouTubeQueue
@@ -417,44 +419,6 @@ fun PlayerMenu(
             bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         )
     ) {
-        if (!mediaMetadata.isLocal)
-            GridMenuItem(
-                icon = Icons.Rounded.Radio,
-                title = R.string.start_radio
-            ) {
-                playerConnection.playQueue(YouTubeQueue.radio(mediaMetadata), isRadio = true)
-                onDismiss()
-            }
-        GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.QueueMusic,
-            title = R.string.add_to_queue
-        ) {
-            showChooseQueueDialog = true
-        }
-        GridMenuItem(
-            icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
-            title = R.string.add_to_playlist
-        ) {
-            showChoosePlaylistDialog = true
-        }
-        if (!mediaMetadata.isLocal)
-            DownloadGridMenu(
-                localDateTime = download,
-                onDownload = {
-                    database.transaction {
-                        insert(mediaMetadata)
-                    }
-                    downloadUtil.download(mediaMetadata)
-                },
-                onRemoveDownload = {
-                    DownloadService.sendRemoveDownload(
-                        context,
-                        ExoDownloadService::class.java,
-                        mediaMetadata.id,
-                        false
-                    )
-                }
-            )
         if (librarySong?.song?.inLibrary != null && !librarySong!!.song.isLocal) {
             GridMenuItem(
                 icon = Icons.Rounded.LibraryAddCheck,
@@ -475,6 +439,24 @@ fun PlayerMenu(
                 }
             }
         }
+        if (!mediaMetadata.isLocal)
+            DownloadGridMenu(
+                localDateTime = download,
+                onDownload = {
+                    database.transaction {
+                        insert(mediaMetadata)
+                    }
+                    downloadUtil.download(mediaMetadata)
+                },
+                onRemoveDownload = {
+                    DownloadService.sendRemoveDownload(
+                        context,
+                        ExoDownloadService::class.java,
+                        mediaMetadata.id,
+                        false
+                    )
+                }
+            )
         GridMenuItem(
             icon = R.drawable.artist,
             title = R.string.view_artist
@@ -496,6 +478,34 @@ fun PlayerMenu(
                 playerBottomSheetState.collapseSoft()
                 onDismiss()
             }
+        }
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+            title = R.string.play_next
+        ) {
+            playerConnection.enqueueNext(mediaMetadata.toMediaItem())
+            onDismiss()
+        }
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.QueueMusic,
+            title = R.string.add_to_queue
+        ) {
+            showChooseQueueDialog = true
+        }
+
+        if (!mediaMetadata.isLocal)
+            GridMenuItem(
+                icon = Icons.Rounded.Radio,
+                title = R.string.start_radio
+            ) {
+                playerConnection.playQueue(YouTubeQueue.radio(mediaMetadata), isRadio = true)
+                onDismiss()
+            }
+        GridMenuItem(
+            icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+            title = R.string.add_to_playlist
+        ) {
+            showChoosePlaylistDialog = true
         }
 
         if (!mediaMetadata.isLocal)

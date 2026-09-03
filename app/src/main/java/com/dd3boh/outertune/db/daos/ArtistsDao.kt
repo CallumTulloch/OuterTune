@@ -17,6 +17,7 @@ import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongArtistMap
+import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.reversed
 import com.dd3boh.outertune.ui.utils.resize
 import com.zionhuang.innertube.pages.ArtistPage
@@ -130,7 +131,7 @@ interface ArtistsDao {
     """)
     fun mostPlayedArtists(fromYear: Int, fromMonth: Int, limit: Int = 6): Flow<List<Artist>>
 
-    @RawQuery(observedEntities = [ArtistEntity::class])
+    @RawQuery(observedEntities = [ArtistEntity::class, SongEntity::class, SongArtistMap::class])
     fun _getArtists(query: SupportSQLiteQuery): Flow<List<Artist>>
 
     fun artists(filter: ArtistFilter, sortType: ArtistSortType, descending: Boolean, localOnly: Boolean? = null): Flow<List<Artist>> {
@@ -140,17 +141,16 @@ interface ArtistsDao {
             ArtistSortType.SONG_COUNT -> "songCount ASC"
         }
 
-        val where = when (filter) {
+        val contentCondition = when (filter) {
             ArtistFilter.DOWNLOADED -> "song.dateDownload IS NOT NULL"
             ArtistFilter.LIBRARY -> "song.inLibrary IS NOT NULL"
             ArtistFilter.LIKED -> "artist.bookmarkedAt IS NOT NULL"
-        } + if (localOnly == null) {
-            ""
-        } else if (localOnly) {
-            "artist.isLocal = 1"
-        } else {
-            "artist.isLocal = 0"
+            ArtistFilter.ALL -> "song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL"
         }
+        val where = buildList {
+            add("($contentCondition)")
+            localOnly?.let { add("artist.isLocal = ${if (it) 1 else 0}") }
+        }.joinToString(" AND ")
 
         val having = when (filter) {
             ArtistFilter.DOWNLOADED -> "AND downloadCount > 0"
@@ -172,7 +172,7 @@ interface ArtistsDao {
         """)
 
         return _getArtists(query).map { artists ->
-            val filtered = if (filter == ArtistFilter.LIBRARY) {
+            val filtered = if (filter == ArtistFilter.LIBRARY || filter == ArtistFilter.ALL) {
                 artists
             } else {
                 artists.filter { it.artist.isYouTubeArtist || it.artist.isLocal } // TODO: add ui to filter by local or remote or something idk
@@ -184,6 +184,21 @@ interface ArtistsDao {
     fun artistsInLibraryAsc() = artists(ArtistFilter.LIBRARY, ArtistSortType.CREATE_DATE, false)
     fun artistsBookmarkedAsc() = artists(ArtistFilter.LIKED, ArtistSortType.CREATE_DATE, false)
     fun artistsLocalBookmarkedAsc() = artists(ArtistFilter.LIKED, ArtistSortType.CREATE_DATE, false, true)
+
+    @Transaction
+    @Query("""
+        SELECT
+            artist.*,
+            COUNT(song.id) AS songCount,
+            SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
+        FROM artist
+            JOIN song_artist_map sam ON artist.id = sam.artistId
+            JOIN song ON sam.songId = song.id
+        WHERE song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL
+        GROUP BY artist.id
+        ORDER BY artist.rowId ASC
+    """)
+    fun savedArtistsByCreateDateAsc(): Flow<List<Artist>>
 
     @Transaction
     @Query("""

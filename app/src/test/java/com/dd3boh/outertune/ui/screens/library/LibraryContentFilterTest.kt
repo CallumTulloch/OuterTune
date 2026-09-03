@@ -1,0 +1,74 @@
+package com.dd3boh.outertune.ui.screens.library
+
+import com.dd3boh.outertune.constants.AlbumFilter
+import com.dd3boh.outertune.constants.ArtistFilter
+import com.dd3boh.outertune.ui.screens.Screens.LibraryFilter
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class LibraryContentFilterTest {
+    @Test
+    fun `unfiltered library shows enabled category chips in configured order`() {
+        val enabled = listOf(
+            LibraryFilter.ARTISTS,
+            LibraryFilter.ALBUMS,
+            LibraryFilter.PLAYLISTS,
+        )
+
+        assertEquals(
+            enabled.map(::LibraryChip),
+            libraryChips(LibraryFilter.ALL, enabled),
+        )
+    }
+
+    @Test
+    fun `supported category shows downloaded then library content filters`() {
+        listOf(
+            LibraryFilter.ALBUMS,
+            LibraryFilter.ARTISTS,
+            LibraryFilter.PLAYLISTS,
+        ).forEach { category ->
+            assertEquals(
+                listOf(
+                    LibraryChip(category),
+                    LibraryChip(category, LibraryContentFilter.DOWNLOADED),
+                    LibraryChip(category, LibraryContentFilter.LIBRARY),
+                ),
+                libraryChips(category, LibraryFilter.entries),
+            )
+        }
+    }
+
+    @Test
+    fun `unsupported category only shows its category chip`() {
+        listOf(LibraryFilter.SONGS, LibraryFilter.FOLDERS).forEach { category ->
+            assertEquals(
+                listOf(LibraryChip(category)),
+                libraryChips(category, LibraryFilter.entries),
+            )
+        }
+    }
+
+    @Test
+    fun `album secondary filter can return to combined default`() {
+        assertEquals(AlbumFilter.DOWNLOADED, nextAlbumFilter(AlbumFilter.ALL, AlbumFilter.DOWNLOADED))
+        assertEquals(AlbumFilter.ALL, nextAlbumFilter(AlbumFilter.DOWNLOADED, AlbumFilter.DOWNLOADED))
+        assertEquals(AlbumFilter.LIBRARY, nextAlbumFilter(AlbumFilter.DOWNLOADED, AlbumFilter.LIBRARY))
+    }
+
+    @Test
+    fun `artist secondary filter can return to combined default`() {
+        assertEquals(ArtistFilter.LIBRARY, nextArtistFilter(ArtistFilter.ALL, ArtistFilter.LIBRARY))
+        assertEquals(ArtistFilter.ALL, nextArtistFilter(ArtistFilter.LIBRARY, ArtistFilter.LIBRARY))
+        assertEquals(ArtistFilter.DOWNLOADED, nextArtistFilter(ArtistFilter.LIBRARY, ArtistFilter.DOWNLOADED))
+    }
+
+    @Test
+    fun `embedded album and artist hide liked-only state behind combined default`() {
+        assertEquals(AlbumFilter.ALL, normalizeEmbeddedAlbumFilter(AlbumFilter.LIKED))
+        assertEquals(AlbumFilter.DOWNLOADED, normalizeEmbeddedAlbumFilter(AlbumFilter.DOWNLOADED))
+        assertEquals(ArtistFilter.ALL, normalizeEmbeddedArtistFilter(ArtistFilter.LIKED))
+        assertEquals(ArtistFilter.LIBRARY, normalizeEmbeddedArtistFilter(ArtistFilter.LIBRARY))
+    }
+
+}

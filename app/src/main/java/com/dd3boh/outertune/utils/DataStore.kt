@@ -84,14 +84,16 @@ inline fun <reified T : Enum<T>> rememberEnumPreference(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    val initialValue = context.dataStore[key].toEnum(defaultValue = defaultValue)
-    val state = remember {
+    val initialValue = remember(context, key, defaultValue) {
+        context.dataStore[key].toEnum(defaultValue = defaultValue)
+    }
+    val state = remember(context, key, defaultValue) {
         context.dataStore.data
             .map { it[key].toEnum(defaultValue = defaultValue) }
             .distinctUntilChanged()
     }.collectAsState(initialValue)
 
-    return remember {
+    return remember(context, key, state, coroutineScope) {
         object : MutableState<T> {
             override var value: T
                 get() = state.value

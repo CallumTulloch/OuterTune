@@ -359,6 +359,9 @@ interface SongsDao {
     @Query("UPDATE song SET dateDownload = :dateDownload WHERE id = :songId")
     fun updateDownloadStatus(songId: String, dateDownload: LocalDateTime?)
 
+    @Query("UPDATE song SET dateDownload = :dateDownload WHERE id = :songId AND isLocal = 0 AND localPath IS NULL")
+    fun updateMedia3DownloadStatus(songId: String, dateDownload: LocalDateTime?)
+
     @Transaction
     @Query("UPDATE song SET dateDownload = :dateDownload, localPath = :localPath WHERE id = :mediaId AND isLocal = 0")
     fun registerDownloadSong(mediaId: String, dateDownload: LocalDateTime, localPath: String)

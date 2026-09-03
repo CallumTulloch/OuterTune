@@ -121,6 +121,9 @@ fun LibrarySongsScreen(
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val isSyncingRemoteLikedSongs by viewModel.isSyncingRemoteLikedSongs.collectAsState()
     val isSyncingRemoteSongs by viewModel.isSyncingRemoteSongs.collectAsState()
+    val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
+    val isRefreshingLibrary =
+        isManualLibraryRefresh || isSyncingRemoteLikedSongs || isSyncingRemoteSongs
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val pullRefreshState = rememberPullToRefreshState()
 
@@ -289,13 +292,13 @@ fun LibrarySongsScreen(
             .fillMaxSize()
             .pullToRefresh(
                 state = pullRefreshState,
-                isRefreshing = isSyncingRemoteLikedSongs || isSyncingRemoteSongs,
+                isRefreshing = isRefreshingLibrary,
                 onRefresh = {
                     when (filter) {
                         SongFilter.ALL -> viewModel.syncAllSongs(true)
                         SongFilter.LIKED -> viewModel.syncLikedSongs(true)
                         SongFilter.LIBRARY -> viewModel.syncLibrarySongs(true)
-                        else -> return@pullToRefresh
+                        SongFilter.DOWNLOADED -> viewModel.refreshDownloads()
                     }
                 }
             ),
@@ -402,7 +405,7 @@ fun LibrarySongsScreen(
         )
 
         Indicator(
-            isRefreshing = isSyncingRemoteLikedSongs || isSyncingRemoteSongs,
+            isRefreshing = isRefreshingLibrary,
             state = pullRefreshState,
             modifier = Modifier
                 .align(Alignment.TopCenter)
