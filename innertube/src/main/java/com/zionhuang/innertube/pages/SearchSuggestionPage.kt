@@ -7,7 +7,7 @@ import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
 object SearchSuggestionPage {
@@ -20,7 +20,7 @@ object SearchSuggestionPage {
                         ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
                         ?.text ?: return null,
                     artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator()
-                        ?.getOrNull(1)?.oddElements()?.map {
+                            ?.getOrNull(1)?.artistElements()?.map {
                             Artist(
                                 name = it.text,
                                 id = it.navigationEndpoint?.browseEndpoint?.browseId
@@ -63,7 +63,7 @@ object SearchSuggestionPage {
                     title = renderer.flexColumns.firstOrNull()
                         ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
                         ?.text ?: return null,
-                    artists = secondaryLine.getOrNull(1)?.oddElements()?.map {
+                    artists = secondaryLine.getOrNull(1)?.artistElements()?.map {
                         Artist(
                             name = it.text,
                             id = it.navigationEndpoint?.browseEndpoint?.browseId

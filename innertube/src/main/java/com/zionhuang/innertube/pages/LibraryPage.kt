@@ -10,7 +10,7 @@ import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.Run
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.utils.parseTime
 
 data class LibraryPage(
@@ -83,7 +83,7 @@ data class LibraryPage(
                         title = renderer.flexColumns.firstOrNull()
                             ?.musicResponsiveListItemFlexColumnRenderer?.text
                             ?.runs?.firstOrNull()?.text ?: return null,
-                        artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.oddElements()
+                        artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.artistElements()
                             ?.map {
                                 Artist(
                                     name = it.text,

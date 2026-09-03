@@ -14,7 +14,7 @@ import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.models.getItems
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 
 data class ArtistSection(
     val title: String,
@@ -64,7 +64,7 @@ data class ArtistPage(
                 title = renderer.flexColumns.firstOrNull()
                     ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
                     ?.text ?: return null,
-                artists = PageHelper.extractRuns(renderer.flexColumns, "MUSIC_PAGE_TYPE_ARTIST").ifEmpty { renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs }?.oddElements()?.map {
+                artists = PageHelper.extractRuns(renderer.flexColumns, "MUSIC_PAGE_TYPE_ARTIST").ifEmpty { renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs }?.artistElements()?.map {
                     Artist(
                         name = it.text,
                         id = it.navigationEndpoint?.browseEndpoint?.browseId

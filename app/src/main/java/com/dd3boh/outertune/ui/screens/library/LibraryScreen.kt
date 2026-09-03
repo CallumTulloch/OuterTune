@@ -37,7 +37,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -101,6 +100,10 @@ import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+internal const val MINIMUM_PULL_REFRESH_INDICATOR_MILLIS = 400L
 
 internal enum class LibraryContentFilter {
     DOWNLOADED,
@@ -121,6 +124,7 @@ private val libraryCategoriesWithContentFilter = setOf(
 internal fun libraryChips(
     activeCategory: LibraryFilter,
     enabledCategories: List<LibraryFilter>,
+    showContentFilters: Boolean = true,
 ): List<LibraryChip> = if (activeCategory == LibraryFilter.ALL) {
     enabledCategories
         .filterNot { it == LibraryFilter.ALL }
@@ -128,7 +132,7 @@ internal fun libraryChips(
 } else {
     buildList {
         add(LibraryChip(activeCategory))
-        if (activeCategory in libraryCategoriesWithContentFilter) {
+        if (showContentFilters && activeCategory in libraryCategoriesWithContentFilter) {
             add(LibraryChip(activeCategory, LibraryContentFilter.DOWNLOADED))
             add(LibraryChip(activeCategory, LibraryContentFilter.LIBRARY))
         }
@@ -155,7 +159,7 @@ fun LibraryScreen(
     var filter by rememberEnumPreference(LibraryFilterKey, LibraryFilter.ALL)
     var albumFilter by rememberEnumPreference(AlbumFilterKey, AlbumFilter.ALL)
     var artistFilter by rememberEnumPreference(ArtistFilterKey, ArtistFilter.ALL)
-    var playlistFilter by rememberEnumPreference(PlaylistFilterKey, PlaylistFilter.LIBRARY)
+    var playlistFilter by rememberEnumPreference(PlaylistFilterKey, PlaylistFilter.ALL)
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
 
     val (sortType, onSortTypeChange) = rememberEnumPreference(LibrarySortTypeKey, LibrarySortType.CREATE_DATE)
@@ -170,12 +174,14 @@ fun LibraryScreen(
     val isSyncingRemoteSongs by viewModel.isSyncingRemoteSongs.collectAsState()
     val isSyncingRemoteLikedSongs by viewModel.isSyncingRemoteLikedSongs.collectAsState()
     val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
-    val isRefreshingLibrary = isManualLibraryRefresh ||
+    val isLibraryRefreshRunning = isManualLibraryRefresh ||
             isSyncingRemotePlaylists ||
             isSyncingRemoteAlbums ||
             isSyncingRemoteArtists ||
             isSyncingRemoteSongs ||
             isSyncingRemoteLikedSongs
+    var isPullRefreshFeedbackVisible by remember { mutableStateOf(false) }
+    val isRefreshingLibrary = isLibraryRefreshRunning || isPullRefreshFeedbackVisible
     val pullRefreshState = rememberPullToRefreshState()
 
     val likedPlaylist = PlaylistEntity(id = "liked", name = stringResource(id = R.string.liked_songs))
@@ -186,10 +192,19 @@ fun LibraryScreen(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val scrollToTop = backStackEntry?.savedStateHandle?.getStateFlow("scrollToTop", false)?.collectAsState()
 
-    val chips = libraryChips(filter, Screens.getFilters(enabledFilters)).map { chip ->
+    var contentFiltersVisibleFor by remember { mutableStateOf<LibraryFilter?>(null) }
+    LaunchedEffect(filter) {
+        contentFiltersVisibleFor = filter.takeIf { it in libraryCategoriesWithContentFilter }
+    }
+
+    val chips = libraryChips(
+        activeCategory = filter,
+        enabledCategories = Screens.getFilters(enabledFilters),
+        showContentFilters = contentFiltersVisibleFor == filter,
+    ).map { chip ->
         chip to when (chip.contentFilter) {
             LibraryContentFilter.DOWNLOADED -> stringResource(R.string.filter_downloaded)
-            LibraryContentFilter.LIBRARY -> stringResource(R.string.filter_library)
+            LibraryContentFilter.LIBRARY -> stringResource(R.string.library)
             null -> when (chip.category) {
                 LibraryFilter.ALBUMS -> stringResource(R.string.albums)
                 LibraryFilter.ARTISTS -> stringResource(R.string.artists)
@@ -227,88 +242,96 @@ fun LibraryScreen(
                 }
             }
             Row {
-                key(filter) {
-                    ChipsLazyRow(
-                        chips = chips,
-                        currentValue = LibraryChip(filter),
-                        onValueUpdate = { chip ->
-                            when (chip.contentFilter) {
-                                null -> {
-                                    filter = if (filter == LibraryFilter.ALL) chip.category else LibraryFilter.ALL
-                                }
-
-                                LibraryContentFilter.DOWNLOADED -> when (chip.category) {
-                                    LibraryFilter.ALBUMS -> {
-                                        val updatedFilter = nextAlbumFilter(albumFilter, AlbumFilter.DOWNLOADED)
-                                        albumFilter = updatedFilter
-                                        if (updatedFilter != AlbumFilter.DOWNLOADED) viewModel.syncAlbums()
-                                    }
-
-                                    LibraryFilter.ARTISTS -> {
-                                        val updatedFilter = nextArtistFilter(artistFilter, ArtistFilter.DOWNLOADED)
-                                        artistFilter = updatedFilter
-                                        if (updatedFilter != ArtistFilter.DOWNLOADED) viewModel.syncArtists()
-                                    }
-
-                                    LibraryFilter.PLAYLISTS -> playlistFilter = PlaylistFilter.DOWNLOADED
-                                    else -> Unit
-                                }
-
-                                LibraryContentFilter.LIBRARY -> when (chip.category) {
-                                    LibraryFilter.ALBUMS -> {
-                                        albumFilter = nextAlbumFilter(albumFilter, AlbumFilter.LIBRARY)
-                                        viewModel.syncAlbums()
-                                    }
-
-                                    LibraryFilter.ARTISTS -> {
-                                        artistFilter = nextArtistFilter(artistFilter, ArtistFilter.LIBRARY)
-                                        viewModel.syncArtists()
-                                    }
-
-                                    LibraryFilter.PLAYLISTS -> {
-                                        playlistFilter = PlaylistFilter.LIBRARY
-                                        viewModel.syncPlaylists()
-                                    }
-
-                                    else -> Unit
-                                }
+                ChipsLazyRow(
+                    chips = chips,
+                    currentValue = LibraryChip(filter),
+                    onValueUpdate = { chip ->
+                        when (chip.contentFilter) {
+                            null -> {
+                                filter = if (filter == LibraryFilter.ALL) chip.category else LibraryFilter.ALL
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                        selected = { chip ->
-                            when (chip.contentFilter) {
-                                null -> chip.category == filter
-                                LibraryContentFilter.DOWNLOADED -> when (chip.category) {
-                                    LibraryFilter.ALBUMS -> albumFilter == AlbumFilter.DOWNLOADED
-                                    LibraryFilter.ARTISTS -> artistFilter == ArtistFilter.DOWNLOADED
-                                    LibraryFilter.PLAYLISTS -> playlistFilter == PlaylistFilter.DOWNLOADED
-                                    else -> false
+
+                            LibraryContentFilter.DOWNLOADED -> when (chip.category) {
+                                LibraryFilter.ALBUMS -> {
+                                    val updatedFilter = nextAlbumFilter(albumFilter, AlbumFilter.DOWNLOADED)
+                                    albumFilter = updatedFilter
+                                    if (updatedFilter != AlbumFilter.DOWNLOADED) viewModel.syncAlbums()
                                 }
 
-                                LibraryContentFilter.LIBRARY -> when (chip.category) {
-                                    LibraryFilter.ALBUMS -> albumFilter == AlbumFilter.LIBRARY
-                                    LibraryFilter.ARTISTS -> artistFilter == ArtistFilter.LIBRARY
-                                    LibraryFilter.PLAYLISTS -> playlistFilter == PlaylistFilter.LIBRARY
-                                    else -> false
+                                LibraryFilter.ARTISTS -> {
+                                    val updatedFilter = nextArtistFilter(artistFilter, ArtistFilter.DOWNLOADED)
+                                    artistFilter = updatedFilter
+                                    if (updatedFilter != ArtistFilter.DOWNLOADED) viewModel.syncArtists()
                                 }
+
+                                LibraryFilter.PLAYLISTS -> {
+                                    val updatedFilter = nextPlaylistFilter(
+                                        playlistFilter,
+                                        PlaylistFilter.DOWNLOADED
+                                    )
+                                    playlistFilter = updatedFilter
+                                    if (updatedFilter != PlaylistFilter.DOWNLOADED) viewModel.syncPlaylists()
+                                }
+                                else -> Unit
                             }
-                        },
-                        isLoading = { chip ->
-                            val isCategorySyncing = when (chip.category) {
-                                LibraryFilter.PLAYLISTS -> isSyncingRemotePlaylists
-                                LibraryFilter.ALBUMS -> isSyncingRemoteAlbums
-                                LibraryFilter.ARTISTS -> isSyncingRemoteArtists
-                                LibraryFilter.SONGS -> isSyncingRemoteSongs || isSyncingRemoteLikedSongs
-                                else -> false
-                            }
-                            if (filter == LibraryFilter.ALL) {
-                                chip.contentFilter == null && isCategorySyncing
-                            } else {
-                                chip.contentFilter == LibraryContentFilter.LIBRARY && isCategorySyncing
+
+                            LibraryContentFilter.LIBRARY -> when (chip.category) {
+                                LibraryFilter.ALBUMS -> {
+                                    albumFilter = nextAlbumFilter(albumFilter, AlbumFilter.LIBRARY)
+                                    viewModel.syncAlbums()
+                                }
+
+                                LibraryFilter.ARTISTS -> {
+                                    artistFilter = nextArtistFilter(artistFilter, ArtistFilter.LIBRARY)
+                                    viewModel.syncArtists()
+                                }
+
+                                LibraryFilter.PLAYLISTS -> {
+                                    playlistFilter = nextPlaylistFilter(
+                                        playlistFilter,
+                                        PlaylistFilter.LIBRARY
+                                    )
+                                    viewModel.syncPlaylists()
+                                }
+
+                                else -> Unit
                             }
                         }
-                    )
-                }
+                    },
+                    modifier = Modifier.weight(1f),
+                    selected = { chip ->
+                        when (chip.contentFilter) {
+                            null -> chip.category == filter
+                            LibraryContentFilter.DOWNLOADED -> when (chip.category) {
+                                LibraryFilter.ALBUMS -> albumFilter == AlbumFilter.DOWNLOADED
+                                LibraryFilter.ARTISTS -> artistFilter == ArtistFilter.DOWNLOADED
+                                LibraryFilter.PLAYLISTS -> playlistFilter == PlaylistFilter.DOWNLOADED
+                                else -> false
+                            }
+
+                            LibraryContentFilter.LIBRARY -> when (chip.category) {
+                                LibraryFilter.ALBUMS -> albumFilter == AlbumFilter.LIBRARY
+                                LibraryFilter.ARTISTS -> artistFilter == ArtistFilter.LIBRARY
+                                LibraryFilter.PLAYLISTS -> playlistFilter == PlaylistFilter.LIBRARY
+                                else -> false
+                            }
+                        }
+                    },
+                    isLoading = { chip ->
+                        val isCategorySyncing = when (chip.category) {
+                            LibraryFilter.PLAYLISTS -> isSyncingRemotePlaylists
+                            LibraryFilter.ALBUMS -> isSyncingRemoteAlbums
+                            LibraryFilter.ARTISTS -> isSyncingRemoteArtists
+                            LibraryFilter.SONGS -> isSyncingRemoteSongs || isSyncingRemoteLikedSongs
+                            else -> false
+                        }
+                        if (filter == LibraryFilter.ALL) {
+                            chip.contentFilter == null && isCategorySyncing
+                        } else {
+                            chip.contentFilter == LibraryContentFilter.LIBRARY && isCategorySyncing
+                        }
+                    }
+                )
 
                 if (filter != LibraryFilter.SONGS && filter != LibraryFilter.FOLDERS) {
                     IconButton(
@@ -373,7 +396,14 @@ fun LibraryScreen(
                         state = pullRefreshState,
                         isRefreshing = isRefreshingLibrary,
                         onRefresh = {
-                            viewModel.syncAll(true)
+                            if (!isRefreshingLibrary) {
+                                isPullRefreshFeedbackVisible = true
+                                viewModel.syncAll(true)
+                                coroutineScope.launch {
+                                    delay(MINIMUM_PULL_REFRESH_INDICATOR_MILLIS)
+                                    isPullRefreshFeedbackVisible = false
+                                }
+                            }
                         }
                     )
                 } else {

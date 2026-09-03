@@ -20,7 +20,7 @@ import com.zionhuang.innertube.models.YouTubeClient.Companion.WEB_REMIX
 import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.innertube.models.getContinuation
 import com.zionhuang.innertube.models.getItems
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.response.AccountMenuResponse
 import com.zionhuang.innertube.models.response.BrowseResponse
 import com.zionhuang.innertube.models.response.CreatePlaylistResponse
@@ -206,7 +206,7 @@ object YouTube {
                 browseId = browseId,
                 playlistId = playlistId,
                 title = response.contents?.twoColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicResponsiveHeaderRenderer?.title?.runs?.firstOrNull()?.text!!,
-                artists = response.contents.twoColumnBrowseResultsRenderer.tabs.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicResponsiveHeaderRenderer?.straplineTextOne?.runs?.oddElements()?.map {
+                artists = response.contents.twoColumnBrowseResultsRenderer.tabs.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicResponsiveHeaderRenderer?.straplineTextOne?.runs?.artistElements()?.map {
                     Artist(
                         name = it.text,
                         id = it.navigationEndpoint?.browseEndpoint?.browseId

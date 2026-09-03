@@ -10,7 +10,7 @@ import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 
 data class HomePage(
     val chips: List<Chip>?,
@@ -85,7 +85,7 @@ data class HomePage(
                                 ?.musicPlayButtonRenderer?.playNavigationEndpoint
                                 ?.watchPlaylistEndpoint?.playlistId ?: return null,
                             title = renderer.title.runs?.firstOrNull()?.text ?: return null,
-                            artists = renderer.subtitle?.runs?.oddElements()?.drop(1)?.map {
+                            artists = renderer.subtitle?.runs?.artistElements()?.drop(1)?.map {
                                 Artist(
                                     name = it.text,
                                     id = it.navigationEndpoint?.browseEndpoint?.browseId

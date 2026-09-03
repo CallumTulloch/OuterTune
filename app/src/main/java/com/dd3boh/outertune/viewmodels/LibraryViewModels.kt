@@ -333,7 +333,7 @@ class LibraryPlaylistsViewModel @Inject constructor(
     val allPlaylists = context.dataStore.data
         .map {
             Triple(
-                it[PlaylistFilterKey].toEnum(PlaylistFilter.LIBRARY),
+                it[PlaylistFilterKey].toEnum(PlaylistFilter.ALL),
                 it[PlaylistSortTypeKey].toEnum(PlaylistSortType.CREATE_DATE),
                 it[PlaylistSortDescendingKey] ?: true
             )

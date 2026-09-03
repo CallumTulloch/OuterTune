@@ -9,7 +9,7 @@ import com.zionhuang.innertube.models.MusicTwoRowItemRenderer
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 
 data class RelatedPage(
     val songs: List<SongItem>,
@@ -24,7 +24,7 @@ data class RelatedPage(
                 title = renderer.flexColumns.firstOrNull()
                     ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
                     ?.text ?: return null,
-                artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.oddElements()?.map {
+                artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.artistElements()?.map {
                     Artist(
                         name = it.text,
                         id = it.navigationEndpoint?.browseEndpoint?.browseId

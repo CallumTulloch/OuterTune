@@ -35,3 +35,14 @@ fun List<List<Run>>.clean(): List<List<Run>> =
 fun List<Run>.oddElements() = filterIndexed { index, _ ->
     index % 2 == 0
 }
+
+private val durationMetadataRegex = Regex("""^\d+:[0-5]\d(?::[0-5]\d)?$""")
+
+/**
+ * Extract artist runs from bullet-separated metadata while excluding a trailing duration.
+ * Duration runs do not have a navigation endpoint; keeping endpoint-backed values also avoids
+ * rejecting an unusually named artist such as "4:44".
+ */
+fun List<Run>.artistElements() = oddElements().filterNot { run ->
+    run.navigationEndpoint == null && durationMetadataRegex.matches(run.text.trim())
+}

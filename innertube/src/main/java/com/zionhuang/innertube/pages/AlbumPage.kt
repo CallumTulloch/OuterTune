@@ -7,7 +7,7 @@ import com.zionhuang.innertube.models.MusicResponsiveHeaderRenderer
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.getItems
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.response.BrowseResponse
 import com.zionhuang.innertube.models.splitBySeparator
 import com.zionhuang.innertube.utils.parseTime
@@ -44,12 +44,12 @@ data class AlbumPage(
         }
 
         fun getArtists(response: BrowseResponse): List<Artist> {
-            val artists = getHeader(response)?.straplineTextOne?.runs?.oddElements()?.map {
+            val artists = getHeader(response)?.straplineTextOne?.runs?.artistElements()?.map {
                 Artist(
                     name = it.text,
                     id = it.navigationEndpoint?.browseEndpoint?.browseId
                 )
-            } ?: response.header?.musicDetailHeaderRenderer?.subtitle?.runs?.splitBySeparator()?.getOrNull(1)?.oddElements()?.map {
+            } ?: response.header?.musicDetailHeaderRenderer?.subtitle?.runs?.splitBySeparator()?.getOrNull(1)?.artistElements()?.map {
                 Artist(
                     name = it.text,
                     id = it.navigationEndpoint?.browseEndpoint?.browseId

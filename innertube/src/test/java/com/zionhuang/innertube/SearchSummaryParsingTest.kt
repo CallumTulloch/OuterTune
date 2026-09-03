@@ -2,6 +2,7 @@ package com.zionhuang.innertube
 
 import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.pages.LibraryPage
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -65,5 +66,74 @@ class SearchSummaryParsingTest {
         assertEquals(1, page.summaries.single().items.size)
         assertTrue(page.summaries.single().items.single() is SongItem)
         assertEquals("video-id", page.summaries.single().items.single().id)
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    @Test
+    fun `duration metadata in an artist column is not parsed as an artist`() {
+        val content = Json {
+            ignoreUnknownKeys = true
+            explicitNulls = false
+        }.decodeFromString<SectionListRenderer.Content>(
+            """
+            {
+              "itemSectionRenderer": {
+                "contents": [
+                  {
+                    "musicResponsiveListItemRenderer": {
+                      "flexColumns": [
+                        {
+                          "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": { "runs": [{ "text": "In Bloom" }] }
+                          }
+                        },
+                        {
+                          "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {
+                              "runs": [
+                                {
+                                  "text": "Nirvana",
+                                  "navigationEndpoint": {
+                                    "browseEndpoint": { "browseId": "UC-nirvana" }
+                                  }
+                                },
+                                { "text": " • " },
+                                { "text": "4:15" }
+                              ]
+                            }
+                          }
+                        }
+                      ],
+                      "fixedColumns": [
+                        {
+                          "musicResponsiveListItemFixedColumnRenderer": {
+                            "text": { "runs": [{ "text": "4:15" }] }
+                          }
+                        }
+                      ],
+                      "playlistItemData": { "videoId": "in-bloom" },
+                      "thumbnail": {
+                        "musicThumbnailRenderer": {
+                          "thumbnail": {
+                            "thumbnails": [{ "url": "https://example.com/in-bloom.jpg" }]
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        )
+
+        val renderer = content.itemSectionRenderer
+            ?.contents
+            ?.single()
+            ?.musicResponsiveListItemRenderer!!
+        val song = LibraryPage.fromMusicResponsiveListItemRenderer(renderer) as SongItem
+
+        assertEquals(listOf("Nirvana"), song.artists.map { it.name })
+        assertEquals(255, song.duration)
     }
 }

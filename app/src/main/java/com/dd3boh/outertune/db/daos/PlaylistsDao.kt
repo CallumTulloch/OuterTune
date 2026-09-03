@@ -115,7 +115,7 @@ interface PlaylistsDao {
 
         val having = when (filter) {
             PlaylistFilter.DOWNLOADED -> "HAVING SUM(CASE WHEN s.dateDownload IS NOT NULL THEN 1 ELSE 0 END) > 0"
-            else -> ""
+            PlaylistFilter.LIBRARY, PlaylistFilter.ALL -> ""
         }
 
         val where = when (variant) {

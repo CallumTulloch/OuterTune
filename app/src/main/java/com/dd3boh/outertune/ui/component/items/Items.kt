@@ -439,16 +439,22 @@ fun YouTubeListItem(
         },
         badges = badges,
         thumbnailContent = {
-            ItemThumbnail(
-                thumbnailUrl = item.thumbnail,
-                albumIndex = albumIndex,
-                isActive = isActive,
-                isPlaying = isPlaying,
-                shape = if (item is ArtistItem) CircleShape else RoundedCornerShape(
-                    ThumbnailCornerRadius
-                ),
-                modifier = Modifier.size(ListThumbnailSize)
-            )
+            if (item is ArtistItem) {
+                ArtistThumbnail(
+                    thumbnailUrl = item.thumbnail,
+                    isLocal = false,
+                    modifier = Modifier.size(ListThumbnailSize)
+                )
+            } else {
+                ItemThumbnail(
+                    thumbnailUrl = item.thumbnail,
+                    albumIndex = albumIndex,
+                    isActive = isActive,
+                    isPlaying = isPlaying,
+                    shape = RoundedCornerShape(ThumbnailCornerRadius),
+                    modifier = Modifier.size(ListThumbnailSize)
+                )
+            }
         },
         trailingContent = trailingContent,
         modifier = modifier,
@@ -526,12 +532,20 @@ fun YouTubeGridItem(
         val database = LocalDatabase.current
         val playerConnection = LocalPlayerConnection.current ?: return@GridItem
 
-        ItemThumbnail(
-            thumbnailUrl = item.thumbnail,
-            isActive = isActive,
-            isPlaying = isPlaying,
-            shape = if (item is ArtistItem) CircleShape else RoundedCornerShape(ThumbnailCornerRadius),
-        )
+        if (item is ArtistItem) {
+            ArtistThumbnail(
+                thumbnailUrl = item.thumbnail,
+                isLocal = false,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            ItemThumbnail(
+                thumbnailUrl = item.thumbnail,
+                isActive = isActive,
+                isPlaying = isPlaying,
+                shape = RoundedCornerShape(ThumbnailCornerRadius),
+            )
+        }
 
         AlbumPlayButton(
             visible = item is AlbumItem && !isActive,

@@ -88,6 +88,8 @@ import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibrarySongsViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 internal fun nextSongFilter(currentFilter: SongFilter, selectedFilter: SongFilter): SongFilter =
@@ -122,8 +124,10 @@ fun LibrarySongsScreen(
     val isSyncingRemoteLikedSongs by viewModel.isSyncingRemoteLikedSongs.collectAsState()
     val isSyncingRemoteSongs by viewModel.isSyncingRemoteSongs.collectAsState()
     val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
-    val isRefreshingLibrary =
+    val isLibraryRefreshRunning =
         isManualLibraryRefresh || isSyncingRemoteLikedSongs || isSyncingRemoteSongs
+    var isPullRefreshFeedbackVisible by remember { mutableStateOf(false) }
+    val isRefreshingLibrary = isLibraryRefreshRunning || isPullRefreshFeedbackVisible
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val pullRefreshState = rememberPullToRefreshState()
 
@@ -294,11 +298,20 @@ fun LibrarySongsScreen(
                 state = pullRefreshState,
                 isRefreshing = isRefreshingLibrary,
                 onRefresh = {
-                    when (filter) {
-                        SongFilter.ALL -> viewModel.syncAllSongs(true)
-                        SongFilter.LIKED -> viewModel.syncLikedSongs(true)
-                        SongFilter.LIBRARY -> viewModel.syncLibrarySongs(true)
-                        SongFilter.DOWNLOADED -> viewModel.refreshDownloads()
+                    if (!isRefreshingLibrary) {
+                        // Keep user-triggered feedback visible even when the refresh finishes
+                        // before Compose can render the coordinator's refreshing state.
+                        isPullRefreshFeedbackVisible = true
+                        when (filter) {
+                            SongFilter.ALL -> viewModel.syncAllSongs(true)
+                            SongFilter.LIKED -> viewModel.syncLikedSongs(true)
+                            SongFilter.LIBRARY -> viewModel.syncLibrarySongs(true)
+                            SongFilter.DOWNLOADED -> viewModel.refreshDownloads()
+                        }
+                        coroutineScope.launch {
+                            delay(MINIMUM_PULL_REFRESH_INDICATOR_MILLIS)
+                            isPullRefreshFeedbackVisible = false
+                        }
                     }
                 }
             ),

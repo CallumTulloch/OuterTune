@@ -7,6 +7,9 @@
  */
 package com.dd3boh.outertune.ui.component.items
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -14,10 +17,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.OfflinePin
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -26,6 +34,56 @@ import coil3.compose.AsyncImage
 import com.dd3boh.outertune.constants.ListThumbnailSize
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.ui.utils.getNSongsString
+
+@Composable
+fun ArtistThumbnail(
+    thumbnailUrl: String?,
+    isLocal: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp))
+    ) {
+        val thumbnailSize = minOf(maxWidth, maxHeight)
+        val badgeSize = thumbnailSize * 0.36f
+        val badgeInset = thumbnailSize * 0.06f
+
+        Icon(
+            imageVector = Icons.Rounded.Person,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+            modifier = Modifier.size(thumbnailSize * 0.62f)
+        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = badgeInset, bottom = badgeInset)
+                .size(badgeSize)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceColorAtElevation(32.dp))
+        ) {
+            Icon(
+                imageVector = if (isLocal) Icons.Rounded.Folder else Icons.Rounded.Language,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxSize(0.72f)
+            )
+        }
+
+        // Keep the source-specific fallback behind the artwork so it also remains visible
+        // when a non-null image URL fails to load.
+        AsyncImage(
+            model = thumbnailUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
 
 @Composable
 fun ArtistListItem(
@@ -64,12 +122,11 @@ fun ArtistListItem(
     subtitle = getNSongsString(artist.songCount, artist.downloadCount),
     badges = badges,
     thumbnailContent = {
-        AsyncImage(
-            model = artist.artist.thumbnailUrl,
-            contentDescription = null,
+        ArtistThumbnail(
+            thumbnailUrl = artist.artist.thumbnailUrl,
+            isLocal = artist.artist.isLocal,
             modifier = Modifier
                 .size(ListThumbnailSize)
-                .clip(CircleShape)
         )
     },
     trailingContent = trailingContent,
@@ -113,13 +170,11 @@ fun ArtistGridItem(
     subtitle = getNSongsString(artist.songCount, artist.downloadCount),
     badges = badges,
     thumbnailContent = {
-        AsyncImage(
-            model = artist.artist.thumbnailUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Companion.Crop,
+        ArtistThumbnail(
+            thumbnailUrl = artist.artist.thumbnailUrl,
+            isLocal = artist.artist.isLocal,
             modifier = Modifier
                 .fillMaxSize()
-                .clip(CircleShape)
         )
     },
     fillMaxWidth = fillMaxWidth,

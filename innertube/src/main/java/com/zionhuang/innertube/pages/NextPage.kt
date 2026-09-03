@@ -6,7 +6,7 @@ import com.zionhuang.innertube.models.BrowseEndpoint
 import com.zionhuang.innertube.models.PlaylistPanelVideoRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.WatchEndpoint
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 import com.zionhuang.innertube.utils.parseTime
 
@@ -26,7 +26,7 @@ object NextPage {
         return SongItem(
             id = renderer.videoId ?: return null,
             title = renderer.title?.runs?.firstOrNull()?.text ?: return null,
-            artists = longByLineRuns.firstOrNull()?.oddElements()?.map {
+            artists = longByLineRuns.firstOrNull()?.artistElements()?.map {
                 Artist(
                     name = it.text,
                     id = it.navigationEndpoint?.browseEndpoint?.browseId

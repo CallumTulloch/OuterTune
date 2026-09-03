@@ -221,7 +221,7 @@ enum class AlbumFilter {
 }
 
 enum class PlaylistFilter {
-    LIBRARY, DOWNLOADED
+    LIBRARY, DOWNLOADED, ALL
 }
 
 enum class SearchSource {

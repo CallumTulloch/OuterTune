@@ -8,7 +8,7 @@ import com.zionhuang.innertube.models.MusicTwoRowItemRenderer
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 import com.zionhuang.innertube.utils.parseTime
 
@@ -24,7 +24,7 @@ data class ArtistItemsPage(
                 title = renderer.flexColumns.firstOrNull()
                     ?.musicResponsiveListItemFlexColumnRenderer?.text
                     ?.runs?.firstOrNull()?.text ?: return null,
-                artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.oddElements()?.map {
+                artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.artistElements()?.map {
                     Artist(
                         name = it.text,
                         id = it.navigationEndpoint?.browseEndpoint?.browseId
@@ -67,7 +67,7 @@ data class ArtistItemsPage(
                 renderer.isSong -> SongItem(
                     id = renderer.navigationEndpoint.watchEndpoint?.videoId ?: return null,
                     title = renderer.title.runs?.firstOrNull()?.text ?: return null,
-                    artists = renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull()?.oddElements()?.map {
+                    artists = renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull()?.artistElements()?.map {
                         Artist(
                             name = it.text,
                             id = it.navigationEndpoint?.browseEndpoint?.browseId

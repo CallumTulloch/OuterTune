@@ -10,7 +10,7 @@ import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.models.clean
-import com.zionhuang.innertube.models.oddElements
+import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 import com.zionhuang.innertube.utils.parseTime
 
@@ -30,7 +30,7 @@ data class SearchSummaryPage(
                     SongItem(
                         id = renderer.onTap.watchEndpoint.videoId ?: return null,
                         title = renderer.title.runs?.firstOrNull()?.text ?: return null,
-                        artists = subtitle?.getOrNull(1)?.oddElements()?.map {
+                        artists = subtitle?.getOrNull(1)?.artistElements()?.map {
                             Artist(
                                 name = it.text,
                                 id = it.navigationEndpoint?.browseEndpoint?.browseId
@@ -69,7 +69,7 @@ data class SearchSummaryPage(
                         browseId = renderer.onTap.browseEndpoint.browseId,
                         playlistId = renderer.buttons.firstOrNull()?.buttonRenderer?.command?.anyWatchEndpoint?.playlistId ?: return null,
                         title = renderer.title.runs?.firstOrNull()?.text ?: return null,
-                        artists = subtitle?.getOrNull(1)?.oddElements()?.map {
+                        artists = subtitle?.getOrNull(1)?.artistElements()?.map {
                             Artist(
                                 name = it.text,
                                 id = it.navigationEndpoint?.browseEndpoint?.browseId
@@ -123,7 +123,7 @@ data class SearchSummaryPage(
                         title = renderer.flexColumns.firstOrNull()
                             ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
                             ?.firstOrNull()?.text ?: return null,
-                        artists = listRun.getOrNull(0)?.oddElements()?.map {
+                        artists = listRun.getOrNull(0)?.artistElements()?.map {
                             Artist(
                                 name = it.text,
                                 id = it.navigationEndpoint?.browseEndpoint?.browseId
@@ -164,7 +164,7 @@ data class SearchSummaryPage(
                         title = renderer.flexColumns.firstOrNull()
                             ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
                             ?.firstOrNull()?.text ?: return null,
-                        artists = secondaryLine.getOrNull(1)?.oddElements()?.map {
+                        artists = secondaryLine.getOrNull(1)?.artistElements()?.map {
                             Artist(
                                 name = it.text,
                                 id = it.navigationEndpoint?.browseEndpoint?.browseId

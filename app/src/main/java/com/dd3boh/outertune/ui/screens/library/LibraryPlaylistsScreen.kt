@@ -93,6 +93,9 @@ import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryPlaylistsViewModel
 
+internal fun nextPlaylistFilter(currentFilter: PlaylistFilter, selectedFilter: PlaylistFilter): PlaylistFilter =
+    if (currentFilter == selectedFilter) PlaylistFilter.ALL else selectedFilter
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryPlaylistsScreen(
@@ -105,7 +108,7 @@ fun LibraryPlaylistsScreen(
     val menuState = LocalMenuState.current
     val coroutineScope = rememberCoroutineScope()
 
-    var filter by rememberEnumPreference(PlaylistFilterKey, PlaylistFilter.LIBRARY)
+    var filter by rememberEnumPreference(PlaylistFilterKey, PlaylistFilter.ALL)
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
 
     var playlistViewType by rememberEnumPreference(PlaylistViewTypeKey, LibraryViewType.GRID)
@@ -171,8 +174,9 @@ fun LibraryPlaylistsScreen(
                     ),
                     currentValue = filter,
                     onValueUpdate = {
-                        filter = it
-                        if (it == PlaylistFilter.LIBRARY) viewModel.syncPlaylists()
+                        val updatedFilter = nextPlaylistFilter(filter, it)
+                        filter = updatedFilter
+                        if (updatedFilter != PlaylistFilter.DOWNLOADED) viewModel.syncPlaylists()
                     },
                     isLoading = { filter ->
                         filter == PlaylistFilter.LIBRARY && isSyncingRemotePlaylists
