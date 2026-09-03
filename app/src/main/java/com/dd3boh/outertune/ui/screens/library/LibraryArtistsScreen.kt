@@ -62,6 +62,7 @@ import com.dd3boh.outertune.constants.ArtistViewTypeKey
 import com.dd3boh.outertune.constants.CONTENT_TYPE_ARTIST
 import com.dd3boh.outertune.constants.CONTENT_TYPE_HEADER
 import com.dd3boh.outertune.constants.GridThumbnailHeight
+import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.constants.LibraryViewType
 import com.dd3boh.outertune.constants.LibraryViewTypeKey
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
@@ -80,6 +81,8 @@ import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryArtistsViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 internal fun nextArtistFilter(currentFilter: ArtistFilter, selectedFilter: ArtistFilter): ArtistFilter =
     if (currentFilter == selectedFilter) ArtistFilter.ALL else selectedFilter
@@ -93,6 +96,7 @@ fun LibraryArtistsScreen(
     navController: NavController,
     viewModel: LibraryArtistsViewModel = hiltViewModel(),
     libraryFilterContent: @Composable() (() -> Unit)? = null,
+    libraryContentFilters: Set<LibraryContentFilter>? = null,
 ) {
     val context = LocalContext.current
     val menuState = LocalMenuState.current
@@ -108,23 +112,29 @@ fun LibraryArtistsScreen(
     val (sortType, onSortTypeChange) = rememberEnumPreference(ArtistSortTypeKey, ArtistSortType.CREATE_DATE)
     val (sortDescending, onSortDescendingChange) = rememberPreference(ArtistSortDescendingKey, true)
 
-    val artists by viewModel.allArtists.collectAsState()
+    val artistsState = if (libraryContentFilters == null) {
+        viewModel.allArtists.collectAsState()
+    } else {
+        remember(libraryContentFilters, sortType, sortDescending) {
+            viewModel.artists(libraryContentFilters, sortType, sortDescending)
+        }.collectAsState(initial = null)
+    }
+    val artists by artistsState
     val isSyncingRemoteArtists by viewModel.isSyncingRemoteArtists.collectAsState()
     val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
-    val isRefreshingLibrary = isSyncingRemoteArtists || isManualLibraryRefresh
+    val isLibraryRefreshRunning = isSyncingRemoteArtists || isManualLibraryRefresh
+    var isPullRefreshFeedbackVisible by remember { mutableStateOf(false) }
+    val isRefreshingLibrary = isLibraryRefreshRunning || isPullRefreshFeedbackVisible
     val pullRefreshState = rememberPullToRefreshState()
 
     val lazyListState = rememberLazyListState()
     val lazyGridState = rememberLazyGridState()
 
-    LaunchedEffect(Unit) { viewModel.syncArtists() }
-
-    LaunchedEffect(libraryFilterContent, filter) {
-        if (libraryFilterContent != null) {
-            val normalizedFilter = normalizeEmbeddedArtistFilter(filter)
-            if (normalizedFilter != filter) {
-                filter = normalizedFilter
-            }
+    val shouldSyncRemoteLibrary =
+        libraryContentFilters == null || LibraryContentFilter.LIBRARY in libraryContentFilters
+    LaunchedEffect(shouldSyncRemoteLibrary) {
+        if (shouldSyncRemoteLibrary) {
+            viewModel.syncArtists()
         }
     }
 
@@ -157,13 +167,15 @@ fun LibraryArtistsScreen(
                     chips = listOf(
                         ArtistFilter.LIKED to stringResource(R.string.filter_liked),
                         ArtistFilter.LIBRARY to stringResource(R.string.filter_library),
-                        ArtistFilter.DOWNLOADED to stringResource(R.string.filter_downloaded)
+                        ArtistFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
+                        ArtistFilter.FOLDER to stringResource(R.string.folders),
                     ),
                     currentValue = filter,
                     onValueUpdate = {
                         val updatedFilter = nextArtistFilter(filter, it)
                         filter = updatedFilter
                         if (updatedFilter != ArtistFilter.DOWNLOADED
+                            && updatedFilter != ArtistFilter.FOLDER
                             && !isSyncingRemoteArtists
                         ) viewModel.syncArtists()
                     },
@@ -244,6 +256,11 @@ fun LibraryArtistsScreen(
                                         leadingIcon = null,
                                         action = { filter = ArtistFilter.DOWNLOADED }
                                     ),
+                                    DropdownItem(
+                                        title = stringResource(R.string.folders),
+                                        leadingIcon = null,
+                                        action = { filter = ArtistFilter.FOLDER }
+                                    ),
                                 )
                         ),
                     ),
@@ -259,10 +276,22 @@ fun LibraryArtistsScreen(
                 state = pullRefreshState,
                 isRefreshing = isRefreshingLibrary,
                 onRefresh = {
-                    if (filter == ArtistFilter.DOWNLOADED) {
-                        viewModel.refreshDownloads()
-                    } else {
-                        viewModel.syncArtists(true)
+                    if (!isRefreshingLibrary) {
+                        isPullRefreshFeedbackVisible = true
+                        when {
+                            libraryContentFilters?.contains(LibraryContentFilter.LIBRARY) == true ->
+                                viewModel.syncArtists(true)
+                            libraryContentFilters?.contains(LibraryContentFilter.DOWNLOADED) == true ->
+                                viewModel.refreshDownloads()
+                            libraryContentFilters != null -> Unit
+                            filter == ArtistFilter.DOWNLOADED -> viewModel.refreshDownloads()
+                            filter == ArtistFilter.FOLDER -> Unit
+                            else -> viewModel.syncArtists(true)
+                        }
+                        coroutineScope.launch {
+                            delay(MINIMUM_PULL_REFRESH_INDICATOR_MILLIS)
+                            isPullRefreshFeedbackVisible = false
+                        }
                     }
                 }
             ),

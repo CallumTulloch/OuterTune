@@ -12,27 +12,35 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+
+internal const val CHIP_ITEM_TRANSITION_DURATION_MILLIS = 300
 
 @Composable
 fun <E> ChipsRow(
@@ -70,7 +78,6 @@ fun <E> ChipsRow(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun <E> ChipsLazyRow(
     chips: List<Pair<E, String>>,
@@ -78,58 +85,73 @@ fun <E> ChipsLazyRow(
     onValueUpdate: (E) -> Unit,
     modifier: Modifier = Modifier,
     selected: ((E) -> Boolean)? = null,
+    visible: (E) -> Boolean = { true },
+    itemKey: (E) -> Any = { it.toString() },
+    separatorAfterIndex: Int? = null,
     isLoading: (E) -> Boolean = { false }
 ) {
     val haptic = LocalHapticFeedback.current
-    val tween: FiniteAnimationSpec<Float> = tween(
-        durationMillis = 300,
+    val fadeTween: FiniteAnimationSpec<Float> = tween(
+        durationMillis = CHIP_ITEM_TRANSITION_DURATION_MILLIS,
         easing = FastOutSlowInEasing
     )
 
-    val placementTween: FiniteAnimationSpec<IntOffset> = tween(
-        durationMillis = 300,
+    val sizeTween: FiniteAnimationSpec<IntSize> = tween(
+        durationMillis = CHIP_ITEM_TRANSITION_DURATION_MILLIS,
         easing = LinearOutSlowInEasing
     )
 
-    LazyRow(
+    Row(
         modifier = modifier
             .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
     ) {
-        item(
-            key = "spacer"
-        ) {
-            Spacer(Modifier.width(12.dp))
-        }
+        Spacer(Modifier.width(12.dp))
 
-        items(
-            items = chips,
-            key = { it.second }
-        ) {(value, label) ->
-            FilterChip(
-                label = { Text(label) },
-                selected = selected?.let { it(value) } ?: (currentValue == value),
-                colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
-                onClick = {
-                    onValueUpdate(value)
-                    haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
-                },
-                modifier = Modifier
-                    .animateItem(
-                        fadeInSpec =  tween,
-                        placementSpec = placementTween,
-                        fadeOutSpec = tween
+        chips.forEachIndexed { index, (value, label) ->
+            key(itemKey(value)) {
+                AnimatedVisibility(
+                    visible = visible(value),
+                    enter = fadeIn(fadeTween) + expandHorizontally(
+                        animationSpec = sizeTween,
+                        expandFrom = Alignment.Start,
                     ),
-                trailingIcon = {
-                    if (isLoading(value)) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
+                    exit = fadeOut(fadeTween) + shrinkHorizontally(
+                        animationSpec = sizeTween,
+                        shrinkTowards = Alignment.Start,
+                    ),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FilterChip(
+                            label = { Text(label) },
+                            selected = selected?.let { it(value) } ?: (currentValue == value),
+                            colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
+                            onClick = {
+                                onValueUpdate(value)
+                                haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
+                            },
+                            trailingIcon = {
+                                if (isLoading(value)) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            }
                         )
+
+                        Spacer(Modifier.width(8.dp))
+
+                        if (separatorAfterIndex == index) {
+                            VerticalDivider(
+                                modifier = Modifier.height(24.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
                     }
                 }
-            )
-
-            Spacer(Modifier.width(8.dp))
+            }
         }
     }
 }

@@ -221,6 +221,57 @@ interface SongsDao {
         }.map { it.reversed(descending) }
 
     @Transaction
+    @Query("SELECT * FROM song WHERE isLocal = 1 AND inLibrary IS NOT NULL ORDER BY inLibrary")
+    fun folderSongsByCreateDateAsc(): Flow<List<Song>>
+
+    @Transaction
+    @Query("SELECT * FROM song WHERE isLocal = 1 AND inLibrary IS NOT NULL ORDER BY dateModified")
+    fun folderSongsByDateModifiedAsc(): Flow<List<Song>>
+
+    @Transaction
+    @Query("SELECT * FROM song WHERE isLocal = 1 AND inLibrary IS NOT NULL ORDER BY date")
+    fun folderSongsByReleaseDateAsc(): Flow<List<Song>>
+
+    @Transaction
+    @Query("SELECT * FROM song WHERE isLocal = 1 AND inLibrary IS NOT NULL ORDER BY title COLLATE NOCASE ASC")
+    fun folderSongsByNameAsc(): Flow<List<Song>>
+
+    @Transaction
+    @Query("""
+        SELECT * FROM song
+        WHERE isLocal = 1 AND inLibrary IS NOT NULL
+        ORDER BY (
+            SELECT LOWER(GROUP_CONCAT(name, ''))
+            FROM artist
+            WHERE id IN (SELECT artistId FROM song_artist_map WHERE songId = song.id)
+            ORDER BY name
+        ) COLLATE NOCASE
+    """)
+    fun folderSongsByArtistAsc(): Flow<List<Song>>
+
+    @RewriteQueriesToDropUnusedColumns
+    @Transaction
+    @Query("""
+        SELECT song.*, (SELECT SUM(playCount.count)
+            FROM playCount
+            WHERE playCount.song = song.id) AS pc
+        FROM song
+        WHERE isLocal = 1 AND inLibrary IS NOT NULL
+        ORDER BY pc ASC
+    """)
+    fun folderSongsByPlayCountAsc(): Flow<List<Song>>
+
+    fun folderSongs(sortType: SongSortType, descending: Boolean) =
+        when (sortType) {
+            SongSortType.CREATE_DATE -> folderSongsByCreateDateAsc()
+            SongSortType.MODIFIED_DATE -> folderSongsByDateModifiedAsc()
+            SongSortType.RELEASE_DATE -> folderSongsByReleaseDateAsc()
+            SongSortType.NAME -> folderSongsByNameAsc()
+            SongSortType.ARTIST -> folderSongsByArtistAsc()
+            SongSortType.PLAY_COUNT -> folderSongsByPlayCountAsc()
+        }.map { it.reversed(descending) }
+
+    @Transaction
     @Query("SELECT * FROM song WHERE isLocal = 1 and inLibrary IS NOT NULL")
     fun allLocalSongs(): List<Song>
 

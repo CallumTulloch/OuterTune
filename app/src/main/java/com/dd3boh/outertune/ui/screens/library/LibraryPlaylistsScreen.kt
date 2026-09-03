@@ -63,6 +63,7 @@ import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.CONTENT_TYPE_HEADER
 import com.dd3boh.outertune.constants.CONTENT_TYPE_PLAYLIST
 import com.dd3boh.outertune.constants.GridThumbnailHeight
+import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.constants.LibraryViewType
 import com.dd3boh.outertune.constants.LibraryViewTypeKey
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
@@ -92,6 +93,8 @@ import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryPlaylistsViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 internal fun nextPlaylistFilter(currentFilter: PlaylistFilter, selectedFilter: PlaylistFilter): PlaylistFilter =
     if (currentFilter == selectedFilter) PlaylistFilter.ALL else selectedFilter
@@ -102,6 +105,7 @@ fun LibraryPlaylistsScreen(
     navController: NavController,
     viewModel: LibraryPlaylistsViewModel = hiltViewModel(),
     libraryFilterContent: @Composable() (() -> Unit)? = null,
+    libraryContentFilters: Set<LibraryContentFilter>? = null,
 ) {
     Log.v("LibraryPlaylistsScreen", "LP_RC-1")
     val context = LocalContext.current
@@ -119,10 +123,19 @@ fun LibraryPlaylistsScreen(
     val (sortDescending, onSortDescendingChange) = rememberPreference(PlaylistSortDescendingKey, true)
     val (showLikedAndDownloadedPlaylist) = rememberPreference(ShowLikedAndDownloadedPlaylist, true)
 
-    val playlists by viewModel.allPlaylists.collectAsState()
+    val playlistsState = if (libraryContentFilters == null) {
+        viewModel.allPlaylists.collectAsState()
+    } else {
+        remember(libraryContentFilters, sortType, sortDescending) {
+            viewModel.playlists(libraryContentFilters, sortType, sortDescending)
+        }.collectAsState(initial = null)
+    }
+    val playlists by playlistsState
     val isSyncingRemotePlaylists by viewModel.isSyncingRemotePlaylists.collectAsState()
     val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
-    val isRefreshingLibrary = isSyncingRemotePlaylists || isManualLibraryRefresh
+    val isLibraryRefreshRunning = isSyncingRemotePlaylists || isManualLibraryRefresh
+    var isPullRefreshFeedbackVisible by remember { mutableStateOf(false) }
+    val isRefreshingLibrary = isLibraryRefreshRunning || isPullRefreshFeedbackVisible
     val pullRefreshState = rememberPullToRefreshState()
 
     val likedPlaylist = PlaylistEntity(id = "liked", name = stringResource(id = R.string.liked_songs))
@@ -134,7 +147,13 @@ fun LibraryPlaylistsScreen(
     var showImportM3uDialog by rememberSaveable { mutableStateOf(false) }
     var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { viewModel.syncPlaylists() }
+    val shouldSyncRemoteLibrary =
+        libraryContentFilters == null || LibraryContentFilter.LIBRARY in libraryContentFilters
+    LaunchedEffect(shouldSyncRemoteLibrary) {
+        if (shouldSyncRemoteLibrary) {
+            viewModel.syncPlaylists()
+        }
+    }
 
     if (showCreatePlaylistDialog) {
         CreatePlaylistDialog(
@@ -170,13 +189,17 @@ fun LibraryPlaylistsScreen(
                 ChipsRow(
                     chips = listOf(
                         PlaylistFilter.LIBRARY to stringResource(R.string.filter_library),
-                        PlaylistFilter.DOWNLOADED to stringResource(R.string.filter_downloaded)
+                        PlaylistFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
+                        PlaylistFilter.FOLDER to stringResource(R.string.folders),
                     ),
                     currentValue = filter,
                     onValueUpdate = {
                         val updatedFilter = nextPlaylistFilter(filter, it)
                         filter = updatedFilter
-                        if (updatedFilter != PlaylistFilter.DOWNLOADED) viewModel.syncPlaylists()
+                        if (
+                            updatedFilter != PlaylistFilter.DOWNLOADED &&
+                            updatedFilter != PlaylistFilter.FOLDER
+                        ) viewModel.syncPlaylists()
                     },
                     isLoading = { filter ->
                         filter == PlaylistFilter.LIBRARY && isSyncingRemotePlaylists
@@ -238,6 +261,11 @@ fun LibraryPlaylistsScreen(
                                         leadingIcon = null,
                                         action = { filter = PlaylistFilter.DOWNLOADED }
                                     ),
+                                    DropdownItem(
+                                        title = stringResource(R.string.folders),
+                                        leadingIcon = null,
+                                        action = { filter = PlaylistFilter.FOLDER }
+                                    ),
                                 )
                         ),
                         DropdownItem(
@@ -263,10 +291,22 @@ fun LibraryPlaylistsScreen(
                 state = pullRefreshState,
                 isRefreshing = isRefreshingLibrary,
                 onRefresh = {
-                    if (filter == PlaylistFilter.DOWNLOADED) {
-                        viewModel.refreshDownloads()
-                    } else {
-                        viewModel.syncPlaylists(true)
+                    if (!isRefreshingLibrary) {
+                        isPullRefreshFeedbackVisible = true
+                        when {
+                            libraryContentFilters?.contains(LibraryContentFilter.LIBRARY) == true ->
+                                viewModel.syncPlaylists(true)
+                            libraryContentFilters?.contains(LibraryContentFilter.DOWNLOADED) == true ->
+                                viewModel.refreshDownloads()
+                            libraryContentFilters != null -> Unit
+                            filter == PlaylistFilter.DOWNLOADED -> viewModel.refreshDownloads()
+                            filter == PlaylistFilter.FOLDER -> Unit
+                            else -> viewModel.syncPlaylists(true)
+                        }
+                        coroutineScope.launch {
+                            delay(MINIMUM_PULL_REFRESH_INDICATOR_MILLIS)
+                            isPullRefreshFeedbackVisible = false
+                        }
                     }
                 }
             ),

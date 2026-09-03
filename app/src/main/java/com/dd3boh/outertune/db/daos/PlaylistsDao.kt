@@ -12,6 +12,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.dd3boh.outertune.constants.PlaylistFilter
 import com.dd3boh.outertune.constants.PlaylistSortType
+import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.db.entities.Playlist
 import com.dd3boh.outertune.db.entities.PlaylistEntity
 import com.dd3boh.outertune.db.entities.PlaylistSong
@@ -106,16 +107,40 @@ interface PlaylistsDao {
      * 1 -> local playlists (WHERE p.isLocal AND p.bookmarkedAt IS NOT NULL)
      * 2 -> editable playlists (WHERE p.isEditable AND p.bookmarkedAt IS NOT NULL)
      */
-    fun playlists(filter: PlaylistFilter, sortType: PlaylistSortType, descending: Boolean, variant: Int = 0): Flow<List<Playlist>> {
+    fun playlists(
+        filter: PlaylistFilter,
+        sortType: PlaylistSortType,
+        descending: Boolean,
+        variant: Int = 0,
+    ): Flow<List<Playlist>> = playlists(
+        having = playlistContentHaving(filter),
+        sortType = sortType,
+        descending = descending,
+        variant = variant,
+    )
+
+    fun playlists(
+        filters: Set<LibraryContentFilter>,
+        sortType: PlaylistSortType,
+        descending: Boolean,
+        variant: Int = 0,
+    ): Flow<List<Playlist>> = playlists(
+        having = libraryPlaylistContentHaving(filters),
+        sortType = sortType,
+        descending = descending,
+        variant = variant,
+    )
+
+    private fun playlists(
+        having: String,
+        sortType: PlaylistSortType,
+        descending: Boolean,
+        variant: Int,
+    ): Flow<List<Playlist>> {
         val orderBy = when (sortType) {
             PlaylistSortType.CREATE_DATE -> "p.rowId ASC"
             PlaylistSortType.NAME -> "p.name COLLATE NOCASE ASC"
             PlaylistSortType.SONG_COUNT -> "songCount ASC"
-        }
-
-        val having = when (filter) {
-            PlaylistFilter.DOWNLOADED -> "HAVING SUM(CASE WHEN s.dateDownload IS NOT NULL THEN 1 ELSE 0 END) > 0"
-            PlaylistFilter.LIBRARY, PlaylistFilter.ALL -> ""
         }
 
         val where = when (variant) {
@@ -128,7 +153,7 @@ interface PlaylistsDao {
             SELECT 
                 p.*, 
                 COUNT(psm.playlistId) AS songCount,
-                SUM(CASE WHEN s.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
+                SUM(CASE WHEN s.isLocal = 0 AND s.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
             FROM playlist p
                 LEFT JOIN playlist_song_map psm ON p.id = psm.playlistId
                 LEFT JOIN song s ON psm.songId = s.id
@@ -219,4 +244,28 @@ interface PlaylistsDao {
     @Delete
     fun delete(playlistSongMap: PlaylistSongMap)
     // endregion
+}
+
+private const val DOWNLOADED_PLAYLIST_MEMBER_CONDITION =
+    "SUM(CASE WHEN s.isLocal = 0 AND s.dateDownload IS NOT NULL THEN 1 ELSE 0 END) > 0"
+private const val FOLDER_PLAYLIST_MEMBER_CONDITION =
+    "SUM(CASE WHEN s.isLocal = 1 AND s.inLibrary IS NOT NULL THEN 1 ELSE 0 END) > 0"
+
+internal fun playlistContentHaving(filter: PlaylistFilter): String = when (filter) {
+    PlaylistFilter.DOWNLOADED -> "HAVING $DOWNLOADED_PLAYLIST_MEMBER_CONDITION"
+    PlaylistFilter.FOLDER -> "HAVING $FOLDER_PLAYLIST_MEMBER_CONDITION"
+    PlaylistFilter.LIBRARY, PlaylistFilter.ALL -> ""
+}
+
+internal fun libraryPlaylistContentHaving(filters: Set<LibraryContentFilter>): String {
+    if (LibraryContentFilter.LIBRARY in filters) return ""
+
+    val conditions = filters.mapNotNull { filter ->
+        when (filter) {
+            LibraryContentFilter.DOWNLOADED -> DOWNLOADED_PLAYLIST_MEMBER_CONDITION
+            LibraryContentFilter.FOLDER -> FOLDER_PLAYLIST_MEMBER_CONDITION
+            LibraryContentFilter.LIBRARY -> null
+        }
+    }
+    return "HAVING ${conditions.joinToString(separator = " OR ").ifEmpty { "0" }}"
 }

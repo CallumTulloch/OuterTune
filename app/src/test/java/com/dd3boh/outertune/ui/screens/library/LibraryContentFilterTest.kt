@@ -2,6 +2,7 @@ package com.dd3boh.outertune.ui.screens.library
 
 import com.dd3boh.outertune.constants.AlbumFilter
 import com.dd3boh.outertune.constants.ArtistFilter
+import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.constants.PlaylistFilter
 import com.dd3boh.outertune.ui.screens.Screens.LibraryFilter
 import org.junit.Assert.assertEquals
@@ -23,7 +24,7 @@ class LibraryContentFilterTest {
     }
 
     @Test
-    fun `supported category shows downloaded then library content filters`() {
+    fun `supported category shows downloaded library and folder content filters`() {
         listOf(
             LibraryFilter.ALBUMS,
             LibraryFilter.ARTISTS,
@@ -34,6 +35,7 @@ class LibraryContentFilterTest {
                     LibraryChip(category),
                     LibraryChip(category, LibraryContentFilter.DOWNLOADED),
                     LibraryChip(category, LibraryContentFilter.LIBRARY),
+                    LibraryChip(category, LibraryContentFilter.FOLDER),
                 ),
                 libraryChips(category, LibraryFilter.entries),
             )
@@ -81,6 +83,31 @@ class LibraryContentFilterTest {
         assertEquals(PlaylistFilter.DOWNLOADED, nextPlaylistFilter(PlaylistFilter.ALL, PlaylistFilter.DOWNLOADED))
         assertEquals(PlaylistFilter.ALL, nextPlaylistFilter(PlaylistFilter.DOWNLOADED, PlaylistFilter.DOWNLOADED))
         assertEquals(PlaylistFilter.LIBRARY, nextPlaylistFilter(PlaylistFilter.DOWNLOADED, PlaylistFilter.LIBRARY))
+    }
+
+    @Test
+    fun `all secondary filters are selected by default`() {
+        assertEquals(
+            LibraryContentFilter.entries.toSet(),
+            LibraryContentFilter.fromMask(LibraryContentFilter.allMask),
+        )
+    }
+
+    @Test
+    fun `secondary filters toggle independently`() {
+        val withoutDownloaded = toggleLibraryContentFilter(
+            LibraryContentFilter.allMask,
+            LibraryContentFilter.DOWNLOADED,
+        )
+
+        assertEquals(
+            setOf(LibraryContentFilter.LIBRARY, LibraryContentFilter.FOLDER),
+            LibraryContentFilter.fromMask(withoutDownloaded),
+        )
+        assertEquals(
+            LibraryContentFilter.allMask,
+            toggleLibraryContentFilter(withoutDownloaded, LibraryContentFilter.DOWNLOADED),
+        )
     }
 
     @Test

@@ -13,6 +13,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.dd3boh.outertune.constants.AlbumFilter
 import com.dd3boh.outertune.constants.AlbumSortType
+import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.db.entities.AlbumArtistMap
 import com.dd3boh.outertune.db.entities.AlbumEntity
@@ -187,7 +188,16 @@ interface AlbumsDao : ArtistsDao {
     )
     fun _getAlbum(query: SupportSQLiteQuery): Flow<List<Album>>
 
-    fun albums(filter: AlbumFilter, sortType: AlbumSortType, descending: Boolean): Flow<List<Album>> {
+    fun albums(filter: AlbumFilter, sortType: AlbumSortType, descending: Boolean): Flow<List<Album>> =
+        albums(albumContentCondition(filter), sortType, descending)
+
+    fun albums(
+        filters: Set<LibraryContentFilter>,
+        sortType: AlbumSortType,
+        descending: Boolean,
+    ): Flow<List<Album>> = albums(libraryAlbumContentCondition(filters), sortType, descending)
+
+    private fun albums(where: String, sortType: AlbumSortType, descending: Boolean): Flow<List<Album>> {
         val orderBy = when (sortType) {
             AlbumSortType.CREATE_DATE -> "album.rowId ASC"
             AlbumSortType.NAME -> "album.title COLLATE NOCASE ASC"
@@ -202,15 +212,9 @@ interface AlbumsDao : ArtistsDao {
             AlbumSortType.LENGTH -> "album.duration ASC"
         }
 
-        val where = when (filter) {
-            AlbumFilter.DOWNLOADED -> "song.dateDownload IS NOT NULL"
-            AlbumFilter.LIBRARY -> "song.inLibrary IS NOT NULL"
-            AlbumFilter.LIKED -> "album.bookmarkedAt IS NOT NULL"
-            AlbumFilter.ALL -> "song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL"
-        }
-
         val query = SimpleSQLiteQuery("""
-            SELECT album.*, count(song.dateDownload) downloadCount
+            SELECT album.*,
+                COUNT(CASE WHEN song.isLocal = 0 AND song.dateDownload IS NOT NULL THEN 1 END) downloadCount
             FROM album
                 LEFT JOIN song_album_map ON album.id = song_album_map.albumId
                 LEFT JOIN song ON song.id = song_album_map.songId
@@ -411,3 +415,23 @@ interface AlbumsDao : ArtistsDao {
     fun nukeLocalAlbums()
     // endregion
 }
+
+internal fun albumContentCondition(filter: AlbumFilter): String = when (filter) {
+    AlbumFilter.DOWNLOADED -> "song.isLocal = 0 AND song.dateDownload IS NOT NULL"
+    AlbumFilter.LIBRARY -> "song.inLibrary IS NOT NULL"
+    AlbumFilter.LIKED -> "album.bookmarkedAt IS NOT NULL"
+    AlbumFilter.FOLDER -> "song.isLocal = 1 AND song.inLibrary IS NOT NULL"
+    AlbumFilter.ALL ->
+        "song.inLibrary IS NOT NULL OR (song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
+}
+
+internal fun libraryAlbumContentCondition(filters: Set<LibraryContentFilter>): String =
+    filters.map { filter ->
+        when (filter) {
+            LibraryContentFilter.DOWNLOADED ->
+                "(song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
+            LibraryContentFilter.LIBRARY -> "(song.inLibrary IS NOT NULL)"
+            LibraryContentFilter.FOLDER ->
+                "(song.isLocal = 1 AND song.inLibrary IS NOT NULL)"
+        }
+    }.joinToString(separator = " OR ").ifEmpty { "0" }

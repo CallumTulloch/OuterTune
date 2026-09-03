@@ -209,19 +209,32 @@ enum class LibrarySortType {
 }
 
 enum class SongFilter {
-    LIBRARY, LIKED, DOWNLOADED, ALL
+    LIBRARY, LIKED, DOWNLOADED, FOLDER, ALL
 }
 
 enum class ArtistFilter {
-    LIBRARY, LIKED, DOWNLOADED, ALL
+    LIBRARY, LIKED, DOWNLOADED, FOLDER, ALL
 }
 
 enum class AlbumFilter {
-    LIBRARY, LIKED, DOWNLOADED, ALL
+    LIBRARY, LIKED, DOWNLOADED, FOLDER, ALL
 }
 
 enum class PlaylistFilter {
-    LIBRARY, DOWNLOADED, ALL
+    LIBRARY, DOWNLOADED, FOLDER, ALL
+}
+
+enum class LibraryContentFilter(val mask: Int) {
+    DOWNLOADED(1 shl 0),
+    LIBRARY(1 shl 1),
+    FOLDER(1 shl 2);
+
+    companion object {
+        val allMask = entries.fold(0) { mask, filter -> mask or filter.mask }
+
+        fun fromMask(mask: Int): Set<LibraryContentFilter> =
+            entries.filterTo(linkedSetOf()) { filter -> mask and filter.mask != 0 }
+    }
 }
 
 enum class SearchSource {

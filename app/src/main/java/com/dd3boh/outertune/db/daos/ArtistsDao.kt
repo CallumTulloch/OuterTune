@@ -13,6 +13,7 @@ import androidx.sqlite.db.SupportSQLiteQuery
 import com.dd3boh.outertune.constants.ArtistFilter
 import com.dd3boh.outertune.constants.ArtistSongSortType
 import com.dd3boh.outertune.constants.ArtistSortType
+import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.Song
@@ -134,48 +135,66 @@ interface ArtistsDao {
     @RawQuery(observedEntities = [ArtistEntity::class, SongEntity::class, SongArtistMap::class])
     fun _getArtists(query: SupportSQLiteQuery): Flow<List<Artist>>
 
-    fun artists(filter: ArtistFilter, sortType: ArtistSortType, descending: Boolean, localOnly: Boolean? = null): Flow<List<Artist>> {
+    fun artists(
+        filter: ArtistFilter,
+        sortType: ArtistSortType,
+        descending: Boolean,
+        localOnly: Boolean? = null,
+    ): Flow<List<Artist>> = artists(
+        contentCondition = artistContentCondition(filter),
+        sortType = sortType,
+        descending = descending,
+        localOnly = localOnly,
+        filterUnsupportedArtists = filter != ArtistFilter.LIBRARY && filter != ArtistFilter.ALL,
+    )
+
+    fun artists(
+        filters: Set<LibraryContentFilter>,
+        sortType: ArtistSortType,
+        descending: Boolean,
+    ): Flow<List<Artist>> = artists(
+        contentCondition = libraryArtistContentCondition(filters),
+        sortType = sortType,
+        descending = descending,
+        filterUnsupportedArtists = LibraryContentFilter.LIBRARY !in filters,
+    )
+
+    private fun artists(
+        contentCondition: String,
+        sortType: ArtistSortType,
+        descending: Boolean,
+        localOnly: Boolean? = null,
+        filterUnsupportedArtists: Boolean,
+    ): Flow<List<Artist>> {
         val orderBy = when (sortType) {
             ArtistSortType.CREATE_DATE -> "artist.rowId ASC"
             ArtistSortType.NAME -> "artist.name COLLATE NOCASE ASC"
             ArtistSortType.SONG_COUNT -> "songCount ASC"
         }
 
-        val contentCondition = when (filter) {
-            ArtistFilter.DOWNLOADED -> "song.dateDownload IS NOT NULL"
-            ArtistFilter.LIBRARY -> "song.inLibrary IS NOT NULL"
-            ArtistFilter.LIKED -> "artist.bookmarkedAt IS NOT NULL"
-            ArtistFilter.ALL -> "song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL"
-        }
         val where = buildList {
             add("($contentCondition)")
             localOnly?.let { add("artist.isLocal = ${if (it) 1 else 0}") }
         }.joinToString(" AND ")
 
-        val having = when (filter) {
-            ArtistFilter.DOWNLOADED -> "AND downloadCount > 0"
-            else -> ""
-        }
-
         val query = SimpleSQLiteQuery("""
             SELECT 
                 artist.*,
                 COUNT(song.id) AS songCount,
-                SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
+                SUM(CASE WHEN song.isLocal = 0 AND song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
             FROM artist
                 LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
                 LEFT JOIN song ON sam.songId = song.id
             WHERE $where
             GROUP BY artist.id
-            HAVING songCount >= 0 $having
             ORDER BY $orderBy
         """)
 
         return _getArtists(query).map { artists ->
-            val filtered = if (filter == ArtistFilter.LIBRARY || filter == ArtistFilter.ALL) {
-                artists
-            } else {
+            val filtered = if (filterUnsupportedArtists) {
                 artists.filter { it.artist.isYouTubeArtist || it.artist.isLocal } // TODO: add ui to filter by local or remote or something idk
+            } else {
+                artists
             }
             filtered.reversed(descending)
         }
@@ -295,3 +314,23 @@ interface ArtistsDao {
     fun nukeLocalArtists()
     // endregion
 }
+
+internal fun artistContentCondition(filter: ArtistFilter): String = when (filter) {
+    ArtistFilter.DOWNLOADED -> "song.isLocal = 0 AND song.dateDownload IS NOT NULL"
+    ArtistFilter.LIBRARY -> "song.inLibrary IS NOT NULL"
+    ArtistFilter.LIKED -> "artist.bookmarkedAt IS NOT NULL"
+    ArtistFilter.FOLDER -> "song.isLocal = 1 AND song.inLibrary IS NOT NULL"
+    ArtistFilter.ALL ->
+        "song.inLibrary IS NOT NULL OR (song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
+}
+
+internal fun libraryArtistContentCondition(filters: Set<LibraryContentFilter>): String =
+    filters.map { filter ->
+        when (filter) {
+            LibraryContentFilter.DOWNLOADED ->
+                "(song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
+            LibraryContentFilter.LIBRARY -> "(song.inLibrary IS NOT NULL)"
+            LibraryContentFilter.FOLDER ->
+                "(song.isLocal = 1 AND song.inLibrary IS NOT NULL)"
+        }
+    }.joinToString(separator = " OR ").ifEmpty { "0" }

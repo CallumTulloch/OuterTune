@@ -179,8 +179,9 @@ fun LibrarySongsScreen(
         ChipsRow(
             chips = listOf(
                 SongFilter.LIKED to stringResource(R.string.filter_liked),
-                SongFilter.LIBRARY to stringResource(R.string.filter_library),
-                SongFilter.DOWNLOADED to stringResource(R.string.filter_downloaded)
+                SongFilter.LIBRARY to stringResource(R.string.library),
+                SongFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
+                SongFilter.FOLDER to stringResource(R.string.folders),
             ),
             currentValue = filter,
             onValueUpdate = {
@@ -190,7 +191,7 @@ fun LibrarySongsScreen(
                     SongFilter.ALL -> viewModel.syncAllSongs()
                     SongFilter.LIKED -> viewModel.syncLikedSongs()
                     SongFilter.LIBRARY -> viewModel.syncLibrarySongs()
-                    SongFilter.DOWNLOADED -> Unit
+                    SongFilter.DOWNLOADED, SongFilter.FOLDER -> Unit
                 }
             },
             isLoading = { filter ->
@@ -247,7 +248,7 @@ fun LibrarySongsScreen(
                                             action = { filter = SongFilter.LIKED }
                                         ),
                                         DropdownItem(
-                                            title = stringResource(R.string.filter_library),
+                                            title = stringResource(R.string.library),
                                             leadingIcon = null,
                                             action = { filter = SongFilter.LIBRARY }
                                         ),
@@ -255,6 +256,11 @@ fun LibrarySongsScreen(
                                             title = stringResource(R.string.filter_downloaded),
                                             leadingIcon = null,
                                             action = { filter = SongFilter.DOWNLOADED }
+                                        ),
+                                        DropdownItem(
+                                            title = stringResource(R.string.folders),
+                                            leadingIcon = null,
+                                            action = { filter = SongFilter.FOLDER }
                                         ),
                                     )
                             ),
@@ -307,6 +313,7 @@ fun LibrarySongsScreen(
                             SongFilter.LIKED -> viewModel.syncLikedSongs(true)
                             SongFilter.LIBRARY -> viewModel.syncLibrarySongs(true)
                             SongFilter.DOWNLOADED -> viewModel.refreshDownloads()
+                            SongFilter.FOLDER -> Unit
                         }
                         coroutineScope.launch {
                             delay(MINIMUM_PULL_REFRESH_INDICATOR_MILLIS)

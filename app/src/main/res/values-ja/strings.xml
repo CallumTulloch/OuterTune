@@ -31,7 +31,7 @@
     <string name="search_library">保存済みの曲を検索…</string>
     <string name="filter_library">ライブラリ追加済み</string>
     <string name="filter_liked">いいね済み</string>
-    <string name="filter_downloaded">ダウンロード済み</string>
+    <string name="filter_downloaded">DL済み</string>
     <string name="filter_all">すべて</string>
     <string name="filter_songs">曲</string>
     <string name="filter_videos">動画</string>
@@ -198,7 +198,9 @@
     <string name="content">コンテンツ</string>
     <string name="login">ログイン</string>
     <string name="not_logged_in">ログインしていません</string>
-    <string name="content_language">コンテンツの既定の言語</string>
+    <string name="app_language">アプリの表示言語</string>
+    <string name="app_language_android_13_required">Android 13 以降で利用できます</string>
+    <string name="content_language">オンラインコンテンツの言語</string>
     <string name="content_country">コンテンツの既定の国</string>
     <string name="system_default">システムに従う</string>
     <string name="enable_proxy">プロキシを有効化</string>

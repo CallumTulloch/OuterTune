@@ -62,6 +62,7 @@ import com.dd3boh.outertune.constants.AlbumViewTypeKey
 import com.dd3boh.outertune.constants.CONTENT_TYPE_ALBUM
 import com.dd3boh.outertune.constants.CONTENT_TYPE_HEADER
 import com.dd3boh.outertune.constants.GridThumbnailHeight
+import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.constants.LibraryViewType
 import com.dd3boh.outertune.constants.LibraryViewTypeKey
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
@@ -80,6 +81,8 @@ import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryAlbumsViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 internal fun nextAlbumFilter(currentFilter: AlbumFilter, selectedFilter: AlbumFilter): AlbumFilter =
     if (currentFilter == selectedFilter) AlbumFilter.ALL else selectedFilter
@@ -93,6 +96,7 @@ fun LibraryAlbumsScreen(
     navController: NavController,
     viewModel: LibraryAlbumsViewModel = hiltViewModel(),
     libraryFilterContent: @Composable() (() -> Unit)? = null,
+    libraryContentFilters: Set<LibraryContentFilter>? = null,
 ) {
     val context = LocalContext.current
     val menuState = LocalMenuState.current
@@ -111,23 +115,29 @@ fun LibraryAlbumsScreen(
     val (sortDescending, onSortDescendingChange) = rememberPreference(AlbumSortDescendingKey, true)
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
 
-    val albums by viewModel.allAlbums.collectAsState()
+    val albumsState = if (libraryContentFilters == null) {
+        viewModel.allAlbums.collectAsState()
+    } else {
+        remember(libraryContentFilters, sortType, sortDescending) {
+            viewModel.albums(libraryContentFilters, sortType, sortDescending)
+        }.collectAsState(initial = null)
+    }
+    val albums by albumsState
     val isSyncingLibraryAlbums by viewModel.isSyncingRemoteAlbums.collectAsState()
     val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
-    val isRefreshingLibrary = isSyncingLibraryAlbums || isManualLibraryRefresh
+    val isLibraryRefreshRunning = isSyncingLibraryAlbums || isManualLibraryRefresh
+    var isPullRefreshFeedbackVisible by remember { mutableStateOf(false) }
+    val isRefreshingLibrary = isLibraryRefreshRunning || isPullRefreshFeedbackVisible
     val pullRefreshState = rememberPullToRefreshState()
 
     val lazyListState = rememberLazyListState()
     val lazyGridState = rememberLazyGridState()
 
-    LaunchedEffect(Unit) { viewModel.syncAlbums() }
-
-    LaunchedEffect(libraryFilterContent, filter) {
-        if (libraryFilterContent != null) {
-            val normalizedFilter = normalizeEmbeddedAlbumFilter(filter)
-            if (normalizedFilter != filter) {
-                filter = normalizedFilter
-            }
+    val shouldSyncRemoteLibrary =
+        libraryContentFilters == null || LibraryContentFilter.LIBRARY in libraryContentFilters
+    LaunchedEffect(shouldSyncRemoteLibrary) {
+        if (shouldSyncRemoteLibrary) {
+            viewModel.syncAlbums()
         }
     }
 
@@ -159,17 +169,22 @@ fun LibraryAlbumsScreen(
                     chips = listOf(
                         AlbumFilter.LIKED to stringResource(R.string.filter_liked),
                         AlbumFilter.LIBRARY to stringResource(R.string.filter_library),
-                        AlbumFilter.DOWNLOADED to stringResource(R.string.filter_downloaded)
+                        AlbumFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
+                        AlbumFilter.FOLDER to stringResource(R.string.folders),
                     ),
                     currentValue = filter,
                     onValueUpdate = {
                         val updatedFilter = nextAlbumFilter(filter, it)
                         filter = updatedFilter
-                        if (updatedFilter != AlbumFilter.DOWNLOADED) viewModel.syncAlbums()
+                        if (
+                            updatedFilter != AlbumFilter.DOWNLOADED &&
+                            updatedFilter != AlbumFilter.FOLDER
+                        ) viewModel.syncAlbums()
                     },
                     modifier = Modifier.weight(1f),
                     isLoading = { chipFilter ->
-                        chipFilter != AlbumFilter.DOWNLOADED && isSyncingLibraryAlbums
+                        (chipFilter == AlbumFilter.LIKED || chipFilter == AlbumFilter.LIBRARY) &&
+                            isSyncingLibraryAlbums
                     }
                 )
 
@@ -249,6 +264,11 @@ fun LibraryAlbumsScreen(
                                         leadingIcon = null,
                                         action = { filter = AlbumFilter.DOWNLOADED }
                                     ),
+                                    DropdownItem(
+                                        title = stringResource(R.string.folders),
+                                        leadingIcon = null,
+                                        action = { filter = AlbumFilter.FOLDER }
+                                    ),
                                 ),
                         ),
                     )
@@ -264,10 +284,22 @@ fun LibraryAlbumsScreen(
                 state = pullRefreshState,
                 isRefreshing = isRefreshingLibrary,
                 onRefresh = {
-                    if (filter == AlbumFilter.DOWNLOADED) {
-                        viewModel.refreshDownloads()
-                    } else {
-                        viewModel.syncAlbums(true)
+                    if (!isRefreshingLibrary) {
+                        isPullRefreshFeedbackVisible = true
+                        when {
+                            libraryContentFilters?.contains(LibraryContentFilter.LIBRARY) == true ->
+                                viewModel.syncAlbums(true)
+                            libraryContentFilters?.contains(LibraryContentFilter.DOWNLOADED) == true ->
+                                viewModel.refreshDownloads()
+                            libraryContentFilters != null -> Unit
+                            filter == AlbumFilter.DOWNLOADED -> viewModel.refreshDownloads()
+                            filter == AlbumFilter.FOLDER -> Unit
+                            else -> viewModel.syncAlbums(true)
+                        }
+                        coroutineScope.launch {
+                            delay(MINIMUM_PULL_REFRESH_INDICATOR_MILLIS)
+                            isPullRefreshFeedbackVisible = false
+                        }
                     }
                 }
             ),

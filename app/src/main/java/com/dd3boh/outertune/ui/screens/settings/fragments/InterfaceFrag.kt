@@ -1,5 +1,11 @@
 package com.dd3boh.outertune.ui.screens.settings.fragments
 
+import android.app.LocaleConfig
+import android.app.LocaleManager
+import android.content.Context
+import android.os.Build
+import android.os.LocaleList
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.dd3boh.outertune.R
@@ -416,9 +423,24 @@ fun ColumnScope.SwipeGesturesFrag() {
 fun ColumnScope.LocalizationFrag() {
     val (contentLanguage, onContentLanguageChange) = rememberPreference(
         key = ContentLanguageKey,
-        defaultValue = "system"
+        defaultValue = SYSTEM_DEFAULT
     )
-    val (contentCountry, onContentCountryChange) = rememberPreference(key = ContentCountryKey, defaultValue = "system")
+    val (contentCountry, onContentCountryChange) = rememberPreference(
+        key = ContentCountryKey,
+        defaultValue = SYSTEM_DEFAULT,
+    )
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        AppLanguagePreference()
+    } else {
+        PreferenceEntry(
+            title = { Text(stringResource(R.string.app_language)) },
+            description = stringResource(R.string.app_language_android_13_required),
+            icon = { Icon(Icons.Rounded.Language, null) },
+            onClick = {},
+            isEnabled = false,
+        )
+    }
 
     ListPreference(
         title = { Text(stringResource(R.string.content_language)) },
@@ -466,4 +488,54 @@ fun ColumnScope.LocalizationFrag() {
             onContentCountryChange(newValue)
         }
     )
+}
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+private fun AppLanguagePreference() {
+    val context = LocalContext.current
+    val localeManager = remember(context) {
+        context.getSystemService(LocaleManager::class.java)
+    }
+    val supportedLanguageTags = remember(context) {
+        supportedAppLanguageTags(context)
+    }
+    val applicationLocales = localeManager.applicationLocales
+    val selectedLanguageTag = if (applicationLocales.size() == 0) {
+        SYSTEM_DEFAULT
+    } else {
+        applicationLocales[0].toLanguageTag()
+    }
+
+    ListPreference(
+        title = { Text(stringResource(R.string.app_language)) },
+        icon = { Icon(Icons.Rounded.Language, null) },
+        selectedValue = selectedLanguageTag,
+        values = listOf(SYSTEM_DEFAULT) + supportedLanguageTags,
+        valueText = { languageTag ->
+            if (languageTag == SYSTEM_DEFAULT) {
+                stringResource(R.string.system_default)
+            } else {
+                val locale = Locale.forLanguageTag(languageTag)
+                locale.getDisplayName(locale)
+            }
+        },
+        onValueSelected = { languageTag ->
+            localeManager.applicationLocales = if (languageTag == SYSTEM_DEFAULT) {
+                LocaleList.getEmptyLocaleList()
+            } else {
+                LocaleList.forLanguageTags(languageTag)
+            }
+        },
+    )
+}
+
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private fun supportedAppLanguageTags(context: Context): List<String> {
+    val supportedLocales = LocaleConfig(context).supportedLocales ?: return listOf("en", "ja")
+    return buildList {
+        for (index in 0 until supportedLocales.size()) {
+            add(supportedLocales[index].toLanguageTag())
+        }
+    }.distinct()
 }

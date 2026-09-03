@@ -7,7 +7,12 @@ import org.junit.Test
 class LibrarySongsScreenTest {
     @Test
     fun `selecting the active visible filter clears the selection`() {
-        listOf(SongFilter.LIKED, SongFilter.LIBRARY, SongFilter.DOWNLOADED).forEach { filter ->
+        listOf(
+            SongFilter.LIKED,
+            SongFilter.LIBRARY,
+            SongFilter.DOWNLOADED,
+            SongFilter.FOLDER,
+        ).forEach { filter ->
             assertEquals(SongFilter.ALL, nextSongFilter(filter, filter))
         }
     }
@@ -28,5 +33,6 @@ class LibrarySongsScreenTest {
     fun `embedded songs screen preserves supported filters`() {
         assertEquals(SongFilter.LIBRARY, normalizeEmbeddedSongFilter(SongFilter.LIBRARY))
         assertEquals(SongFilter.DOWNLOADED, normalizeEmbeddedSongFilter(SongFilter.DOWNLOADED))
+        assertEquals(SongFilter.FOLDER, normalizeEmbeddedSongFilter(SongFilter.FOLDER))
     }
 }

@@ -30,6 +30,7 @@ import com.dd3boh.outertune.constants.ArtistSongSortTypeKey
 import com.dd3boh.outertune.constants.ArtistSortDescendingKey
 import com.dd3boh.outertune.constants.ArtistSortType
 import com.dd3boh.outertune.constants.ArtistSortTypeKey
+import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.constants.LibrarySortDescendingKey
 import com.dd3boh.outertune.constants.LibrarySortType
 import com.dd3boh.outertune.constants.LibrarySortTypeKey
@@ -145,6 +146,7 @@ class LibrarySongsViewModel @Inject constructor(
                     SongFilter.LIBRARY -> database.songs(sortType, descending)
                     SongFilter.LIKED -> database.likedSongs(sortType, descending)
                     SongFilter.DOWNLOADED -> database.downloadSongs(sortType, descending)
+                    SongFilter.FOLDER -> database.folderSongs(sortType, descending)
                 }
             }.stateIn(viewModelScope, SharingStarted.Lazily, null)
     }
@@ -202,7 +204,7 @@ class LibraryFoldersViewModel @Inject constructor(
 @HiltViewModel
 class LibraryArtistsViewModel @Inject constructor(
     @ApplicationContext context: Context,
-    database: MusicDatabase,
+    private val database: MusicDatabase,
     private val syncUtils: SyncUtils,
 ) : ViewModel() {
     val isSyncingRemoteArtists = syncUtils.isSyncingRemoteArtists
@@ -221,6 +223,12 @@ class LibraryArtistsViewModel @Inject constructor(
             database.artists(filter, sortType, descending)
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    fun artists(
+        filters: Set<LibraryContentFilter>,
+        sortType: ArtistSortType,
+        descending: Boolean,
+    ) = database.artists(filters, sortType, descending)
 
     fun syncArtists(bypassCd: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -262,7 +270,7 @@ class LibraryArtistsViewModel @Inject constructor(
 @HiltViewModel
 class LibraryAlbumsViewModel @Inject constructor(
     @ApplicationContext context: Context,
-    database: MusicDatabase,
+    private val database: MusicDatabase,
     private val syncUtils: SyncUtils,
 ) : ViewModel() {
     val isSyncingRemoteAlbums = syncUtils.isSyncingRemoteAlbums
@@ -281,6 +289,12 @@ class LibraryAlbumsViewModel @Inject constructor(
             database.albums(filter, sortType, descending)
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    fun albums(
+        filters: Set<LibraryContentFilter>,
+        sortType: AlbumSortType,
+        descending: Boolean,
+    ) = database.albums(filters, sortType, descending)
 
     fun syncAlbums(bypassCd: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -324,7 +338,7 @@ class LibraryAlbumsViewModel @Inject constructor(
 @HiltViewModel
 class LibraryPlaylistsViewModel @Inject constructor(
     @ApplicationContext context: Context,
-    database: MusicDatabase,
+    private val database: MusicDatabase,
     private val syncUtils: SyncUtils,
 ) : ViewModel() {
     val isSyncingRemotePlaylists = syncUtils.isSyncingRemotePlaylists
@@ -343,6 +357,12 @@ class LibraryPlaylistsViewModel @Inject constructor(
             database.playlists(filter, sortType, descending)
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    fun playlists(
+        filters: Set<LibraryContentFilter>,
+        sortType: PlaylistSortType,
+        descending: Boolean,
+    ) = database.playlists(filters, sortType, descending)
 
     fun syncPlaylists(bypassCd: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
