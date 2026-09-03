@@ -469,19 +469,8 @@ fun ColumnScope.DownloadsFrag() {
                     onClick = {
                         showClearConfirmDialog = false
                         coroutineScope.launch(Dispatchers.IO) {
-                            // clear internal downloads
-                            downloadCache.keys.forEach { key ->
-                                downloadCache.removeResource(key)
-                            }
-
-                            // TODO: Delete external downloads. Rememebr to exclude extra paths
-                            // clear external downloads
-//                            database.downloadSongs(SongSortType.NAME, true).collect { songs ->
-//                                songs.forEach { song ->
-//                                    downloadUtil.delete(song)
-//                                }
-//                            }
-
+                            downloadUtil.clearAllDownloads()
+                            downloadCacheSize = tryOrNull { downloadCache.cacheSpace } ?: 0
                             downloadMainPathSize = downloadUtil.localMgr.getMainDlStorageUsage()
                             downloadExtraPathSize = downloadUtil.localMgr.getExtraDlStorageUsage()
                         }

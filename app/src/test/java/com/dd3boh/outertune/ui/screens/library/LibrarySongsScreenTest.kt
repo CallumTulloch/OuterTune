@@ -6,21 +6,42 @@ import org.junit.Test
 
 class LibrarySongsScreenTest {
     @Test
-    fun `selecting the active visible filter clears the selection`() {
+    fun `selecting the active source clears only the source selection`() {
         listOf(
-            SongFilter.LIKED,
             SongFilter.LIBRARY,
             SongFilter.DOWNLOADED,
             SongFilter.FOLDER,
         ).forEach { filter ->
-            assertEquals(SongFilter.ALL, nextSongFilter(filter, filter))
+            assertEquals(
+                SongFilterSelection(SongFilter.ALL, likedOnly = true),
+                nextSongFilterSelection(filter, likedOnly = true, selectedFilter = filter),
+            )
         }
     }
 
     @Test
-    fun `selecting another filter activates it`() {
-        assertEquals(SongFilter.LIKED, nextSongFilter(SongFilter.ALL, SongFilter.LIKED))
-        assertEquals(SongFilter.DOWNLOADED, nextSongFilter(SongFilter.LIBRARY, SongFilter.DOWNLOADED))
+    fun `selecting another source preserves liked selection`() {
+        assertEquals(
+            SongFilterSelection(SongFilter.DOWNLOADED, likedOnly = true),
+            nextSongFilterSelection(SongFilter.LIBRARY, likedOnly = true, SongFilter.DOWNLOADED),
+        )
+    }
+
+    @Test
+    fun `liked selection toggles independently from source`() {
+        assertEquals(
+            SongFilterSelection(SongFilter.LIBRARY, likedOnly = true),
+            nextSongFilterSelection(SongFilter.LIBRARY, likedOnly = false, SongFilter.LIKED),
+        )
+        assertEquals(
+            SongFilterSelection(SongFilter.LIBRARY, likedOnly = false),
+            nextSongFilterSelection(SongFilter.LIBRARY, likedOnly = true, SongFilter.LIKED),
+        )
+    }
+
+    @Test
+    fun `legacy liked source is normalized to all sources`() {
+        assertEquals(SongFilter.ALL, normalizeSongSourceFilter(SongFilter.LIKED))
     }
 
     @Test

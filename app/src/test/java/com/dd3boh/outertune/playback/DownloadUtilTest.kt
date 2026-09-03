@@ -60,4 +60,17 @@ class DownloadUtilTest {
         assertNull(completedAtForDownloadState(Download.STATE_QUEUED, 1L))
         assertNull(completedAtForDownloadState(Download.STATE_DOWNLOADING, 1L))
     }
+
+    @Test
+    fun `clear downloads retains ids still present in extra import directories`() {
+        val idsToClear = downloadIdsToClear(
+            indexedMediaIds = setOf("internal", "also-extra"),
+            cacheMediaIds = setOf("orphan-cache"),
+            databaseDownloadIds = setOf("stale-db", "also-extra"),
+            deletedMainMediaIds = setOf("main", "also-extra"),
+            remainingCustomIds = setOf("also-extra", "extra-only"),
+        )
+
+        assertEquals(setOf("internal", "orphan-cache", "stale-db", "main"), idsToClear)
+    }
 }

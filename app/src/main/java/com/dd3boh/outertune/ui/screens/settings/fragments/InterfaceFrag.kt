@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Reorder
 import androidx.compose.material.icons.rounded.Swipe
 import androidx.compose.material.icons.rounded.Tab
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -436,7 +437,7 @@ fun ColumnScope.LocalizationFrag() {
         PreferenceEntry(
             title = { Text(stringResource(R.string.app_language)) },
             description = stringResource(R.string.app_language_android_13_required),
-            icon = { Icon(Icons.Rounded.Language, null) },
+            icon = { Icon(Icons.Rounded.Translate, null) },
             onClick = {},
             isEnabled = false,
         )
@@ -509,7 +510,7 @@ private fun AppLanguagePreference() {
 
     ListPreference(
         title = { Text(stringResource(R.string.app_language)) },
-        icon = { Icon(Icons.Rounded.Language, null) },
+        icon = { Icon(Icons.Rounded.Translate, null) },
         selectedValue = selectedLanguageTag,
         values = listOf(SYSTEM_DEFAULT) + supportedLanguageTags,
         valueText = { languageTag ->

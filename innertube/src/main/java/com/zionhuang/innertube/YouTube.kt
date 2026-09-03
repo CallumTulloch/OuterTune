@@ -13,6 +13,7 @@ import com.zionhuang.innertube.models.SearchSuggestions
 import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.WatchEndpoint
+import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.models.WatchEndpoint.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig.Companion.MUSIC_VIDEO_TYPE_ATV
 import com.zionhuang.innertube.models.YouTubeClient
 import com.zionhuang.innertube.models.YouTubeClient.Companion.WEB
@@ -114,6 +115,20 @@ internal fun parseSearchSummary(contents: List<SectionListRenderer.Content>): Se
         }
     )
 
+internal fun List<YTItem>.withResolvedArtists(resolvedSongs: List<SongItem>): List<YTItem> {
+    val resolvedSongsById = resolvedSongs
+        .filter { it.artists.isNotEmpty() }
+        .associateBy(SongItem::id)
+
+    return map { item ->
+        if (item is SongItem && item.artists.isEmpty()) {
+            resolvedSongsById[item.id]?.let { item.copy(artists = it.artists) } ?: item
+        } else {
+            item
+        }
+    }
+}
+
 /**
  * Parse useful data with [InnerTube] sending requests.
  * Modified from [ViMusic](https://github.com/vfsfitvnm/ViMusic)
@@ -152,6 +167,18 @@ object YouTube {
             innerTube.useLoginForBrowse = value
         }
 
+    private suspend fun fetchMissingArtists(items: List<YTItem>): List<SongItem> {
+        val missingArtistIds = items
+            .filterIsInstance<SongItem>()
+            .filter { it.artists.isEmpty() }
+            .map(SongItem::id)
+            .distinct()
+            .take(MAX_GET_QUEUE_SIZE)
+        if (missingArtistIds.isEmpty()) return emptyList()
+
+        return queue(videoIds = missingArtistIds).getOrDefault(emptyList())
+    }
+
     suspend fun searchSuggestions(query: String): Result<SearchSuggestions> = runCatching {
         val response = innerTube.getSearchSuggestions(WEB_REMIX, query).body<GetSearchSuggestionsResponse>()
         SearchSuggestions(
@@ -170,17 +197,24 @@ object YouTube {
         val response = innerTube.search(WEB_REMIX, query).body<SearchResponse>()
         val contents = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
             ?.tabRenderer?.content?.sectionListRenderer?.contents.orEmpty()
-        parseSearchSummary(contents)
+        val page = parseSearchSummary(contents)
+        val resolvedSongs = fetchMissingArtists(page.summaries.flatMap(SearchSummary::items))
+        page.copy(
+            summaries = page.summaries.map { summary ->
+                summary.copy(items = summary.items.withResolvedArtists(resolvedSongs))
+            }
+        )
     }
 
     suspend fun search(query: String, filter: SearchFilter): Result<SearchResult> = runCatching {
         val response = innerTube.search(WEB_REMIX, query, filter.value).body<SearchResponse>()
+        val items = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
+            ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
+            ?.musicShelfRenderer?.contents?.getItems()?.mapNotNull {
+                SearchPage.toYTItem(it)
+            }.orEmpty()
         SearchResult(
-            items = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
-                ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
-                ?.musicShelfRenderer?.contents?.getItems()?.mapNotNull {
-                    SearchPage.toYTItem(it)
-                }.orEmpty(),
+            items = items.withResolvedArtists(fetchMissingArtists(items)),
             continuation = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
                 ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
                 ?.musicShelfRenderer?.continuations?.getContinuation()
@@ -189,12 +223,15 @@ object YouTube {
 
     suspend fun searchContinuation(continuation: String): Result<SearchResult> = runCatching {
         val response = innerTube.search(WEB_REMIX, continuation = continuation).body<SearchResponse>()
+        val continuationPage = response.continuationContents?.musicShelfContinuation
+            ?: error("Missing search continuation contents")
+        val items = continuationPage.contents
+            .mapNotNull {
+                SearchPage.toYTItem(it.musicResponsiveListItemRenderer)
+            }
         SearchResult(
-            items = response.continuationContents?.musicShelfContinuation?.contents
-                ?.mapNotNull {
-                    SearchPage.toYTItem(it.musicResponsiveListItemRenderer)
-                }!!,
-            continuation = response.continuationContents.musicShelfContinuation.continuations?.getContinuation()
+            items = items.withResolvedArtists(fetchMissingArtists(items)),
+            continuation = continuationPage.continuations?.getContinuation()
         )
     }
 

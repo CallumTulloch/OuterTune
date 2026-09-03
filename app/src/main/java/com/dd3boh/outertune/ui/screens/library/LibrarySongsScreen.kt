@@ -53,6 +53,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachReversed
+import androidx.datastore.preferences.core.edit
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.dd3boh.outertune.LocalMenuState
@@ -67,6 +68,7 @@ import com.dd3boh.outertune.constants.ListThumbnailSize
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
 import com.dd3boh.outertune.constants.SongFilter
 import com.dd3boh.outertune.constants.SongFilterKey
+import com.dd3boh.outertune.constants.SongLikedFilterKey
 import com.dd3boh.outertune.constants.SongSortDescendingKey
 import com.dd3boh.outertune.constants.SongSortType
 import com.dd3boh.outertune.constants.SongSortTypeKey
@@ -85,6 +87,7 @@ import com.dd3boh.outertune.ui.component.items.SongListItem
 import com.dd3boh.outertune.ui.menu.ActionDropdown
 import com.dd3boh.outertune.ui.menu.DropdownItem
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
+import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibrarySongsViewModel
@@ -92,8 +95,33 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-internal fun nextSongFilter(currentFilter: SongFilter, selectedFilter: SongFilter): SongFilter =
-    if (currentFilter == selectedFilter) SongFilter.ALL else selectedFilter
+internal data class SongFilterSelection(
+    val sourceFilter: SongFilter,
+    val likedOnly: Boolean,
+)
+
+internal fun normalizeSongSourceFilter(filter: SongFilter): SongFilter =
+    if (filter == SongFilter.LIKED) SongFilter.ALL else filter
+
+internal fun nextSongFilterSelection(
+    currentSourceFilter: SongFilter,
+    likedOnly: Boolean,
+    selectedFilter: SongFilter,
+): SongFilterSelection = when (selectedFilter) {
+    SongFilter.LIKED -> SongFilterSelection(
+        sourceFilter = normalizeSongSourceFilter(currentSourceFilter),
+        likedOnly = !likedOnly,
+    )
+
+    else -> SongFilterSelection(
+        sourceFilter = if (normalizeSongSourceFilter(currentSourceFilter) == selectedFilter) {
+            SongFilter.ALL
+        } else {
+            selectedFilter
+        },
+        likedOnly = likedOnly,
+    )
+}
 
 internal fun normalizeEmbeddedSongFilter(filter: SongFilter): SongFilter =
     if (filter == SongFilter.ALL || filter == SongFilter.LIKED) SongFilter.LIBRARY else filter
@@ -114,12 +142,38 @@ fun LibrarySongsScreen(
     val snackbarHostState = LocalSnackbarHostState.current
 
     var filter by rememberEnumPreference(SongFilterKey, SongFilter.LIBRARY)
+    var likedOnly by rememberPreference(SongLikedFilterKey, filter == SongFilter.LIKED)
+    val sourceFilter = normalizeSongSourceFilter(filter)
+    val likedFilterApplied = libraryFilterContent == null && likedOnly
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
     val (sortType, onSortTypeChange) = rememberEnumPreference(SongSortTypeKey, SongSortType.CREATE_DATE)
     val (sortDescending, onSortDescendingChange) = rememberPreference(SongSortDescendingKey, true)
     val swipeEnabled by rememberPreference(SwipeToQueueKey, true)
 
-    val songs by viewModel.allSongs.collectAsState()
+    val unfilteredSongs by viewModel.allSongs.collectAsState()
+    val songs = remember(
+        unfilteredSongs,
+        likedOnly,
+        libraryFilterContent,
+        sortType,
+        sortDescending,
+    ) {
+        if (libraryFilterContent != null || !likedOnly) {
+            unfilteredSongs
+        } else {
+            unfilteredSongs
+                ?.filter { it.song.liked }
+                ?.let { likedSongs ->
+                    if (sortType != SongSortType.CREATE_DATE) {
+                        likedSongs
+                    } else if (sortDescending) {
+                        likedSongs.sortedByDescending { it.song.likedDate }
+                    } else {
+                        likedSongs.sortedBy { it.song.likedDate }
+                    }
+                }
+        }
+    }
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val isSyncingRemoteLikedSongs by viewModel.isSyncingRemoteLikedSongs.collectAsState()
     val isSyncingRemoteSongs by viewModel.isSyncingRemoteSongs.collectAsState()
@@ -149,6 +203,19 @@ fun LibrarySongsScreen(
         BackHandler(onBack = onExitSelectionMode)
     }
 
+    val syncSelection = { selectedSource: SongFilter, selectedLikedOnly: Boolean, bypassCd: Boolean ->
+        when {
+            selectedSource == SongFilter.ALL -> viewModel.syncAllSongs(bypassCd)
+            selectedSource == SongFilter.FOLDER -> Unit
+            selectedLikedOnly && selectedSource == SongFilter.LIBRARY ->
+                viewModel.syncAllSongs(bypassCd)
+            selectedLikedOnly -> viewModel.syncLikedSongs(bypassCd)
+            selectedSource == SongFilter.LIBRARY -> viewModel.syncLibrarySongs(bypassCd)
+            selectedSource == SongFilter.DOWNLOADED && bypassCd -> viewModel.refreshDownloads()
+            else -> Unit
+        }
+    }
+
     LaunchedEffect(songs) {
         selection.fastForEachReversed { songId ->
             if (songs?.find { it.id == songId } == null) {
@@ -158,20 +225,46 @@ fun LibrarySongsScreen(
     }
 
     LaunchedEffect(Unit) {
-        when (filter) {
-            SongFilter.ALL -> viewModel.syncAllSongs()
-            SongFilter.LIKED -> viewModel.syncLikedSongs()
-            SongFilter.LIBRARY -> viewModel.syncLibrarySongs()
-            else -> return@LaunchedEffect
-        }
+        syncSelection(sourceFilter, likedFilterApplied, false)
     }
 
     LaunchedEffect(libraryFilterContent, filter) {
-        if (libraryFilterContent != null) {
-            val normalizedFilter = normalizeEmbeddedSongFilter(filter)
-            if (normalizedFilter != filter) {
-                filter = normalizedFilter
+        when {
+            filter == SongFilter.LIKED -> {
+                context.dataStore.edit { preferences ->
+                    preferences[SongLikedFilterKey] = true
+                    preferences[SongFilterKey] = if (libraryFilterContent == null) {
+                        SongFilter.ALL.name
+                    } else {
+                        SongFilter.LIBRARY.name
+                    }
+                }
             }
+
+            libraryFilterContent != null -> {
+                val normalizedFilter = normalizeEmbeddedSongFilter(filter)
+                if (normalizedFilter != filter) {
+                    filter = normalizedFilter
+                }
+            }
+        }
+    }
+
+    val onFilterSelected = { selectedFilter: SongFilter ->
+        val updatedSelection = nextSongFilterSelection(
+            currentSourceFilter = sourceFilter,
+            likedOnly = likedOnly,
+            selectedFilter = selectedFilter,
+        )
+        filter = updatedSelection.sourceFilter
+        likedOnly = updatedSelection.likedOnly
+
+        if (selectedFilter != SongFilter.LIKED || updatedSelection.likedOnly) {
+            syncSelection(
+                updatedSelection.sourceFilter,
+                updatedSelection.likedOnly,
+                false,
+            )
         }
     }
 
@@ -183,19 +276,19 @@ fun LibrarySongsScreen(
                 SongFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
                 SongFilter.FOLDER to stringResource(R.string.folders),
             ),
-            currentValue = filter,
-            onValueUpdate = {
-                val updatedFilter = nextSongFilter(filter, it)
-                filter = updatedFilter
-                when (updatedFilter) {
-                    SongFilter.ALL -> viewModel.syncAllSongs()
-                    SongFilter.LIKED -> viewModel.syncLikedSongs()
-                    SongFilter.LIBRARY -> viewModel.syncLibrarySongs()
-                    SongFilter.DOWNLOADED, SongFilter.FOLDER -> Unit
+            currentValue = sourceFilter,
+            onValueUpdate = onFilterSelected,
+            selected = { chipFilter ->
+                if (chipFilter == SongFilter.LIKED) {
+                    likedOnly
+                } else {
+                    sourceFilter == chipFilter
                 }
             },
+            separatorAfterIndex = 0,
             isLoading = { filter ->
-                (filter == SongFilter.LIKED && isSyncingRemoteLikedSongs) || (filter == SongFilter.LIBRARY && isSyncingRemoteSongs)
+                (filter == SongFilter.LIKED && likedOnly && isSyncingRemoteLikedSongs) ||
+                        (filter == SongFilter.LIBRARY && isSyncingRemoteSongs)
             }
         )
     }
@@ -212,7 +305,12 @@ fun LibrarySongsScreen(
                 onSortDescendingChange = onSortDescendingChange,
                 sortTypeText = { sortType ->
                     when (sortType) {
-                        SongSortType.CREATE_DATE -> if (filter == SongFilter.LIKED) R.string.sort_by_like_date else R.string.sort_by_create_date
+                        SongSortType.CREATE_DATE ->
+                            if (likedFilterApplied) {
+                                R.string.sort_by_like_date
+                            } else {
+                                R.string.sort_by_create_date
+                            }
                         SongSortType.MODIFIED_DATE -> R.string.sort_by_date_modified
                         SongSortType.RELEASE_DATE -> R.string.sort_by_date_released
                         SongSortType.NAME -> R.string.sort_by_name
@@ -241,26 +339,30 @@ fun LibrarySongsScreen(
                                 leadingIcon = { Icon(Icons.Rounded.FilterAlt, null) },
                                 action = {},
                                 secondaryDropdown =
-                                    listOf(
-                                        DropdownItem(
-                                            title = stringResource(R.string.filter_liked),
-                                            leadingIcon = null,
-                                            action = { filter = SongFilter.LIKED }
-                                        ),
+                                    listOfNotNull(
+                                        if (libraryFilterContent == null) {
+                                            DropdownItem(
+                                                title = stringResource(R.string.filter_liked),
+                                                leadingIcon = null,
+                                                action = { onFilterSelected(SongFilter.LIKED) }
+                                            )
+                                        } else {
+                                            null
+                                        },
                                         DropdownItem(
                                             title = stringResource(R.string.library),
                                             leadingIcon = null,
-                                            action = { filter = SongFilter.LIBRARY }
+                                            action = { onFilterSelected(SongFilter.LIBRARY) }
                                         ),
                                         DropdownItem(
                                             title = stringResource(R.string.filter_downloaded),
                                             leadingIcon = null,
-                                            action = { filter = SongFilter.DOWNLOADED }
+                                            action = { onFilterSelected(SongFilter.DOWNLOADED) }
                                         ),
                                         DropdownItem(
                                             title = stringResource(R.string.folders),
                                             leadingIcon = null,
-                                            action = { filter = SongFilter.FOLDER }
+                                            action = { onFilterSelected(SongFilter.FOLDER) }
                                         ),
                                     )
                             ),
@@ -308,13 +410,7 @@ fun LibrarySongsScreen(
                         // Keep user-triggered feedback visible even when the refresh finishes
                         // before Compose can render the coordinator's refreshing state.
                         isPullRefreshFeedbackVisible = true
-                        when (filter) {
-                            SongFilter.ALL -> viewModel.syncAllSongs(true)
-                            SongFilter.LIKED -> viewModel.syncLikedSongs(true)
-                            SongFilter.LIBRARY -> viewModel.syncLibrarySongs(true)
-                            SongFilter.DOWNLOADED -> viewModel.refreshDownloads()
-                            SongFilter.FOLDER -> Unit
-                        }
+                        syncSelection(sourceFilter, likedFilterApplied, true)
                         coroutineScope.launch {
                             delay(MINIMUM_PULL_REFRESH_INDICATOR_MILLIS)
                             isPullRefreshFeedbackVisible = false

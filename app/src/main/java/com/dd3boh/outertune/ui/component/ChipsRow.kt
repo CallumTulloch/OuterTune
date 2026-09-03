@@ -48,6 +48,8 @@ fun <E> ChipsRow(
     currentValue: E,
     onValueUpdate: (E) -> Unit,
     modifier: Modifier = Modifier,
+    selected: ((E) -> Boolean)? = null,
+    separatorAfterIndex: Int? = null,
     isLoading: (E) -> Boolean = { false }
 ) {
     Row(
@@ -57,10 +59,10 @@ fun <E> ChipsRow(
     ) {
         Spacer(Modifier.width(12.dp))
 
-        chips.forEach { (value, label) ->
+        chips.forEachIndexed { index, (value, label) ->
             FilterChip(
                 label = { Text(label) },
-                selected = currentValue == value,
+                selected = selected?.invoke(value) ?: (currentValue == value),
                 colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
                 onClick = { onValueUpdate(value) },
                 trailingIcon = {
@@ -74,6 +76,14 @@ fun <E> ChipsRow(
             )
 
             Spacer(Modifier.width(8.dp))
+
+            if (separatorAfterIndex == index) {
+                VerticalDivider(
+                    modifier = Modifier.height(24.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+            }
         }
     }
 }

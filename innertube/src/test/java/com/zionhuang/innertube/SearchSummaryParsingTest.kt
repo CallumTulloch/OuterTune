@@ -1,6 +1,7 @@
 package com.zionhuang.innertube
 
 import com.zionhuang.innertube.models.SectionListRenderer
+import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.pages.LibraryPage
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -135,5 +136,27 @@ class SearchSummaryParsingTest {
 
         assertEquals(listOf("Nirvana"), song.artists.map { it.name })
         assertEquals(255, song.duration)
+    }
+
+    @Test
+    fun `missing search artist is restored from queue metadata`() {
+        val incomplete = SongItem(
+            id = "in-bloom",
+            title = "In Bloom",
+            artists = emptyList(),
+            duration = 256,
+            thumbnail = "search-thumbnail",
+        )
+        val queueMetadata = incomplete.copy(
+            artists = listOf(Artist(name = "Nirvana", id = "UC-nirvana")),
+            duration = 255,
+            thumbnail = "queue-thumbnail",
+        )
+
+        val repaired = listOf(incomplete).withResolvedArtists(listOf(queueMetadata)).single() as SongItem
+
+        assertEquals(listOf("Nirvana"), repaired.artists.map(Artist::name))
+        assertEquals(256, repaired.duration)
+        assertEquals("search-thumbnail", repaired.thumbnail)
     }
 }

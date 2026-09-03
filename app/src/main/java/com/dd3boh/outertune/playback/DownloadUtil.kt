@@ -90,6 +90,15 @@ internal fun mergeResolvedMetadata(
     album = original.album ?: resolved.album,
 )
 
+internal fun downloadIdsToClear(
+    indexedMediaIds: Set<String>,
+    cacheMediaIds: Set<String>,
+    databaseDownloadIds: Set<String>,
+    deletedMainMediaIds: Set<String>,
+    remainingCustomIds: Set<String>,
+): Set<String> = (indexedMediaIds + cacheMediaIds + databaseDownloadIds + deletedMainMediaIds) -
+        remainingCustomIds
+
 @Singleton
 class DownloadUtil @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -162,6 +171,64 @@ class DownloadUtil @Inject constructor(
         }
 
     fun getDownload(songId: String): Flow<LocalDateTime?> = downloads.map { it[songId] }
+
+    /**
+     * Removes internal Media3 downloads and app-managed files in the main external download
+     * directory while retaining files imported through extra directories.
+     */
+    suspend fun clearAllDownloads(): Boolean = withDownloadProcessing {
+        try {
+            val indexedMediaIds = mutableSetOf<String>()
+            val cursor = downloadManager.downloadIndex.getDownloads()
+            try {
+                while (cursor.moveToNext()) {
+                    indexedMediaIds += cursor.download.request.id
+                }
+            } finally {
+                cursor.close()
+            }
+
+            val cacheMediaIds = downloadCache.keys.toSet()
+            val databaseDownloadIds = database.downloadedOrQueuedSongs().first().mapTo(mutableSetOf()) {
+                it.song.id
+            }
+
+            // Let Media3 cancel active jobs and remove both its index entries and owned cache data.
+            withContext(Dispatchers.Main) {
+                downloadManager.removeAllDownloads()
+            }
+
+            // Media3 cannot remove orphaned cache entries that no longer exist in its index.
+            (cacheMediaIds - indexedMediaIds).forEach { mediaId ->
+                downloadCache.removeResource(mediaId)
+            }
+
+            val mainDeletion = localMgr.deleteMainDownloads()
+            val remainingCustomIds = localMgr.getAvailableFiles().keys.toSet()
+            val idsToClear = downloadIdsToClear(
+                indexedMediaIds = indexedMediaIds,
+                cacheMediaIds = cacheMediaIds,
+                databaseDownloadIds = databaseDownloadIds,
+                deletedMainMediaIds = mainDeletion.deletedMediaIds,
+                remainingCustomIds = remainingCustomIds,
+            )
+
+            database.awaitTransaction {
+                idsToClear.forEach { removeDownloadSong(it) }
+            }
+            downloads.update { current ->
+                current.filterKeys(remainingCustomIds::contains)
+            }
+
+            mainDeletion.failedMediaIds.isEmpty()
+        } catch (throwable: CancellationException) {
+            throw throwable
+        } catch (throwable: Throwable) {
+            Log.e(TAG, "Failed to clear downloads", throwable)
+            reportException(throwable)
+            false
+        }
+    }
 
     fun download(songs: List<MediaMetadata>) {
         prepareDownloads(songs)
@@ -583,6 +650,8 @@ class DownloadUtil @Inject constructor(
                         try {
                             downloadStateMutex.withLock {
                                 val state = stateToLocalDateTime(download)
+                                val hasCustomDownload = database.song(download.request.id).first()
+                                    ?.song?.localPath != null
                                 database.awaitTransaction {
                                     updateMedia3DownloadStatus(
                                         songId = download.request.id,
@@ -595,13 +664,13 @@ class DownloadUtil @Inject constructor(
 
                                 downloads.update { map ->
                                     map.toMutableMap().apply {
-                                        if (state == STATE_INVALID) {
+                                        if (state == STATE_INVALID && !hasCustomDownload) {
                                             Log.w(
                                                 TAG,
                                                 "Invalid download state for ${download.request.id}. Removing download",
                                             )
                                             remove(download.request.id)
-                                        } else {
+                                        } else if (state != STATE_INVALID) {
                                             set(download.request.id, state)
                                         }
                                     }
@@ -611,6 +680,35 @@ class DownloadUtil @Inject constructor(
                             throw throwable
                         } catch (throwable: Throwable) {
                             Log.e(TAG, "Failed to persist download state for ${download.request.id}", throwable)
+                            reportException(throwable)
+                        }
+                    }
+                }
+
+                override fun onDownloadRemoved(
+                    downloadManager: DownloadManager,
+                    download: Download,
+                ) {
+                    downloadStateScope.launch {
+                        try {
+                            downloadStateMutex.withLock {
+                                val hasCustomDownload = database.song(download.request.id).first()
+                                    ?.song?.localPath != null
+                                database.awaitTransaction {
+                                    updateMedia3DownloadStatus(download.request.id, null)
+                                }
+                                if (!hasCustomDownload) {
+                                    downloads.update { map ->
+                                        map.toMutableMap().apply {
+                                            remove(download.request.id)
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (throwable: CancellationException) {
+                            throw throwable
+                        } catch (throwable: Throwable) {
+                            Log.e(TAG, "Failed to persist removal for ${download.request.id}", throwable)
                             reportException(throwable)
                         }
                     }

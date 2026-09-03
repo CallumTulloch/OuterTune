@@ -11,6 +11,7 @@ import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.models.artistElements
+import com.zionhuang.innertube.models.splitBySeparator
 
 data class HomePage(
     val chips: List<Chip>?,
@@ -63,12 +64,13 @@ data class HomePage(
                         SongItem(
                             id = renderer.navigationEndpoint.watchEndpoint?.videoId ?: return null,
                             title = renderer.title.runs?.firstOrNull()?.text ?: return null,
-                            artists = listOfNotNull(renderer.subtitle?.runs?.firstOrNull()?.let {
+                            artists = renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull()
+                                ?.artistElements()?.map {
                                 Artist(
                                     name = it.text,
                                     id = it.navigationEndpoint?.browseEndpoint?.browseId
                                 )
-                            }),
+                            }.orEmpty(),
                             album = null,
                             duration = null,
                             thumbnail = renderer.thumbnailRenderer.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,

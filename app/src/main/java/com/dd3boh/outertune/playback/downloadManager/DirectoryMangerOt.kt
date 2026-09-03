@@ -11,6 +11,11 @@ import com.dd3boh.outertune.utils.scanners.documentFileFromUri
 import java.io.IOException
 import java.io.InputStream
 
+data class MainDownloadDeletionResult(
+    val deletedMediaIds: Set<String>,
+    val failedMediaIds: Set<String>,
+)
+
 class DownloadDirectoryManagerOt(private var context: Context, private var dir: Uri, extraDirs: List<Uri>) {
     val TAG = DownloadDirectoryManagerOt::class.simpleName.toString()
     var mainDir: DocumentFile? = null
@@ -66,6 +71,37 @@ class DownloadDirectoryManagerOt(private var context: Context, private var dir: 
     fun deleteFile(mediaId: String): Boolean {
         val file = isExists(mediaId)
         return file?.delete() == true
+    }
+
+    /**
+     * Deletes app-managed files from the configured main download directory only.
+     * Extra import directories and unrelated files in the main directory are left untouched.
+     */
+    fun deleteMainDownloads(): MainDownloadDeletionResult {
+        val directory = mainDir
+            ?: return MainDownloadDeletionResult(emptySet(), emptySet())
+        val files = ArrayList<DocumentFile>()
+        scanDfRecursive(directory, files, true)
+
+        val deletedMediaIds = mutableSetOf<String>()
+        val failedMediaIds = mutableSetOf<String>()
+        files.forEach { file ->
+            val mediaId = (file as? TreeDocumentFileOt)?.id
+                ?.takeIf { it.isNotBlank() && file.name?.endsWith(".mka", ignoreCase = true) == true }
+                ?: return@forEach
+            if (file.delete()) {
+                deletedMediaIds += mediaId
+            } else {
+                failedMediaIds += mediaId
+            }
+        }
+
+        // Keep lookups in sync with the files that still exist, including extra import paths.
+        getAvailableFiles(false)
+        return MainDownloadDeletionResult(
+            deletedMediaIds = deletedMediaIds,
+            failedMediaIds = failedMediaIds,
+        )
     }
 
     fun saveFile(mediaId: String, input: InputStream, displayName: String?): Uri? {
