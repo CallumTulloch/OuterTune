@@ -3,6 +3,7 @@ package com.dd3boh.outertune.db.entities
 import androidx.compose.runtime.Immutable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.zionhuang.innertube.YouTube
@@ -13,12 +14,16 @@ import org.apache.commons.lang3.RandomStringUtils
 import java.time.LocalDateTime
 
 @Immutable
-@Entity(tableName = "album")
+@Entity(
+    tableName = "album",
+    indices = [Index(value = ["musicBrainzId"])]
+)
 data class AlbumEntity(
     @PrimaryKey val id: String,
     val playlistId: String? = null,
     val title: String,
     val year: Int? = null,
+    val musicBrainzId: String? = null,
     val thumbnailUrl: String? = null,
     val themeColor: Int? = null,
     val songCount: Int,

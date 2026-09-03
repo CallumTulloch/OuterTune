@@ -20,6 +20,8 @@ import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.reversed
+import com.dd3boh.outertune.models.cleanLocalMetadataText
+import com.dd3boh.outertune.models.selectArtistByNormalizedName
 import com.dd3boh.outertune.ui.utils.resize
 import com.zionhuang.innertube.pages.ArtistPage
 import kotlinx.coroutines.flow.Flow
@@ -54,6 +56,68 @@ interface ArtistsDao {
 
     @Query("SELECT * FROM artist WHERE name = :name")
     fun artistByName(name: String): ArtistEntity?
+
+    @Query("""
+        SELECT * FROM artist
+        WHERE artist.isLocal = :isLocal
+            AND TRIM(artist.name) = TRIM(:name) COLLATE NOCASE
+        ORDER BY artist.rowId ASC
+        LIMIT 1
+    """)
+    fun artistByNameAndSourceExact(name: String, isLocal: Boolean): ArtistEntity?
+
+    @Query("SELECT * FROM artist WHERE isLocal = :isLocal ORDER BY rowId ASC")
+    fun artistsBySource(isLocal: Boolean): List<ArtistEntity>
+
+    @Query("SELECT artistId FROM song_artist_map WHERE songId = :songId ORDER BY position ASC")
+    fun artistIdsForSong(songId: String): List<String>
+
+    /** Resolves id-less metadata without ever joining local and online artists by display name. */
+    fun resolveArtist(
+        id: String?,
+        name: String,
+        isLocal: Boolean,
+        thumbnailUrl: String? = null,
+        channelId: String? = null,
+    ): ArtistEntity {
+        val resolvedName = if (isLocal) cleanLocalMetadataText(name) else name
+        val explicitId = id?.takeIf(String::isNotBlank)
+
+        if (!isLocal && explicitId != null) {
+            artistById(explicitId)?.let { return it }
+            return ArtistEntity(
+                id = explicitId,
+                name = resolvedName,
+                thumbnailUrl = thumbnailUrl,
+                channelId = channelId,
+                isLocal = false,
+            )
+        }
+
+        artistByNameAndSourceExact(resolvedName, isLocal)?.let { return it }
+        selectArtistByNormalizedName(
+            name = resolvedName,
+            isLocal = isLocal,
+            candidates = artistsBySource(isLocal),
+        )?.let { return it }
+
+        return ArtistEntity(
+            id = if (isLocal) ArtistEntity.generateArtistId()
+                else explicitId ?: ArtistEntity.generateArtistId(),
+            name = resolvedName,
+            thumbnailUrl = thumbnailUrl,
+            channelId = channelId,
+            isLocal = isLocal,
+        )
+    }
+
+    fun resolveAndInsertArtist(
+        id: String?,
+        name: String,
+        isLocal: Boolean,
+        thumbnailUrl: String? = null,
+        channelId: String? = null,
+    ): ArtistEntity = resolveArtist(id, name, isLocal, thumbnailUrl, channelId).also(::insert)
 
     @Query("SELECT * FROM artist WHERE isLocal = 1 AND name LIKE '%' || :name || '%'")
     fun localArtistsByNameFuzzy(name: String): List<ArtistEntity>
@@ -298,12 +362,17 @@ interface ArtistsDao {
     @Delete
     fun delete(artist: ArtistEntity)
 
-   @Query("""
+    @Query("""
         DELETE FROM Artist
         WHERE NOT EXISTS (
             SELECT 1
             FROM song_artist_map
             WHERE song_artist_map.artistId = :artistId
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM album_artist_map
+            WHERE album_artist_map.artistId = :artistId
         )
         AND id = :artistId
     """)

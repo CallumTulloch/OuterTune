@@ -62,6 +62,8 @@ class TagLibScanner : MetadataScanner {
 
             var artistList = ArrayList<ArtistEntity>()
             var genresList = ArrayList<GenreEntity>()
+            val albumArtistValues = ArrayList<String>()
+            val musicBrainzAlbumIdValues = ArrayList<String>()
 
 
             // Read audio properties
@@ -89,7 +91,14 @@ class TagLibScanner : MetadataScanner {
                         allData += "\n$key: $it"
                     }
 
-                    when (key) {
+                    if (isAlbumArtistTag(key)) {
+                        albumArtistValues.add(it)
+                        // Keep the raw value visible in the existing song properties dialog.
+                        extraData += "$key: $it\n"
+                    } else if (isMusicBrainzAlbumIdTag(key)) {
+                        musicBrainzAlbumIdValues.add(it)
+                        extraData += "$key: $it\n"
+                    } else when (key) {
                         // why the fsck does an error here get swallowed silently????
                         "ARTISTS", "ARTIST", "artist" -> {
                             val splitArtists = it.split(ARTIST_SEPARATORS)
@@ -175,6 +184,7 @@ class TagLibScanner : MetadataScanner {
 
             // should never be invalid if scanner even gets here fine...
             val dateModified = LocalDateTime.ofInstant(Instant.ofEpochMilli(file.lastModified()), ZoneOffset.UTC)
+            albumName = albumName?.trim()?.takeIf(String::isNotEmpty)
             val albumId = if (albumName != null) AlbumEntity.generateAlbumId() else null
 
             /**
@@ -228,7 +238,9 @@ class TagLibScanner : MetadataScanner {
                     sampleRate = sampleRate,
                     contentLength = duration,
                     extraComment = if (!extraData.isBlank()) extraData else null,
-                )
+                ),
+                albumArtists = albumArtistEntities(albumArtistValues),
+                albumMusicBrainzId = parseMusicBrainzAlbumId(musicBrainzAlbumIdValues),
             )
         }
     }

@@ -39,6 +39,7 @@ import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.db.entities.SongGenreMap
 import com.dd3boh.outertune.db.entities.SortedSongAlbumMap
+import com.dd3boh.outertune.db.entities.SortedAlbumArtistMap
 import com.dd3boh.outertune.db.entities.SortedSongArtistMap
 import com.dd3boh.outertune.extensions.toSQLiteQuery
 import java.time.Instant
@@ -80,7 +81,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 21
+        const val MUSIC_DATABASE_VERSION = 22
     }
 }
 
@@ -107,6 +108,7 @@ class MusicDatabase(
         RecentActivityEntity::class
     ],
     views = [
+        SortedAlbumArtistMap::class,
         SortedSongArtistMap::class,
         SortedSongAlbumMap::class,
         PlaylistSongMapPreview::class
@@ -147,6 +149,7 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_15_16)
                     .addMigrations(MIGRATION_16_17)
                     .addMigrations(MIGRATION_20_21)
+                    .addMigrations(MIGRATION_21_22)
                     .build()
             )
 
@@ -159,6 +162,7 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_15_16)
                     .addMigrations(MIGRATION_16_17)
                     .addMigrations(MIGRATION_20_21)
+                    .addMigrations(MIGRATION_21_22)
                     .build()
             )
     }
@@ -502,6 +506,28 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
 val MIGRATION_20_21 = object : Migration(20, 21) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `song` ADD COLUMN `lyricsOffsetMs` INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+/**
+ * Persist the release identifier embedded by MusicBrainz-compatible taggers. Local albums use it
+ * as the strongest available identity while remaining separate from online albums.
+ */
+val MIGRATION_21_22 = object : Migration(21, 22) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `album` ADD COLUMN `musicBrainzId` TEXT")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_album_musicBrainzId` " +
+                "ON `album` (`musicBrainzId`)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_artist_isLocal_name` " +
+                "ON `artist` (`isLocal`, `name`)"
+        )
+        db.execSQL(
+            "CREATE VIEW `sorted_album_artist_map` AS " +
+                "SELECT * FROM album_artist_map ORDER BY `order`"
+        )
     }
 }
 

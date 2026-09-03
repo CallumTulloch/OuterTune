@@ -44,7 +44,7 @@ data class SongEntity(
     val discNumber: Int? = null,
     val albumId: String? = null,
     val albumName: String? = null,
-//    val albumArtist // if anyone wants to implement album artists in a sane way, pull requests are welcome.
+    // Album artists are normalized through AlbumArtistMap instead of being duplicated per song.
     val year: Int? = null,
     val date: LocalDateTime? = null, // ID3 tag property
     val dateModified: LocalDateTime? = null, // file property

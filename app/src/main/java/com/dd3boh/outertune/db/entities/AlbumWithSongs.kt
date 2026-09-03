@@ -14,7 +14,7 @@ data class AlbumWithSongs(
         entityColumn = "id",
         parentColumn = "id",
         associateBy = Junction(
-            value = AlbumArtistMap::class,
+            value = SortedAlbumArtistMap::class,
             parentColumn = "albumId",
             entityColumn = "artistId"
         )

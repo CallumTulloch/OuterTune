@@ -23,6 +23,8 @@ import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongAlbumMap
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.reversed
+import com.dd3boh.outertune.models.LocalAlbumCandidateRow
+import com.dd3boh.outertune.models.LocalSongAlbumArtistRow
 import com.zionhuang.innertube.models.AlbumItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -86,6 +88,66 @@ interface AlbumsDao : ArtistsDao {
     """)
     fun localAlbumByTitleExact(title: String): AlbumEntity?
 
+    @Query("""
+        SELECT
+            album.rowId AS albumRowId,
+            album.id AS albumId,
+            album.title AS albumTitle,
+            album.year AS albumYear,
+            album.musicBrainzId AS albumMusicBrainzId,
+            artist.name AS albumArtistName,
+            album_artist_map.`order` AS albumArtistOrder,
+            NULL AS localPath
+        FROM album
+            LEFT JOIN album_artist_map
+                ON album_artist_map.albumId = album.id
+            LEFT JOIN artist
+                ON artist.id = album_artist_map.artistId
+        WHERE album.isLocal = 1
+            AND (
+                TRIM(album.title) = TRIM(:title) COLLATE NOCASE
+                OR (:musicBrainzId IS NOT NULL AND album.musicBrainzId = :musicBrainzId)
+            )
+
+        UNION ALL
+
+        SELECT
+            album.rowId AS albumRowId,
+            album.id AS albumId,
+            album.title AS albumTitle,
+            album.year AS albumYear,
+            album.musicBrainzId AS albumMusicBrainzId,
+            NULL AS albumArtistName,
+            NULL AS albumArtistOrder,
+            song.localPath AS localPath
+        FROM album
+            LEFT JOIN song_album_map
+                ON song_album_map.albumId = album.id
+            LEFT JOIN song
+                ON song.id = song_album_map.songId
+        WHERE album.isLocal = 1
+            AND (
+                TRIM(album.title) = TRIM(:title) COLLATE NOCASE
+                OR (:musicBrainzId IS NOT NULL AND album.musicBrainzId = :musicBrainzId)
+            )
+        ORDER BY albumRowId ASC, albumArtistOrder ASC
+    """)
+    fun localAlbumCandidateRows(
+        title: String,
+        musicBrainzId: String?,
+    ): List<LocalAlbumCandidateRow>
+
+    @Query("""
+        SELECT song.id AS songId, artist.name AS artistName
+        FROM song
+            JOIN song_album_map ON song_album_map.songId = song.id
+            JOIN album_artist_map ON album_artist_map.albumId = song_album_map.albumId
+            JOIN artist ON artist.id = album_artist_map.artistId
+        WHERE song.isLocal = 1
+        ORDER BY song.rowId ASC, album_artist_map.`order` ASC
+    """)
+    fun allLocalSongAlbumArtistRows(): List<LocalSongAlbumArtistRow>
+
     @Query("UPDATE song_album_map SET albumId = :newId WHERE albumId = :oldId")
     fun updateSongAlbumMapRows(oldId: String, newId: String)
 
@@ -107,6 +169,9 @@ interface AlbumsDao : ArtistsDao {
         refreshLocalAlbumStats(newId)
     }
 
+    @Query("SELECT artistId FROM album_artist_map WHERE albumId = :albumId ORDER BY `order` ASC")
+    fun albumArtistIdsForAlbum(albumId: String): List<String>
+
     @Query(
         """
         DELETE FROM album
@@ -118,7 +183,15 @@ interface AlbumsDao : ArtistsDao {
         AND id = :albumId
     """
     )
-    fun safeDeleteAlbum(albumId: String)
+    fun deleteAlbumIfUnreferenced(albumId: String): Int
+
+    @Transaction
+    fun safeDeleteAlbum(albumId: String) {
+        val previousArtistIds = albumArtistIdsForAlbum(albumId)
+        if (deleteAlbumIfUnreferenced(albumId) > 0) {
+            previousArtistIds.forEach(::safeDeleteArtist)
+        }
+    }
 
     @Transaction
     @Query("""
@@ -313,6 +386,34 @@ interface AlbumsDao : ArtistsDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insert(map: AlbumArtistMap)
 
+    @Upsert
+    fun upsertAlbumArtistMap(map: AlbumArtistMap)
+
+    @Query("DELETE FROM album_artist_map WHERE albumId = :albumId")
+    fun deleteAlbumArtistMaps(albumId: String)
+
+    @Transaction
+    fun replaceAlbumArtistMaps(albumId: String, artists: List<ArtistEntity>) {
+        val distinctArtists = artists.distinctBy(ArtistEntity::id)
+        val previousArtistIds = albumArtistIdsForAlbum(albumId)
+        val newArtistIds = distinctArtists.map(ArtistEntity::id)
+        if (previousArtistIds == newArtistIds) return
+
+        deleteAlbumArtistMaps(albumId)
+        distinctArtists.forEachIndexed { index, artist ->
+            upsertAlbumArtistMap(
+                AlbumArtistMap(
+                    albumId = albumId,
+                    artistId = artist.id,
+                    order = index,
+                )
+            )
+        }
+        previousArtistIds
+            .filterNot(newArtistIds::contains)
+            .forEach(::safeDeleteArtist)
+    }
+
     @Transaction
     fun insert(albumItem: AlbumItem) {
         if (insert(AlbumEntity(
@@ -325,22 +426,16 @@ interface AlbumsDao : ArtistsDao {
                 duration = 0
             )) == -1L
         ) return
-        albumItem.artists
-            ?.map { artist ->
-                ArtistEntity(
-                    id = artist.id ?: artistByName(artist.name)?.id ?: ArtistEntity.generateArtistId(),
-                    name = artist.name
+        albumItem.artists?.let { artists ->
+            val resolvedArtists = artists.map { artist ->
+                resolveAndInsertArtist(
+                    id = artist.id,
+                    name = artist.name,
+                    isLocal = false,
                 )
             }
-            ?.onEach(::insert)
-            ?.mapIndexed { index, artist ->
-                AlbumArtistMap(
-                    albumId = albumItem.browseId,
-                    artistId = artist.id,
-                    order = index
-                )
-            }
-            ?.forEach(::insert)
+            replaceAlbumArtistMaps(albumItem.browseId, resolvedArtists)
+        }
     }
     // endregion
 

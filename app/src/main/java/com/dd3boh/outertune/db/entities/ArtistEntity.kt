@@ -3,6 +3,7 @@ package com.dd3boh.outertune.db.entities
 import androidx.compose.runtime.Immutable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.zionhuang.innertube.YouTube
@@ -13,7 +14,10 @@ import org.apache.commons.lang3.RandomStringUtils
 import java.time.LocalDateTime
 
 @Immutable
-@Entity(tableName = "artist")
+@Entity(
+    tableName = "artist",
+    indices = [Index(value = ["isLocal", "name"])],
+)
 data class ArtistEntity(
     @PrimaryKey val id: String,
     val name: String,

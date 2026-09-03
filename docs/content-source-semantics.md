@@ -23,3 +23,18 @@
 
 `PlaylistEntity.isLocal` は再生リストの同期・所有形態を表す既存名称であり、
 収録曲が端末ファイルかどうかを表す値ではない。
+
+## フォルダ曲のArtist／Album Artist
+
+- 曲の `Artist` とアルバムの `Album Artist` は別のクレジットとして保存する。
+  `Album Artist` を曲のArtist一覧・曲数集計へ混ぜない。
+- 同じ表示名でも、フォルダ由来のArtist (`isLocal = true`) とオンラインArtist
+  (`isLocal = false`) は別Entityとして解決する。
+- 同名アルバムの照合は、MusicBrainz Album ID、Album Artist、同一フォルダ、年の順に
+  信頼度を下げて判断する。既知のMusicBrainz Album IDまたはAlbum Artistが異なるものは
+  統合しない。年は補助情報であり、同じフォルダ内の年表記の揺れだけでは分割しない。
+- 再スキャン時は同一ファイルパスを最優先する。パスが変わった場合のメタデータ照合では
+  Album Artistも比較し、候補が同点なら既存のどれかへ推測で上書きせず新規曲として扱う。
+- TagLib／FFmpegスキャンではMusicBrainz Album IDを利用できる。MediaStoreスキャンでは
+  Album Artist列がない、または空の場合のみ、アルバムとフォルダの組み合わせごとに1回だけ
+  Android標準のメタデータ取得で補完する。

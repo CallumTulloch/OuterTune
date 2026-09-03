@@ -90,6 +90,8 @@ class FFmpegScanner() : MetadataScanner {
 
             var artistList: MutableList<ArtistEntity> = ArrayList<ArtistEntity>()
             var genresList: MutableList<GenreEntity> = ArrayList<GenreEntity>()
+            val albumArtistValues = ArrayList<String>()
+            val musicBrainzAlbumIdValues = ArrayList<String>()
 
             var extraData: String = "" // extra data field
 
@@ -98,7 +100,20 @@ class FFmpegScanner() : MetadataScanner {
             // extra values to supplement those.
             data.extrasRaw.forEach {
                 val tag = it.substringBefore(':').trim()
-                when (tag) {
+                if (isAlbumArtistTag(tag)) {
+                    val value = it.substringAfter(':', missingDelimiterValue = "").trim()
+                    if (value.isNotEmpty()) {
+                        albumArtistValues.add(value)
+                        // Keep the raw value visible in the existing song properties dialog.
+                        extraData += "$tag: $value\n"
+                    }
+                } else if (isMusicBrainzAlbumIdTag(tag)) {
+                    val value = it.substringAfter(':', missingDelimiterValue = "").trim()
+                    if (value.isNotEmpty()) {
+                        musicBrainzAlbumIdValues.add(value)
+                        extraData += "$tag: $value\n"
+                    }
+                } else when (tag) {
                     // why the fsck does an error here get swallowed silently????
                     "ALBUM", "album" -> {
                         if (albumName == null) {
@@ -179,6 +194,7 @@ class FFmpegScanner() : MetadataScanner {
             // should never be invalid if scanner even gets here fine...
             val dateModified =
                 LocalDateTime.ofInstant(Instant.ofEpochMilli(file.lastModified()), ZoneOffset.UTC)
+            albumName = albumName?.trim()?.takeIf(String::isNotEmpty)
             val albumId = if (albumName != null) AlbumEntity.generateAlbumId() else null
             val mime = if (type != null) {
                 "${type.trim()}/${file.extension}"
@@ -266,7 +282,9 @@ class FFmpegScanner() : MetadataScanner {
                     sampleRate = sampleRate,
                     contentLength = duration,
                     extraComment = if (!extraData.isBlank()) extraData else null
-                )
+                ),
+                albumArtists = albumArtistEntities(albumArtistValues),
+                albumMusicBrainzId = parseMusicBrainzAlbumId(musicBrainzAlbumIdValues),
             )
         }
     }

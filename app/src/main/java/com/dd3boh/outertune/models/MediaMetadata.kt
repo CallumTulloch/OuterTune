@@ -43,6 +43,8 @@ data class MediaMetadata(
         val id: String,
         val title: String,
         val isLocal: Boolean = false,
+        val artists: List<Artist> = emptyList(),
+        val musicBrainzId: String? = null,
     ) : Serializable
 
     data class Genre(
@@ -129,7 +131,8 @@ fun Song.toMediaMetadata() = MediaMetadata(
         MediaMetadata.Album(
             id = it.id,
             title = it.title,
-            isLocal = it.isLocal
+            isLocal = it.isLocal,
+            musicBrainzId = it.musicBrainzId,
         )
     } ?: song.albumId?.let { albumId ->
         MediaMetadata.Album(
