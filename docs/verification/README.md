@@ -23,7 +23,8 @@
 
 | 日付 | 改修 | 対象 | 自動検証 | 手動検証 | 未完了 |
 | --- | --- | --- | --- | --- | --- |
-| 2026-09-05 | [再生時メタデータ補完](records/2026-09-05-playback-metadata.md) | `fd3730e0` | unit: 156 pass / 13 skipped / 0 fail; full lint: 途中版で `FAIL`、最終版は `DEFERRED` | 途中版で `OBSERVED` | `PM-001`〜`PM-006`, `LINT-001` |
+| 2026-09-05 | [型付き endpoint によるオンライン遷移](records/2026-09-05-navigation-endpoints.md) | この記録を含む commit | targeted: 8 pass; related: 164 pass / 13 skipped / 0 fail; core-release: `PASS` | clean-installしたrelease-only emulator: `PASS` | `NAV-001` |
+| 2026-09-05 | [再生時メタデータ補完](records/2026-09-05-playback-metadata.md) | `fd3730e0` | unit: 156 pass / 13 skipped / 0 fail; lint親比較: 追加0 | 後続releaseで再生・再起動・APK確認 `PASS` | `PM-003`〜`PM-005` |
 | 2026-09-05 | [検証記録の運用導入](records/2026-09-05-verification-workflow.md) | 記録を含む commit | 文書検証 | N/A | なし |
 
 ## 新しい記録の作り方

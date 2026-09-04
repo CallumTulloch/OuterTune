@@ -1,0 +1,290 @@
+{
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "content": {
+              "sectionListRenderer": {
+                "contents": [
+                  {
+                    "musicResponsiveHeaderRenderer": {
+                      "buttons": [
+                        {
+                          "menuRenderer": {
+                            "items": [
+                              {
+                                "menuNavigationItemRenderer": {
+                                  "text": { "runs": [{ "text": "アーティストに移動" }] },
+                                  "icon": { "iconType": "ARTIST" },
+                                  "navigationEndpoint": {
+                                    "browseEndpoint": {
+                                      "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                                      "browseEndpointContextSupportedConfigs": {
+                                        "browseEndpointContextMusicConfig": {
+                                          "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "menuNavigationItemRenderer": {
+                                  "text": { "runs": [{ "text": "アルバムに移動" }] },
+                                  "icon": { "iconType": "ALBUM" },
+                                  "navigationEndpoint": {
+                                    "browseEndpoint": {
+                                      "browseId": "MPREb_NUdafp1DlA5",
+                                      "browseEndpointContextSupportedConfigs": {
+                                        "browseEndpointContextMusicConfig": {
+                                          "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "menuNavigationItemRenderer": {
+                                  "text": { "runs": [{ "text": "Duplicate artist endpoint" }] },
+                                  "icon": { "iconType": "ARTIST" },
+                                  "navigationEndpoint": {
+                                    "browseEndpoint": {
+                                      "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                                      "browseEndpointContextSupportedConfigs": {
+                                        "browseEndpointContextMusicConfig": {
+                                          "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "menuNavigationItemRenderer": {
+                                  "text": { "runs": [{ "text": "曲のクレジットを表示" }] },
+                                  "icon": { "iconType": "PEOPLE_GROUP" },
+                                  "navigationEndpoint": {
+                                    "browseEndpoint": {
+                                      "browseId": "MPTCTSZhKssbW2g",
+                                      "browseEndpointContextSupportedConfigs": {
+                                        "browseEndpointContextMusicConfig": {
+                                          "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ],
+                      "title": { "runs": [{ "text": "Test Album" }] },
+                      "subtitle": { "runs": [{ "text": "Album" }, { "text": " • " }, { "text": "2024" }] },
+                      "straplineTextOne": {
+                        "runs": [{ "text": "翟锦彦、8082Audio" }]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "secondaryContents": {
+        "sectionListRenderer": {
+          "contents": [
+            {
+              "musicShelfRenderer": {
+                "contents": [
+                  {
+                    "musicResponsiveListItemRenderer": {
+                      "flexColumns": [
+                        {
+                          "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {
+                              "runs": [
+                                {
+                                  "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+                                  "navigationEndpoint": {
+                                    "watchEndpoint": {
+                                      "videoId": "TSZhKssbW2g",
+                                      "watchEndpointMusicSupportedConfigs": {
+                                        "watchEndpointMusicConfig": {
+                                          "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ],
+                      "fixedColumns": [
+                        {
+                          "musicResponsiveListItemFixedColumnRenderer": {
+                            "text": { "runs": [{ "text": "3:58" }] }
+                          }
+                        }
+                      ],
+                      "playlistItemData": { "videoId": "TSZhKssbW2g" },
+                      "menu": {
+                        "menuRenderer": {
+                          "items": [
+                            {
+                              "menuNavigationItemRenderer": {
+                                "text": { "runs": [{ "text": "アルバムに移動" }] },
+                                "icon": { "iconType": "ALBUM" },
+                                "navigationEndpoint": {
+                                  "browseEndpoint": {
+                                    "browseId": "MPREb_NUdafp1DlA5",
+                                    "browseEndpointContextSupportedConfigs": {
+                                      "browseEndpointContextMusicConfig": {
+                                        "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "menuNavigationItemRenderer": {
+                                "text": { "runs": [{ "text": "アーティストに移動" }] },
+                                "icon": { "iconType": "ARTIST" },
+                                "navigationEndpoint": {
+                                  "browseEndpoint": {
+                                    "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                                    "browseEndpointContextSupportedConfigs": {
+                                      "browseEndpointContextMusicConfig": {
+                                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "menuNavigationItemRenderer": {
+                                "text": { "runs": [{ "text": "曲のクレジットを表示" }] },
+                                "icon": { "iconType": "PEOPLE_GROUP" },
+                                "navigationEndpoint": {
+                                  "browseEndpoint": {
+                                    "browseId": "MPTCTSZhKssbW2g",
+                                    "browseEndpointContextSupportedConfigs": {
+                                      "browseEndpointContextMusicConfig": {
+                                        "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "musicResponsiveListItemRenderer": {
+                      "flexColumns": [
+                        {
+                          "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {
+                              "runs": [
+                                {
+                                  "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版伴奏)",
+                                  "navigationEndpoint": {
+                                    "watchEndpoint": {
+                                      "videoId": "xDWhuDRnevk",
+                                      "watchEndpointMusicSupportedConfigs": {
+                                        "watchEndpointMusicConfig": {
+                                          "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ],
+                      "fixedColumns": [
+                        {
+                          "musicResponsiveListItemFixedColumnRenderer": {
+                            "text": { "runs": [{ "text": "3:58" }] }
+                          }
+                        }
+                      ],
+                      "playlistItemData": { "videoId": "xDWhuDRnevk" },
+                      "menu": {
+                        "menuRenderer": {
+                          "items": [
+                            {
+                              "menuNavigationItemRenderer": {
+                                "text": { "runs": [{ "text": "アルバムに移動" }] },
+                                "icon": { "iconType": "ALBUM" },
+                                "navigationEndpoint": {
+                                  "browseEndpoint": {
+                                    "browseId": "MPREb_NUdafp1DlA5",
+                                    "browseEndpointContextSupportedConfigs": {
+                                      "browseEndpointContextMusicConfig": {
+                                        "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "menuNavigationItemRenderer": {
+                                "text": { "runs": [{ "text": "アーティストに移動" }] },
+                                "icon": { "iconType": "ARTIST" },
+                                "navigationEndpoint": {
+                                  "browseEndpoint": {
+                                    "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                                    "browseEndpointContextSupportedConfigs": {
+                                      "browseEndpointContextMusicConfig": {
+                                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "menuNavigationItemRenderer": {
+                                "text": { "runs": [{ "text": "曲のクレジットを表示" }] },
+                                "icon": { "iconType": "PEOPLE_GROUP" },
+                                "navigationEndpoint": {
+                                  "browseEndpoint": {
+                                    "browseId": "MPTCxDWhuDRnevk",
+                                    "browseEndpointContextSupportedConfigs": {
+                                      "browseEndpointContextMusicConfig": {
+                                        "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "responseContext": {}
+}

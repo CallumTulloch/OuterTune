@@ -28,6 +28,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,8 +63,10 @@ import com.dd3boh.outertune.db.entities.Playlist
 import com.dd3boh.outertune.db.entities.PlaylistSong
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.extensions.toMediaItem
-import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.artistNavigationId
+import com.dd3boh.outertune.models.navigationTargets
+import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.playback.queues.YouTubeQueue
@@ -111,11 +114,50 @@ fun SongMenu(
     val librarySong by database.song(originalSong.id).collectAsState(initial = originalSong)
     val song = librarySong ?: originalSong
     val containingFolderRoute = localSongFolderRoute(song.song.isLocal, song.song.localPath)
-    val navigableArtists = remember(song.artists) {
-        song.artists.mapNotNull { artist ->
-            artist.artistNavigationId()?.let { artistId ->
-                artist to artistId
+    val onlineNavigationTargets = remember(song) {
+        song.toMediaMetadata().navigationTargets()
+    }
+    var onlineArtists by remember(onlineNavigationTargets.artists) {
+        mutableStateOf(
+            onlineNavigationTargets.artists.map { target ->
+                MediaMetadata.Artist(
+                    id = target.browseId,
+                    name = target.name ?: target.browseId,
+                )
             }
+        )
+    }
+    LaunchedEffect(onlineNavigationTargets.artists) {
+        if (onlineNavigationTargets.artists.size <= 1 ||
+            onlineNavigationTargets.artists.all { it.name != null }
+        ) {
+            return@LaunchedEffect
+        }
+        onlineArtists = onlineNavigationTargets.artists.map { target ->
+            MediaMetadata.Artist(
+                id = target.browseId,
+                name = target.name
+                    ?: YouTube.artist(target.browseId).getOrNull()?.artist?.title
+                    ?: target.browseId,
+            )
+        }
+    }
+    val databaseNavigableArtistIds = remember(song.artists) {
+        song.artists.mapNotNull { artist -> artist.artistNavigationId() }
+    }
+    val hasAdditionalOnlineArtists = remember(databaseNavigableArtistIds, onlineArtists) {
+        val databaseIds = databaseNavigableArtistIds.toSet()
+        onlineArtists.any { it.id !in databaseIds }
+    }
+    val navigableArtistIds = remember(
+        song.song.isLocal,
+        databaseNavigableArtistIds,
+        onlineArtists,
+    ) {
+        if (song.song.isLocal) {
+            databaseNavigableArtistIds
+        } else {
+            onlineArtists.mapNotNull(MediaMetadata.Artist::id)
         }
     }
     val download by LocalDownloadUtil.current.getDownload(originalSong.id).collectAsState(initial = null)
@@ -231,13 +273,13 @@ fun SongMenu(
                 }
             )
 
-        if (navigableArtists.isNotEmpty()) {
+        if (navigableArtistIds.isNotEmpty()) {
             GridMenuItem(
                 icon = R.drawable.artist,
                 title = R.string.view_artist
             ) {
-                if (navigableArtists.size == 1) {
-                    navController.navigate("artist/${navigableArtists[0].second}")
+                if (navigableArtistIds.size == 1) {
+                    navController.navigate("artist/${navigableArtistIds.single()}")
                     onDismiss()
                 } else {
                     showSelectArtistDialog = true
@@ -252,13 +294,13 @@ fun SongMenu(
                 onDismiss()
                 navController.navigate(containingFolderRoute)
             }
-        } else if (song.song.albumId != null && !song.song.isLocal) {
+        } else if (onlineNavigationTargets.albumBrowseId != null && !song.song.isLocal) {
             GridMenuItem(
                 icon = Icons.Rounded.Album,
                 title = R.string.view_album
             ) {
                 onDismiss()
-                navController.navigate("album/${song.song.albumId}")
+                navController.navigate("album/${onlineNavigationTargets.albumBrowseId}")
             }
         }
         GridMenuItem(
@@ -419,11 +461,19 @@ fun SongMenu(
     }
 
     if (showSelectArtistDialog) {
-        ArtistDialog(
-            navController = navController,
-            artists = song.artists,
-            onDismiss = { showSelectArtistDialog = false }
-        )
+        if (song.song.isLocal || !hasAdditionalOnlineArtists) {
+            ArtistDialog(
+                navController = navController,
+                artists = song.artists,
+                onDismiss = { showSelectArtistDialog = false }
+            )
+        } else {
+            ArtistDialog(
+                navController = navController,
+                artists = onlineArtists,
+                onDismiss = { showSelectArtistDialog = false }
+            )
+        }
     }
 
     if (showDetailsDialog) {

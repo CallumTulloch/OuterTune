@@ -7,13 +7,10 @@
 
 | ID | 起点 | 状態 | リスク | 実行する契機 |
 | --- | --- | --- | --- | --- |
-| `PM-001` | [再生時メタデータ補完](records/2026-09-05-playback-metadata.md) | `DEFERRED` | 最終 commit 固有の退行を手動では未検出 | 次にエミュレータを使う時、または次回 release 前 |
-| `PM-002` | 同上 | `DEFERRED` | 再起動後に補完値が失われる可能性 | `PM-001` と同時 |
 | `PM-003` | 同上 | `DEFERRED` | download が補完済みの値を退行させる、または fresh download の album を保存しない可能性 | 次に download 動作を変更する時、または次回 release 前 |
 | `PM-004` | 同上 | `DEFERRED` | 一度の通信失敗後に自動回復しない可能性 | ネットワーク回復処理を変更する時 |
 | `PM-005` | 同上 | `DEFERRED` | 補完通知でキュー操作状態が崩れる可能性 | キュー UI を変更する時、または次回 release 前 |
-| `PM-006` | 同上 | `DEFERRED` | 配布 APK 固有の install / 起動問題 | APK を端末へ配布する前 |
-| `LINT-001` | 同上 | `DEFERRED` | full lint の156 issuesに今回由来のものが混在する可能性 | lint debt を整理する時、または関連箇所を変更する時 |
+| `NAV-001` | [型付き endpoint によるオンライン遷移](records/2026-09-05-navigation-endpoints.md) | `DEFERRED` | 通常版と instrumental 版の長い共通 title が末尾省略により同じ曲に見える | 曲一覧または title 表示を次に改修する時 |
 
 ## 実行手順と合格条件
 
@@ -49,7 +46,13 @@
 - 手順: `OuterTune-0.10.2-b1-core-universal-release-71.apk` を対応端末またはエミュレータへ clean install し、起動と基本再生を確認する。
 - 合格: install と初回起動が成功し、起動直後の致命的例外がなく、基本再生が開始できる。
 
-### LINT-001: full lint 156 issues の分類
+### NAV-001: 長い title の末尾差を識別できる表示
+
+- 現状: `TSZhKssbW2g` の末尾は `(特别版)`、`xDWhuDRnevk` は `(特别版伴奏)` で、通常版と instrumental 版として ID も完全な title も異なり、release build で別々に stream できることを確認済み。ただし一覧では長い共通部分の後ろにある相違箇所が省略され、同一曲の重複に見える。
+- 手順: 両方を含む検索結果または曲一覧を開き、項目を再生せずに通常版と instrumental 版を識別できるか確認する。
+- 合格: 末尾の版表記を表示する、補助情報を付ける、または省略方法を変えるなどにより、2項目が別版であることを一覧上で判断できる。既存の曲 ID、完全な title、artist metadata は変更しない。
+
+### LINT-001: full lint issue の分類
 
 - 手順: 別々の clean worktree で対象 commit `fd3730e0` と、その親 `40212b39708b8d26c0350c8348ae7428df2c0095` に対し、
   `.\gradlew.bat :app:lintCoreRelease --console=plain` を一度ずつ実行する。両方の `app/build/reports/lint-results-coreRelease.xml` を
@@ -62,4 +65,7 @@
 
 | ID | 完了日 | 結果 | 完了証跡 |
 | --- | --- | --- | --- |
-| なし | - | - | - |
+| `PM-001` | 2026-09-05 | `PASS`: 後続の最終 core-release で `TSZhKssbW2g` を再生。player、MediaSession、通知、queue は `翟锦彦` と正しい album を表示し、artist / album 遷移と通常版・instrumental版の分離も確認 | [型付き endpoint によるオンライン遷移](records/2026-09-05-navigation-endpoints.md) |
+| `PM-002` | 2026-09-05 | `PASS`: 補完後に強制終了・再起動し、通常版の title、`翟锦彦`、album が保持され、再生再開後の MediaSession・通知にも反映 | 同上 |
+| `PM-006` | 2026-09-05 | `PASS`: 最終 universal core-release を clean install。versionCode 71 / versionName 0.10.2-b1 で起動・オンライン再生に成功し、fatal exception なし | 同上 |
+| `LINT-001` | 2026-09-05 | `PASS`（退行比較）: `40212b39` と `fd3730e0` はともに28 errors / 164 warnings / 2 hints。正規化比較は共通194、追加0、削除0。両 lint task 自体は既存28 errorsで `FAIL` | [再生時メタデータ補完](records/2026-09-05-playback-metadata.md) |

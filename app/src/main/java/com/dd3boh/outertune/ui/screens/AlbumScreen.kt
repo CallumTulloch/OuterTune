@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.asPaddingValues
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.OfflinePin
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -39,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
@@ -90,6 +93,7 @@ import com.dd3boh.outertune.constants.SwipeToQueueKey
 import com.dd3boh.outertune.constants.ThumbnailCornerRadius
 import com.dd3boh.outertune.constants.TopBarInsets
 import com.dd3boh.outertune.db.entities.Album
+import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
@@ -108,6 +112,7 @@ import com.dd3boh.outertune.ui.component.shimmer.ButtonPlaceholder
 import com.dd3boh.outertune.ui.component.shimmer.ListItemPlaceHolder
 import com.dd3boh.outertune.ui.component.shimmer.ShimmerHost
 import com.dd3boh.outertune.ui.component.shimmer.TextPlaceholder
+import com.dd3boh.outertune.ui.dialog.ArtistDialog
 import com.dd3boh.outertune.ui.menu.AlbumMenu
 import com.dd3boh.outertune.ui.menu.YouTubeAlbumMenu
 import com.dd3boh.outertune.ui.utils.backToMain
@@ -141,11 +146,35 @@ fun AlbumScreen(
 
     val albumWithSongs by viewModel.albumWithSongs.collectAsState()
     val otherVersions by viewModel.otherVersions.collectAsState()
+    val artistNavigationTargets by viewModel.artistNavigationTargets.collectAsState()
+    val artistDestinations = remember(artistNavigationTargets) {
+        artistNavigationTargets.map { target ->
+            MediaMetadata.Artist(
+                id = target.browseId,
+                name = target.name ?: target.browseId,
+            )
+        }
+    }
+    val directlyLinkedArtistIds = remember(albumWithSongs?.artists) {
+        albumWithSongs?.artists.orEmpty()
+            .mapNotNull { it.artistNavigationId() }
+            .toSet()
+    }
+    val independentArtistDestinations = remember(
+        artistDestinations,
+        directlyLinkedArtistIds,
+    ) {
+        artistDestinations.filterNot { it.id in directlyLinkedArtistIds }
+    }
+    val independentArtistName = independentArtistDestinations.singleOrNull()?.id?.let { artistId ->
+        artistNavigationTargets.firstOrNull { it.browseId == artistId }?.name
+    }
     val state = rememberLazyListState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     // multiselect
     var inSelectMode by rememberSaveable { mutableStateOf(false) }
+    var showArtistNavigationDialog by rememberSaveable { mutableStateOf(false) }
     val selection = rememberSaveable(
         saver = listSaver<MutableList<String>, String>(
             save = { it.toList() },
@@ -255,6 +284,38 @@ fun AlbumScreen(
 
                             Text(annotatedString)
 
+                            if (independentArtistDestinations.isNotEmpty()) {
+                                TextButton(
+                                    onClick = {
+                                        if (independentArtistDestinations.size == 1) {
+                                            independentArtistDestinations[0].id?.let { artistId ->
+                                                navController.navigate("artist/$artistId")
+                                            }
+                                        } else {
+                                            showArtistNavigationDialog = true
+                                        }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 0.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = if (
+                                            independentArtistDestinations.size == 1 &&
+                                            independentArtistName != null
+                                        ) {
+                                            "${stringResource(R.string.view_artist)}: $independentArtistName"
+                                        } else {
+                                            stringResource(R.string.view_artist)
+                                        }
+                                    )
+                                }
+                            }
+
                             Text(
                                 text = if (albumWithSongsLocal.album.year != null) {
                                     joinByBullet(
@@ -359,6 +420,9 @@ fun AlbumScreen(
                                                 ),
                                                 navController = navController,
                                                 onDismiss = menuState::dismiss,
+                                                additionalArtistDestinations = artistDestinations,
+                                                onAlbumRefetched =
+                                                    viewModel::updateArtistNavigationCandidates,
                                             )
                                         }
                                     }
@@ -596,6 +660,14 @@ fun AlbumScreen(
             modifier = Modifier
                 .windowInsetsPadding(LocalPlayerAwareWindowInsets.current)
                 .align(Alignment.BottomCenter)
+        )
+    }
+
+    if (showArtistNavigationDialog) {
+        ArtistDialog(
+            navController = navController,
+            artists = independentArtistDestinations,
+            onDismiss = { showArtistNavigationDialog = false },
         )
     }
 }

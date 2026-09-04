@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +49,7 @@ import com.dd3boh.outertune.constants.ThumbnailCornerRadius
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.models.MediaMetadata
-import com.dd3boh.outertune.models.artistNavigationId
+import com.dd3boh.outertune.models.navigationTargets
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.ListQueue
@@ -82,11 +83,35 @@ fun YouTubeSongMenu(
 
     val librarySong by database.song(song.id).collectAsState(initial = null)
     val download by LocalDownloadUtil.current.getDownload(song.id).collectAsState(initial = null)
-    val artists = remember(song.artists) {
-        song.artists.mapNotNull {
-            it.id.artistNavigationId(isLocal = false)?.let { artistId ->
-                MediaMetadata.Artist(id = artistId, name = it.name)
+    val navigationTargets = remember(song, librarySong) {
+        song.navigationTargets(librarySong?.toMediaMetadata())
+    }
+    var artists by remember(navigationTargets.artists) {
+        mutableStateOf(
+            navigationTargets.artists.map { target ->
+                MediaMetadata.Artist(
+                    id = target.browseId,
+                    name = target.name ?: target.browseId,
+                )
             }
+        )
+    }
+
+    // Names are needed only to distinguish multiple independent destinations. A single typed
+    // endpoint can be opened directly without guessing which visible credit it belongs to.
+    LaunchedEffect(navigationTargets.artists) {
+        if (navigationTargets.artists.size <= 1 ||
+            navigationTargets.artists.all { it.name != null }
+        ) {
+            return@LaunchedEffect
+        }
+        artists = navigationTargets.artists.map { target ->
+            MediaMetadata.Artist(
+                id = target.browseId,
+                name = target.name
+                    ?: YouTube.artist(target.browseId).getOrNull()?.artist?.title
+                    ?: target.browseId,
+            )
         }
     }
 
@@ -207,21 +232,21 @@ fun YouTubeSongMenu(
                 title = R.string.view_artist
             ) {
                 if (artists.size == 1) {
-                    artists[0].id.artistNavigationId(isLocal = false)?.let { artistId ->
-                        navController.navigate("artist/$artistId")
-                        onDismiss()
-                    }
+                    navController.navigate(
+                        "artist/${navigationTargets.artists.single().browseId}"
+                    )
+                    onDismiss()
                 } else {
                     showSelectArtistDialog = true
                 }
             }
         }
-        song.album?.let { album ->
+        navigationTargets.albumBrowseId?.let { albumBrowseId ->
             GridMenuItem(
                 icon = Icons.Rounded.Album,
                 title = R.string.view_album
             ) {
-                navController.navigate("album/${album.id}")
+                navController.navigate("album/$albumBrowseId")
                 onDismiss()
             }
         }

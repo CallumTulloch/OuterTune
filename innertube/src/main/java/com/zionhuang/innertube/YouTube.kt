@@ -263,7 +263,8 @@ object YouTube {
             otherVersions = response.contents.twoColumnBrowseResultsRenderer.secondaryContents?.sectionListRenderer?.contents?.getOrNull(1)?.musicCarouselShelfRenderer?.contents
                 ?.mapNotNull { it.musicTwoRowItemRenderer }
                 ?.mapNotNull(NewReleaseAlbumPage::fromMusicTwoRowItemRenderer)
-                .orEmpty()
+                .orEmpty(),
+            artistNavigationCandidates = AlbumPage.getArtistNavigationCandidates(response),
         )
     }
 

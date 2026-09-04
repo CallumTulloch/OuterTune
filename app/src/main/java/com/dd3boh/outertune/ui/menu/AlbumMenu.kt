@@ -46,8 +46,9 @@ import com.dd3boh.outertune.R
 import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.extensions.toMediaItem
-import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.artistNavigationId
+import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.AlbumListItem
@@ -56,6 +57,7 @@ import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
 import com.dd3boh.outertune.ui.dialog.ArtistDialog
 import com.dd3boh.outertune.utils.getDownloadState
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.pages.AlbumPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -65,6 +67,8 @@ fun AlbumMenu(
     originalAlbum: Album,
     navController: NavController,
     onDismiss: () -> Unit,
+    additionalArtistDestinations: List<MediaMetadata.Artist> = emptyList(),
+    onAlbumRefetched: (AlbumPage) -> Unit = {},
 ) {
     val context = LocalContext.current
     val database = LocalDatabase.current
@@ -88,12 +92,31 @@ fun AlbumMenu(
 //    }
 
     val coroutineScope = rememberCoroutineScope()
-    val navigableArtists = remember(album.artists) {
+    val databaseNavigableArtists = remember(album.artists) {
         album.artists.mapNotNull { artist ->
-            artist.artistNavigationId()?.let { artistId ->
-                artist to artistId
-            }
+            artist.artistNavigationId()?.let { artistId -> artist to artistId }
         }
+    }
+    val additionalNavigableArtists = remember(
+        databaseNavigableArtists,
+        additionalArtistDestinations,
+    ) {
+        val databaseArtistIds = databaseNavigableArtists.mapTo(mutableSetOf()) { it.second }
+        additionalArtistDestinations.mapNotNull { artist ->
+            artist.id.artistNavigationId(isLocal = artist.isLocal)?.let { artistId ->
+                artist.copy(id = artistId)
+            }
+        }.filterNot { it.id in databaseArtistIds }
+            .distinctBy(MediaMetadata.Artist::id)
+    }
+    val navigableArtists = remember(databaseNavigableArtists, additionalNavigableArtists) {
+        databaseNavigableArtists.map { (artist, artistId) ->
+            MediaMetadata.Artist(
+                id = artistId,
+                name = artist.name,
+                isLocal = artist.isLocal,
+            )
+        } + additionalNavigableArtists
     }
 
     LaunchedEffect(Unit) {
@@ -235,8 +258,10 @@ fun AlbumMenu(
                 title = R.string.view_artist
             ) {
                 if (navigableArtists.size == 1) {
-                    navController.navigate("artist/${navigableArtists[0].second}")
-                    onDismiss()
+                    navigableArtists[0].id?.let { artistId ->
+                        navController.navigate("artist/$artistId")
+                        onDismiss()
+                    }
                 } else {
                     showSelectArtistDialog = true
                 }
@@ -256,6 +281,7 @@ fun AlbumMenu(
             refetchIconDegree -= 360
             scope.launch(Dispatchers.IO) {
                 YouTube.album(album.id).onSuccess {
+                    onAlbumRefetched(it)
                     database.transaction {
                         update(album.album, it)
                     }
@@ -319,11 +345,20 @@ fun AlbumMenu(
     }
 
     if (showSelectArtistDialog) {
-        ArtistDialog(
-            navController = navController,
-            artists = album.artists,
-            onDismiss = { showSelectArtistDialog = false }
-        )
+        if (additionalNavigableArtists.isEmpty()) {
+            ArtistDialog(
+                navController = navController,
+                artists = album.artists,
+                onDismiss = { showSelectArtistDialog = false }
+            )
+        } else {
+            ArtistDialog(
+                navController = navController,
+                artists = navigableArtists,
+                allowLocalArtistIds = album.album.isLocal,
+                onDismiss = { showSelectArtistDialog = false }
+            )
+        }
     }
 
 }
