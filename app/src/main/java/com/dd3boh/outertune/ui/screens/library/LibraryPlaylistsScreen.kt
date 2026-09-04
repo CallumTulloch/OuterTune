@@ -216,7 +216,7 @@ fun LibraryPlaylistsScreen(
             itemVerticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, top = 16.dp, end = 8.dp, bottom = 16.dp)
+                .padding(horizontal = 16.dp)
         ) {
             SortHeader(
                 sortType = sortType,

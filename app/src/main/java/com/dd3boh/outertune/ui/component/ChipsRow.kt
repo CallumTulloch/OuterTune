@@ -55,7 +55,8 @@ fun <E> ChipsRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
+            .horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Spacer(Modifier.width(12.dp))
 

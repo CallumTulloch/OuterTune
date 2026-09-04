@@ -258,14 +258,15 @@ internal fun playlistContentHaving(filter: PlaylistFilter): String = when (filte
 }
 
 internal fun libraryPlaylistContentHaving(filters: Set<LibraryContentFilter>): String {
-    if (LibraryContentFilter.LIBRARY in filters) return ""
+    val effectiveFilters = LibraryContentFilter.effective(filters)
+    if (LibraryContentFilter.LIBRARY in effectiveFilters) return ""
 
-    val conditions = filters.mapNotNull { filter ->
+    val conditions = effectiveFilters.mapNotNull { filter ->
         when (filter) {
             LibraryContentFilter.DOWNLOADED -> DOWNLOADED_PLAYLIST_MEMBER_CONDITION
             LibraryContentFilter.FOLDER -> FOLDER_PLAYLIST_MEMBER_CONDITION
             LibraryContentFilter.LIBRARY -> null
         }
     }
-    return "HAVING ${conditions.joinToString(separator = " OR ").ifEmpty { "0" }}"
+    return "HAVING ${conditions.joinToString(separator = " OR ")}"
 }

@@ -159,6 +159,7 @@ val ArtistSongSortDescendingKey = booleanPreferencesKey("artistSongSortDescendin
 
 val SongFilterKey = stringPreferencesKey("songFilter")
 val SongLikedFilterKey = booleanPreferencesKey("songLikedFilter")
+val SongSourceFilterMaskKey = intPreferencesKey("songSourceFilterMask")
 val ArtistFilterKey = stringPreferencesKey("artistFilter")
 val ArtistViewTypeKey = stringPreferencesKey("artistViewType")
 val AlbumFilterKey = stringPreferencesKey("albumFilter")
@@ -166,6 +167,8 @@ val PlaylistFilterKey = stringPreferencesKey("playlistFilter")
 val LibraryAlbumContentFilterMaskKey = intPreferencesKey("libraryAlbumContentFilterMask")
 val LibraryArtistContentFilterMaskKey = intPreferencesKey("libraryArtistContentFilterMask")
 val LibraryPlaylistContentFilterMaskKey = intPreferencesKey("libraryPlaylistContentFilterMask")
+val LibraryContentFilterUnselectedDefaultMigratedKey =
+    booleanPreferencesKey("libraryContentFilterUnselectedDefaultMigrated")
 val AlbumViewTypeKey = stringPreferencesKey("albumViewType")
 val PlaylistViewTypeKey = stringPreferencesKey("playlistViewType")
 val LibraryFilterKey = stringPreferencesKey("libraryFilter")

@@ -86,28 +86,43 @@ class LibraryContentFilterTest {
     }
 
     @Test
-    fun `all secondary filters are selected by default`() {
+    fun `empty mask displays no selection but evaluates all secondary filters`() {
+        assertEquals(emptySet<LibraryContentFilter>(), LibraryContentFilter.fromMask(0))
         assertEquals(
             LibraryContentFilter.entries.toSet(),
-            LibraryContentFilter.fromMask(LibraryContentFilter.allMask),
+            LibraryContentFilter.effectiveFromMask(0),
         )
     }
 
     @Test
     fun `secondary filters toggle independently`() {
-        val withoutDownloaded = toggleLibraryContentFilter(
-            LibraryContentFilter.allMask,
+        val downloadedOnly = toggleLibraryContentFilter(
+            0,
             LibraryContentFilter.DOWNLOADED,
+        )
+        val downloadedAndLibrary = toggleLibraryContentFilter(
+            downloadedOnly,
+            LibraryContentFilter.LIBRARY,
         )
 
         assertEquals(
-            setOf(LibraryContentFilter.LIBRARY, LibraryContentFilter.FOLDER),
-            LibraryContentFilter.fromMask(withoutDownloaded),
+            setOf(LibraryContentFilter.DOWNLOADED, LibraryContentFilter.LIBRARY),
+            LibraryContentFilter.fromMask(downloadedAndLibrary),
         )
         assertEquals(
-            LibraryContentFilter.allMask,
-            toggleLibraryContentFilter(withoutDownloaded, LibraryContentFilter.DOWNLOADED),
+            LibraryContentFilter.LIBRARY.mask,
+            toggleLibraryContentFilter(downloadedAndLibrary, LibraryContentFilter.DOWNLOADED),
         )
+    }
+
+    @Test
+    fun `legacy all-selected default migrates to unselected default`() {
+        assertEquals(0, migrateLibraryContentFilterMask(LibraryContentFilter.allMask))
+        assertEquals(
+            LibraryContentFilter.LIBRARY.mask,
+            migrateLibraryContentFilterMask(LibraryContentFilter.LIBRARY.mask),
+        )
+        assertEquals(null, migrateLibraryContentFilterMask(null))
     }
 
     @Test

@@ -69,11 +69,14 @@ import com.dd3boh.outertune.constants.LocalLibraryEnableKey
 import com.dd3boh.outertune.constants.SongFilter
 import com.dd3boh.outertune.constants.SongFilterKey
 import com.dd3boh.outertune.constants.SongLikedFilterKey
+import com.dd3boh.outertune.constants.SongSourceFilter
+import com.dd3boh.outertune.constants.SongSourceFilterMaskKey
 import com.dd3boh.outertune.constants.SongSortDescendingKey
 import com.dd3boh.outertune.constants.SongSortType
 import com.dd3boh.outertune.constants.SongSortTypeKey
 import com.dd3boh.outertune.constants.SwipeToQueueKey
 import com.dd3boh.outertune.db.entities.Song
+import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.ChipsRow
@@ -88,6 +91,7 @@ import com.dd3boh.outertune.ui.menu.ActionDropdown
 import com.dd3boh.outertune.ui.menu.DropdownItem
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.utils.dataStore
+import com.dd3boh.outertune.utils.get
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibrarySongsViewModel
@@ -96,35 +100,63 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 internal data class SongFilterSelection(
-    val sourceFilter: SongFilter,
+    val sourceFilterMask: Int,
     val likedOnly: Boolean,
 )
 
-internal fun normalizeSongSourceFilter(filter: SongFilter): SongFilter =
-    if (filter == SongFilter.LIKED) SongFilter.ALL else filter
+internal fun SongFilter.toSongSourceFilterOrNull(): SongSourceFilter? = when (this) {
+    SongFilter.LIBRARY -> SongSourceFilter.LIBRARY
+    SongFilter.DOWNLOADED -> SongSourceFilter.DOWNLOADED
+    SongFilter.FOLDER -> SongSourceFilter.FOLDER
+    SongFilter.LIKED, SongFilter.ALL -> null
+}
 
 internal fun nextSongFilterSelection(
-    currentSourceFilter: SongFilter,
+    currentSourceFilterMask: Int,
     likedOnly: Boolean,
     selectedFilter: SongFilter,
 ): SongFilterSelection = when (selectedFilter) {
     SongFilter.LIKED -> SongFilterSelection(
-        sourceFilter = normalizeSongSourceFilter(currentSourceFilter),
+        sourceFilterMask = currentSourceFilterMask,
         likedOnly = !likedOnly,
     )
 
+    SongFilter.ALL -> SongFilterSelection(
+        sourceFilterMask = 0,
+        likedOnly = likedOnly,
+    )
+
     else -> SongFilterSelection(
-        sourceFilter = if (normalizeSongSourceFilter(currentSourceFilter) == selectedFilter) {
-            SongFilter.ALL
-        } else {
-            selectedFilter
-        },
+        sourceFilterMask = currentSourceFilterMask xor
+                requireNotNull(selectedFilter.toSongSourceFilterOrNull()).mask,
         likedOnly = likedOnly,
     )
 }
 
-internal fun normalizeEmbeddedSongFilter(filter: SongFilter): SongFilter =
-    if (filter == SongFilter.ALL || filter == SongFilter.LIKED) SongFilter.LIBRARY else filter
+internal fun migrateLegacySongFilterSelection(
+    sourceFilter: SongFilter?,
+    likedOnly: Boolean,
+): SongFilterSelection = SongFilterSelection(
+    sourceFilterMask = sourceFilter?.toSongSourceFilterOrNull()?.mask ?: 0,
+    likedOnly = likedOnly || sourceFilter == SongFilter.LIKED,
+)
+
+internal fun songMatchesFilters(
+    song: SongEntity,
+    sourceFilters: Set<SongSourceFilter>,
+    likedOnly: Boolean,
+): Boolean {
+    if (likedOnly && !song.liked) return false
+    if (sourceFilters.isEmpty()) return true
+
+    return sourceFilters.any { sourceFilter ->
+        when (sourceFilter) {
+            SongSourceFilter.LIBRARY -> song.inLibrary != null
+            SongSourceFilter.DOWNLOADED -> !song.isLocal && song.dateDownload != null
+            SongSourceFilter.FOLDER -> song.isLocal && song.inLibrary != null
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -141,9 +173,38 @@ fun LibrarySongsScreen(
     val playerConnection = LocalPlayerConnection.current ?: return
     val snackbarHostState = LocalSnackbarHostState.current
 
-    var filter by rememberEnumPreference(SongFilterKey, SongFilter.LIBRARY)
-    var likedOnly by rememberPreference(SongLikedFilterKey, filter == SongFilter.LIKED)
-    val sourceFilter = normalizeSongSourceFilter(filter)
+    val initialFilterSelection = remember(context) {
+        val storedSourceMask = context.dataStore[SongSourceFilterMaskKey]
+        val storedLikedOnly = context.dataStore[SongLikedFilterKey]
+        if (storedSourceMask != null) {
+            SongFilterSelection(
+                sourceFilterMask = storedSourceMask,
+                likedOnly = storedLikedOnly ?: false,
+            )
+        } else {
+            val legacySourceFilter = context.dataStore[SongFilterKey]?.let { storedFilter ->
+                SongFilter.entries.firstOrNull { it.name == storedFilter }
+            }
+            migrateLegacySongFilterSelection(
+                sourceFilter = legacySourceFilter,
+                likedOnly = storedLikedOnly ?: false,
+            )
+        }
+    }
+    var sourceFilterMask by rememberPreference(
+        SongSourceFilterMaskKey,
+        initialFilterSelection.sourceFilterMask,
+    )
+    var likedOnly by rememberPreference(
+        SongLikedFilterKey,
+        initialFilterSelection.likedOnly,
+    )
+    val selectedSourceFilters = SongSourceFilter.fromMask(sourceFilterMask)
+    val appliedSourceFilters = if (libraryFilterContent == null) {
+        selectedSourceFilters
+    } else {
+        setOf(SongSourceFilter.LIBRARY)
+    }
     val likedFilterApplied = libraryFilterContent == null && likedOnly
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
     val (sortType, onSortTypeChange) = rememberEnumPreference(SongSortTypeKey, SongSortType.CREATE_DATE)
@@ -153,26 +214,28 @@ fun LibrarySongsScreen(
     val unfilteredSongs by viewModel.allSongs.collectAsState()
     val songs = remember(
         unfilteredSongs,
-        likedOnly,
-        libraryFilterContent,
+        appliedSourceFilters,
+        likedFilterApplied,
         sortType,
         sortDescending,
     ) {
-        if (libraryFilterContent != null || !likedOnly) {
-            unfilteredSongs
-        } else {
-            unfilteredSongs
-                ?.filter { it.song.liked }
-                ?.let { likedSongs ->
-                    if (sortType != SongSortType.CREATE_DATE) {
-                        likedSongs
-                    } else if (sortDescending) {
-                        likedSongs.sortedByDescending { it.song.likedDate }
-                    } else {
-                        likedSongs.sortedBy { it.song.likedDate }
-                    }
+        unfilteredSongs
+            ?.filter { song ->
+                songMatchesFilters(
+                    song = song.song,
+                    sourceFilters = appliedSourceFilters,
+                    likedOnly = likedFilterApplied,
+                )
+            }
+            ?.let { filteredSongs ->
+                if (!likedFilterApplied || sortType != SongSortType.CREATE_DATE) {
+                    filteredSongs
+                } else if (sortDescending) {
+                    filteredSongs.sortedByDescending { it.song.likedDate }
+                } else {
+                    filteredSongs.sortedBy { it.song.likedDate }
                 }
-        }
+            }
     }
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val isSyncingRemoteLikedSongs by viewModel.isSyncingRemoteLikedSongs.collectAsState()
@@ -203,15 +266,17 @@ fun LibrarySongsScreen(
         BackHandler(onBack = onExitSelectionMode)
     }
 
-    val syncSelection = { selectedSource: SongFilter, selectedLikedOnly: Boolean, bypassCd: Boolean ->
+    val syncSelection = {
+        selectedSources: Set<SongSourceFilter>,
+        selectedLikedOnly: Boolean,
+        bypassCd: Boolean ->
+        val syncLibrary = selectedSources.isEmpty() || SongSourceFilter.LIBRARY in selectedSources
+        val syncLiked = selectedSources.isEmpty() || selectedLikedOnly
         when {
-            selectedSource == SongFilter.ALL -> viewModel.syncAllSongs(bypassCd)
-            selectedSource == SongFilter.FOLDER -> Unit
-            selectedLikedOnly && selectedSource == SongFilter.LIBRARY ->
-                viewModel.syncAllSongs(bypassCd)
-            selectedLikedOnly -> viewModel.syncLikedSongs(bypassCd)
-            selectedSource == SongFilter.LIBRARY -> viewModel.syncLibrarySongs(bypassCd)
-            selectedSource == SongFilter.DOWNLOADED && bypassCd -> viewModel.refreshDownloads()
+            syncLibrary && syncLiked -> viewModel.syncAllSongs(bypassCd)
+            syncLibrary -> viewModel.syncLibrarySongs(bypassCd)
+            syncLiked -> viewModel.syncLikedSongs(bypassCd)
+            SongSourceFilter.DOWNLOADED in selectedSources && bypassCd -> viewModel.refreshDownloads()
             else -> Unit
         }
     }
@@ -225,43 +290,36 @@ fun LibrarySongsScreen(
     }
 
     LaunchedEffect(Unit) {
-        syncSelection(sourceFilter, likedFilterApplied, false)
-    }
-
-    LaunchedEffect(libraryFilterContent, filter) {
-        when {
-            filter == SongFilter.LIKED -> {
-                context.dataStore.edit { preferences ->
-                    preferences[SongLikedFilterKey] = true
-                    preferences[SongFilterKey] = if (libraryFilterContent == null) {
-                        SongFilter.ALL.name
-                    } else {
-                        SongFilter.LIBRARY.name
-                    }
+        context.dataStore.edit { preferences ->
+            if (preferences[SongSourceFilterMaskKey] == null) {
+                val legacySourceFilter = preferences[SongFilterKey]?.let { storedFilter ->
+                    SongFilter.entries.firstOrNull { it.name == storedFilter }
                 }
-            }
-
-            libraryFilterContent != null -> {
-                val normalizedFilter = normalizeEmbeddedSongFilter(filter)
-                if (normalizedFilter != filter) {
-                    filter = normalizedFilter
+                val migratedSelection = migrateLegacySongFilterSelection(
+                    sourceFilter = legacySourceFilter,
+                    likedOnly = preferences[SongLikedFilterKey] ?: false,
+                )
+                preferences[SongSourceFilterMaskKey] = migratedSelection.sourceFilterMask
+                if (migratedSelection.likedOnly) {
+                    preferences[SongLikedFilterKey] = true
                 }
             }
         }
+        syncSelection(appliedSourceFilters, likedFilterApplied, false)
     }
 
     val onFilterSelected = { selectedFilter: SongFilter ->
         val updatedSelection = nextSongFilterSelection(
-            currentSourceFilter = sourceFilter,
+            currentSourceFilterMask = sourceFilterMask,
             likedOnly = likedOnly,
             selectedFilter = selectedFilter,
         )
-        filter = updatedSelection.sourceFilter
+        sourceFilterMask = updatedSelection.sourceFilterMask
         likedOnly = updatedSelection.likedOnly
 
         if (selectedFilter != SongFilter.LIKED || updatedSelection.likedOnly) {
             syncSelection(
-                updatedSelection.sourceFilter,
+                SongSourceFilter.fromMask(updatedSelection.sourceFilterMask),
                 updatedSelection.likedOnly,
                 false,
             )
@@ -276,13 +334,15 @@ fun LibrarySongsScreen(
                 SongFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
                 SongFilter.FOLDER to stringResource(R.string.folders),
             ),
-            currentValue = sourceFilter,
+            currentValue = SongFilter.ALL,
             onValueUpdate = onFilterSelected,
             selected = { chipFilter ->
                 if (chipFilter == SongFilter.LIKED) {
                     likedOnly
                 } else {
-                    sourceFilter == chipFilter
+                    chipFilter.toSongSourceFilterOrNull()?.let { sourceFilter ->
+                        sourceFilterMask and sourceFilter.mask != 0
+                    } ?: false
                 }
             },
             separatorAfterIndex = 0,
@@ -410,7 +470,7 @@ fun LibrarySongsScreen(
                         // Keep user-triggered feedback visible even when the refresh finishes
                         // before Compose can render the coordinator's refreshing state.
                         isPullRefreshFeedbackVisible = true
-                        syncSelection(sourceFilter, likedFilterApplied, true)
+                        syncSelection(appliedSourceFilters, likedFilterApplied, true)
                         coroutineScope.launch {
                             delay(MINIMUM_PULL_REFRESH_INDICATOR_MILLIS)
                             isPullRefreshFeedbackVisible = false

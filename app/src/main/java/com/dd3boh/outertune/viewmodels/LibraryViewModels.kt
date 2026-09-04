@@ -39,8 +39,6 @@ import com.dd3boh.outertune.constants.PlaylistFilterKey
 import com.dd3boh.outertune.constants.PlaylistSortDescendingKey
 import com.dd3boh.outertune.constants.PlaylistSortType
 import com.dd3boh.outertune.constants.PlaylistSortTypeKey
-import com.dd3boh.outertune.constants.SongFilter
-import com.dd3boh.outertune.constants.SongFilterKey
 import com.dd3boh.outertune.constants.SongSortDescendingKey
 import com.dd3boh.outertune.constants.SongSortType
 import com.dd3boh.outertune.constants.SongSortTypeKey
@@ -133,21 +131,14 @@ class LibrarySongsViewModel @Inject constructor(
 
         return context.dataStore.data
             .map {
-                Triple(
-                    it[SongFilterKey].toEnum(SongFilter.LIBRARY),
+                Pair(
                     it[SongSortTypeKey].toEnum(SongSortType.CREATE_DATE),
                     (it[SongSortDescendingKey] != false)
                 )
             }
             .distinctUntilChanged()
-            .flatMapLatest { (filter, sortType, descending) ->
-                when (filter) {
-                    SongFilter.ALL -> database.savedSongs(sortType, descending)
-                    SongFilter.LIBRARY -> database.songs(sortType, descending)
-                    SongFilter.LIKED -> database.likedSongs(sortType, descending)
-                    SongFilter.DOWNLOADED -> database.downloadSongs(sortType, descending)
-                    SongFilter.FOLDER -> database.folderSongs(sortType, descending)
-                }
+            .flatMapLatest { (sortType, descending) ->
+                database.savedSongs(sortType, descending)
             }.stateIn(viewModelScope, SharingStarted.Lazily, null)
     }
 }

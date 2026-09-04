@@ -212,6 +212,17 @@ enum class SongFilter {
     LIBRARY, LIKED, DOWNLOADED, FOLDER, ALL
 }
 
+enum class SongSourceFilter(val mask: Int) {
+    LIBRARY(1 shl 0),
+    DOWNLOADED(1 shl 1),
+    FOLDER(1 shl 2);
+
+    companion object {
+        fun fromMask(mask: Int): Set<SongSourceFilter> =
+            entries.filterTo(linkedSetOf()) { filter -> mask and filter.mask != 0 }
+    }
+}
+
 enum class ArtistFilter {
     LIBRARY, LIKED, DOWNLOADED, FOLDER, ALL
 }
@@ -234,6 +245,12 @@ enum class LibraryContentFilter(val mask: Int) {
 
         fun fromMask(mask: Int): Set<LibraryContentFilter> =
             entries.filterTo(linkedSetOf()) { filter -> mask and filter.mask != 0 }
+
+        fun effective(filters: Set<LibraryContentFilter>): Set<LibraryContentFilter> =
+            filters.ifEmpty { entries.toCollection(linkedSetOf()) }
+
+        fun effectiveFromMask(mask: Int): Set<LibraryContentFilter> =
+            effective(fromMask(mask))
     }
 }
 

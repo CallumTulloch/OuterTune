@@ -216,12 +216,15 @@ interface ArtistsDao {
         filters: Set<LibraryContentFilter>,
         sortType: ArtistSortType,
         descending: Boolean,
-    ): Flow<List<Artist>> = artists(
-        contentCondition = libraryArtistContentCondition(filters),
-        sortType = sortType,
-        descending = descending,
-        filterUnsupportedArtists = LibraryContentFilter.LIBRARY !in filters,
-    )
+    ): Flow<List<Artist>> {
+        val effectiveFilters = LibraryContentFilter.effective(filters)
+        return artists(
+            contentCondition = libraryArtistContentCondition(effectiveFilters),
+            sortType = sortType,
+            descending = descending,
+            filterUnsupportedArtists = LibraryContentFilter.LIBRARY !in effectiveFilters,
+        )
+    }
 
     private fun artists(
         contentCondition: String,
@@ -394,7 +397,7 @@ internal fun artistContentCondition(filter: ArtistFilter): String = when (filter
 }
 
 internal fun libraryArtistContentCondition(filters: Set<LibraryContentFilter>): String =
-    filters.map { filter ->
+    LibraryContentFilter.effective(filters).map { filter ->
         when (filter) {
             LibraryContentFilter.DOWNLOADED ->
                 "(song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
@@ -402,4 +405,4 @@ internal fun libraryArtistContentCondition(filters: Set<LibraryContentFilter>): 
             LibraryContentFilter.FOLDER ->
                 "(song.isLocal = 1 AND song.inLibrary IS NOT NULL)"
         }
-    }.joinToString(separator = " OR ").ifEmpty { "0" }
+    }.joinToString(separator = " OR ")

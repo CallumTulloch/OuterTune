@@ -521,7 +521,7 @@ internal fun albumContentCondition(filter: AlbumFilter): String = when (filter) 
 }
 
 internal fun libraryAlbumContentCondition(filters: Set<LibraryContentFilter>): String =
-    filters.map { filter ->
+    LibraryContentFilter.effective(filters).map { filter ->
         when (filter) {
             LibraryContentFilter.DOWNLOADED ->
                 "(song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
@@ -529,4 +529,4 @@ internal fun libraryAlbumContentCondition(filters: Set<LibraryContentFilter>): S
             LibraryContentFilter.FOLDER ->
                 "(song.isLocal = 1 AND song.inLibrary IS NOT NULL)"
         }
-    }.joinToString(separator = " OR ").ifEmpty { "0" }
+    }.joinToString(separator = " OR ")

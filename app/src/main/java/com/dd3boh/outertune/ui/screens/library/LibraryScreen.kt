@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.datastore.preferences.core.edit
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -66,6 +67,7 @@ import com.dd3boh.outertune.constants.GridThumbnailHeight
 import com.dd3boh.outertune.constants.LibraryAlbumContentFilterMaskKey
 import com.dd3boh.outertune.constants.LibraryArtistContentFilterMaskKey
 import com.dd3boh.outertune.constants.LibraryContentFilter
+import com.dd3boh.outertune.constants.LibraryContentFilterUnselectedDefaultMigratedKey
 import com.dd3boh.outertune.constants.LibraryFilterKey
 import com.dd3boh.outertune.constants.LibraryPlaylistContentFilterMaskKey
 import com.dd3boh.outertune.constants.LibrarySortDescendingKey
@@ -98,6 +100,7 @@ import com.dd3boh.outertune.ui.component.items.AutoPlaylistListItem
 import com.dd3boh.outertune.ui.screens.Screens
 import com.dd3boh.outertune.ui.screens.Screens.LibraryFilter
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
+import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryViewModel
@@ -154,6 +157,9 @@ internal fun libraryChipUniverse(
 internal fun toggleLibraryContentFilter(mask: Int, filter: LibraryContentFilter): Int =
     mask xor filter.mask
 
+internal fun migrateLibraryContentFilterMask(mask: Int?): Int? =
+    if (mask == LibraryContentFilter.allMask) 0 else mask
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
@@ -174,21 +180,58 @@ fun LibraryScreen(
     var filter by rememberEnumPreference(LibraryFilterKey, LibraryFilter.ALL)
     var albumContentFilterMask by rememberPreference(
         LibraryAlbumContentFilterMaskKey,
-        LibraryContentFilter.allMask,
+        0,
     )
     var artistContentFilterMask by rememberPreference(
         LibraryArtistContentFilterMaskKey,
-        LibraryContentFilter.allMask,
+        0,
     )
     var playlistContentFilterMask by rememberPreference(
         LibraryPlaylistContentFilterMaskKey,
-        LibraryContentFilter.allMask,
+        0,
+    )
+    val libraryContentFilterDefaultsMigrated by rememberPreference(
+        LibraryContentFilterUnselectedDefaultMigratedKey,
+        false,
     )
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
 
-    val albumContentFilters = LibraryContentFilter.fromMask(albumContentFilterMask)
-    val artistContentFilters = LibraryContentFilter.fromMask(artistContentFilterMask)
-    val playlistContentFilters = LibraryContentFilter.fromMask(playlistContentFilterMask)
+    val albumSelectedFilterMask = if (libraryContentFilterDefaultsMigrated) {
+        albumContentFilterMask
+    } else {
+        migrateLibraryContentFilterMask(albumContentFilterMask) ?: 0
+    }
+    val artistSelectedFilterMask = if (libraryContentFilterDefaultsMigrated) {
+        artistContentFilterMask
+    } else {
+        migrateLibraryContentFilterMask(artistContentFilterMask) ?: 0
+    }
+    val playlistSelectedFilterMask = if (libraryContentFilterDefaultsMigrated) {
+        playlistContentFilterMask
+    } else {
+        migrateLibraryContentFilterMask(playlistContentFilterMask) ?: 0
+    }
+
+    val albumContentFilters = LibraryContentFilter.effectiveFromMask(albumSelectedFilterMask)
+    val artistContentFilters = LibraryContentFilter.effectiveFromMask(artistSelectedFilterMask)
+    val playlistContentFilters = LibraryContentFilter.effectiveFromMask(playlistSelectedFilterMask)
+
+    LaunchedEffect(libraryContentFilterDefaultsMigrated) {
+        if (!libraryContentFilterDefaultsMigrated) {
+            context.dataStore.edit { preferences ->
+                listOf(
+                    LibraryAlbumContentFilterMaskKey,
+                    LibraryArtistContentFilterMaskKey,
+                    LibraryPlaylistContentFilterMaskKey,
+                ).forEach { key ->
+                    migrateLibraryContentFilterMask(preferences[key])?.let { migratedMask ->
+                        preferences[key] = migratedMask
+                    }
+                }
+                preferences[LibraryContentFilterUnselectedDefaultMigratedKey] = true
+            }
+        }
+    }
 
     val (sortType, onSortTypeChange) = rememberEnumPreference(LibrarySortTypeKey, LibrarySortType.CREATE_DATE)
     val (sortDescending, onSortDescendingChange) = rememberPreference(LibrarySortDescendingKey, true)
@@ -308,11 +351,11 @@ fun LibraryScreen(
                                 val contentFilter = chip.contentFilter
                                 when (chip.category) {
                                     LibraryFilter.ALBUMS -> albumContentFilterMask =
-                                        toggleLibraryContentFilter(albumContentFilterMask, contentFilter)
+                                        toggleLibraryContentFilter(albumSelectedFilterMask, contentFilter)
                                     LibraryFilter.ARTISTS -> artistContentFilterMask =
-                                        toggleLibraryContentFilter(artistContentFilterMask, contentFilter)
+                                        toggleLibraryContentFilter(artistSelectedFilterMask, contentFilter)
                                     LibraryFilter.PLAYLISTS -> playlistContentFilterMask =
-                                        toggleLibraryContentFilter(playlistContentFilterMask, contentFilter)
+                                        toggleLibraryContentFilter(playlistSelectedFilterMask, contentFilter)
                                     else -> Unit
                                 }
                             }
@@ -324,11 +367,11 @@ fun LibraryScreen(
                             null -> chip.category == visibleCategory
                             else -> when (chip.category) {
                                 LibraryFilter.ALBUMS ->
-                                    albumContentFilterMask and chip.contentFilter.mask != 0
+                                    albumSelectedFilterMask and chip.contentFilter.mask != 0
                                 LibraryFilter.ARTISTS ->
-                                    artistContentFilterMask and chip.contentFilter.mask != 0
+                                    artistSelectedFilterMask and chip.contentFilter.mask != 0
                                 LibraryFilter.PLAYLISTS ->
-                                    playlistContentFilterMask and chip.contentFilter.mask != 0
+                                    playlistSelectedFilterMask and chip.contentFilter.mask != 0
                                 else -> false
                             }
                         }

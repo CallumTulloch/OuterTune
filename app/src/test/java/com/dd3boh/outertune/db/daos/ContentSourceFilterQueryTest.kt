@@ -42,9 +42,20 @@ class ContentSourceFilterQueryTest {
     }
 
     @Test
-    fun `empty secondary selection matches no content`() {
-        assertEquals("0", libraryAlbumContentCondition(emptySet()))
-        assertEquals("0", libraryArtistContentCondition(emptySet()))
-        assertEquals("HAVING 0", libraryPlaylistContentHaving(emptySet()))
+    fun `empty secondary selection evaluates all content sources`() {
+        val allFilters = LibraryContentFilter.entries.toSet()
+
+        assertEquals(
+            libraryAlbumContentCondition(allFilters),
+            libraryAlbumContentCondition(emptySet()),
+        )
+        assertEquals(
+            libraryArtistContentCondition(allFilters),
+            libraryArtistContentCondition(emptySet()),
+        )
+        assertEquals(
+            libraryPlaylistContentHaving(allFilters),
+            libraryPlaylistContentHaving(emptySet()),
+        )
     }
 }
