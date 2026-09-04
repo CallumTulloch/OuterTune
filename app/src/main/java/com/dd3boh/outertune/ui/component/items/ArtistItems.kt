@@ -8,6 +8,7 @@
 package com.dd3boh.outertune.ui.component.items
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.RowScope
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Folder
@@ -41,15 +43,19 @@ fun ArtistThumbnail(
     isLocal: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val fallbackSurfaceColor = MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp)
+
     BoxWithConstraints(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp))
+            .background(fallbackSurfaceColor)
     ) {
         val thumbnailSize = minOf(maxWidth, maxHeight)
-        val badgeSize = thumbnailSize * 0.36f
-        val badgeInset = thumbnailSize * 0.06f
+        // Keep every corner of the source badge inside the circular thumbnail clip.
+        val badgeSize = thumbnailSize * 0.29f
+        val badgeInset = thumbnailSize * 0.18f
+        val badgeShape = RoundedCornerShape(badgeSize * 0.125f)
 
         Icon(
             imageVector = Icons.Rounded.Person,
@@ -63,14 +69,19 @@ fun ArtistThumbnail(
                 .align(Alignment.BottomEnd)
                 .padding(end = badgeInset, bottom = badgeInset)
                 .size(badgeSize)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceColorAtElevation(32.dp))
+                .clip(badgeShape)
+                .background(fallbackSurfaceColor)
+                .border(
+                    width = thumbnailSize * 0.02f,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
+                    shape = badgeShape,
+                )
         ) {
             Icon(
                 imageVector = if (isLocal) Icons.Rounded.Folder else Icons.Rounded.Language,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxSize(0.72f)
+                modifier = Modifier.fillMaxSize(0.68f)
             )
         }
 

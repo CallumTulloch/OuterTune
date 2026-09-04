@@ -11,6 +11,7 @@ package com.dd3boh.outertune.ui.component
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
@@ -32,7 +33,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -99,7 +102,9 @@ fun <E> ChipsLazyRow(
     visible: (E) -> Boolean = { true },
     itemKey: (E) -> Any = { it.toString() },
     separatorAfterIndex: Int? = null,
-    isLoading: (E) -> Boolean = { false }
+    isLoading: (E) -> Boolean = { false },
+    visibilityTransitionKey: Any? = null,
+    onVisibilityTransitionFinished: (() -> Unit)? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     val fadeTween: FiniteAnimationSpec<Float> = tween(
@@ -112,6 +117,8 @@ fun <E> ChipsLazyRow(
         easing = LinearOutSlowInEasing
     )
 
+    val visibilityStates = mutableListOf<MutableTransitionState<Boolean>>()
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -121,8 +128,16 @@ fun <E> ChipsLazyRow(
 
         chips.forEachIndexed { index, (value, label) ->
             key(itemKey(value)) {
+                val targetVisible = visible(value)
+                val visibilityState = remember {
+                    MutableTransitionState(targetVisible)
+                }.apply {
+                    targetState = targetVisible
+                }
+                visibilityStates += visibilityState
+
                 AnimatedVisibility(
-                    visible = visible(value),
+                    visibleState = visibilityState,
                     enter = fadeIn(fadeTween) + expandHorizontally(
                         animationSpec = sizeTween,
                         expandFrom = Alignment.Start,
@@ -163,6 +178,13 @@ fun <E> ChipsLazyRow(
                     }
                 }
             }
+        }
+    }
+
+    val allVisibilityTransitionsIdle = visibilityStates.all { it.isIdle }
+    LaunchedEffect(visibilityTransitionKey, allVisibilityTransitionsIdle) {
+        if (visibilityTransitionKey != null && allVisibilityTransitionsIdle) {
+            onVisibilityTransitionFinished?.invoke()
         }
     }
 }

@@ -2,8 +2,6 @@ package com.dd3boh.outertune.ui.screens.library
 
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -83,7 +81,6 @@ import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.Playlist
 import com.dd3boh.outertune.db.entities.PlaylistEntity
-import com.dd3boh.outertune.ui.component.CHIP_ITEM_TRANSITION_DURATION_MILLIS
 import com.dd3boh.outertune.ui.component.ChipsLazyRow
 import com.dd3boh.outertune.ui.component.EmptyPlaceholder
 import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
@@ -295,7 +292,6 @@ fun LibraryScreen(
     val scrollToTop = backStackEntry?.savedStateHandle?.getStateFlow("scrollToTop", false)?.collectAsState()
 
     var categoryTransitionTarget by remember { mutableStateOf<LibraryFilter?>(null) }
-    val categoryTransitionClock = remember { Animatable(0f) }
     val visibleCategory = categoryTransitionTarget ?: filter
 
     var contentFiltersVisibleFor by remember { mutableStateOf<LibraryFilter?>(null) }
@@ -362,18 +358,6 @@ fun LibraryScreen(
                                         val target = chip.category
                                         categoryTransitionTarget = target
                                         filter = target
-                                        coroutineScope.launch {
-                                            categoryTransitionClock.snapTo(0f)
-                                            categoryTransitionClock.animateTo(
-                                                targetValue = 1f,
-                                                animationSpec = tween(
-                                                    durationMillis = CHIP_ITEM_TRANSITION_DURATION_MILLIS,
-                                                ),
-                                            )
-                                            if (categoryTransitionTarget == target) {
-                                                categoryTransitionTarget = null
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -435,6 +419,10 @@ fun LibraryScreen(
                     separatorAfterIndex = chipValues.indexOf(LibraryChip(filter)).takeIf {
                         categoryTransitionTarget == null &&
                                 filter in libraryCategoriesWithContentFilter
+                    },
+                    visibilityTransitionKey = categoryTransitionTarget,
+                    onVisibilityTransitionFinished = {
+                        categoryTransitionTarget = null
                     },
                 )
 
