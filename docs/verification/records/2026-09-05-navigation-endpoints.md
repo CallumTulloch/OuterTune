@@ -1,6 +1,6 @@
 # NAV-20260905: 型付き endpoint によるオンライン遷移
 
-- 対象 commit: この記録を含む commit
+- 対象 commit: `bf7cf2815693ed9ebea3d699a286f79503ff79c8`
 - 記録日: 2026-09-05
 - 目的: 未ダウンロードの検索結果と album 画面から、表示文字列を推測・分割せず、YouTube Music が返した型付き endpoint だけで artist / album へ遷移できるようにする。
 - 変更範囲: 検索結果・DB 保存済み楽曲・album のメニュー導線、album header menu と album 内楽曲 menu の解析、artist 候補名の検証。
@@ -52,6 +52,7 @@ parser fixture は、実サービスで確認した response の階層・page ty
 | `PASS` | `.\gradlew.bat :innertube:test :app:testCoreDebugUnitTest --console=plain` | 最終ソース | 177 total: 164 pass / 13 skipped / 0 fail | 16秒 |
 | `PASS` | `git diff --check` | 最終差分 | whitespace error なし | 1秒未満 |
 | `PASS` | `.\gradlew.bat :app:assembleCoreRelease --console=plain` | 最終ソース | universal を含む core-release APK を生成。`lintVital` も成功 | 2分16秒 |
+| `PASS` | 同上 | commit `bf7cf281` | commit後にVCS metadataを更新して再package。APK内revisionが `bf7cf2815693ed9ebea3d699a286f79503ff79c8` と一致 | 4秒 |
 
 13件の `SKIPPED` は、既存の `innertube/src/test/java/com/zionhuang/innertube/YouTubeTest.kt` にある class-level `@Ignore` のライブ通信テストである。今回追加した8件に skip はない。
 
@@ -59,13 +60,14 @@ parser fixture は、実サービスで確認した response の階層・page ty
 
 | 状態 | 使用 build・環境 | 操作 | 実測 |
 | --- | --- | --- | --- |
-| `PASS` | 最終 core-release / release package のみを動かした Android emulator | 未ダウンロードの検索結果 `TSZhKssbW2g` の三点メニューを開く | 「アーティストを見る」と「アルバムを見る」の両方を表示 |
+| `PASS` | 最終ソースの release candidate / release package のみを動かした Android emulator | 未ダウンロードの検索結果 `TSZhKssbW2g` の三点メニューを開く | 「アーティストを見る」と「アルバムを見る」の両方を表示 |
 | `PASS` | 同上 | 検索結果の「アーティストを見る」を選ぶ | `UChWKQRswWTLRXp98zmgHtdQ` の `8082Audio` へ遷移 |
 | `PASS` | 同上 | 「アルバムを見る」で album を開き、header の独立した「アーティストを見る: 8082Audio」を選ぶ | `8082Audio` へ遷移。結合表示または `翟锦彦` へ候補 ID を誤関連付けしなかった |
 | `PASS` | 同上 | 通常版 `TSZhKssbW2g` と instrumental 版 `xDWhuDRnevk` を一曲ずつ再生 | 別 ID・別 title の別曲として個別に stream され、両方とも主表示 artist は `翟锦彦` |
 | `PASS` | 同上 | player、MediaSession、通知、queue を確認 | 通常版の artist はすべて `翟锦彦`。queue は通常版・instrumental版の2項目を別々に保持し、両方とも補完後の artist を表示 |
 | `PASS` | 同上 | アプリを強制終了して再起動 | 通常版の title と `翟锦彦` が保持され、再生再開後の MediaSession・通知にも反映 |
 | `PASS` | 同上 | 上記 menu 遷移・画面遷移・個別再生中のログを確認 | fatal exception なし |
+| `PASS` | commit `bf7cf281` を内部revisionに持つ最終APK / 同emulator | clean install、初回起動、`TSZhKssbW2g` の基本再生 | install成功、versionCode 71 / versionName 0.10.2-b1、stream開始、artist `翟锦彦`、fatal exceptionなし |
 
 当初「同じ曲が2つ」と見えた2項目は重複登録・二重再生ではなかった。`TSZhKssbW2g` の title は末尾が `(特别版)`、`xDWhuDRnevk` は `(特别版伴奏)` であり、通常版と instrumental 版で ID も完全な title も異なる。現在の一覧では共通する長い title の末尾が省略され、相違部分を画面上で確認しにくいことが誤認の原因だった。
 
@@ -81,7 +83,7 @@ parser fixture は、実サービスで確認した response の階層・page ty
 
 | 成果物 | サイズ | SHA-256 | 追加確認 |
 | --- | ---: | --- | --- |
-| `app/build/outputs/apk/core/release/OuterTune-0.10.2-b1-core-universal-release-71.apk` | 11,414,767 bytes | `8844087AEDE89FB4700471A737E1246BD049B62A1B029132CB75855E47893118` | v2署名、signer 1名、clean install と release-only emulator smoke が成功 |
+| `app/build/outputs/apk/core/release/OuterTune-0.10.2-b1-core-universal-release-71.apk` | 11,414,767 bytes | `3DDF885CE7C592EE760701E1D05F9AFBFD2D81B9E85669EFFA026A013BED3AC6` | v2署名、signer 1名、内部revision `bf7cf281`、clean install と release-only emulator smoke が成功 |
 
 signer certificate SHA-256: `45a8c1d0b4e914882ff085b18098cd917679bafedda7debd8a3c48b01727026d`
 
