@@ -74,6 +74,7 @@
     <string name="add_to_playlist">再生リストに追加</string>
     <string name="view_artist">アーティストを表示</string>
     <string name="view_album">アルバムを表示</string>
+    <string name="view_folder">フォルダを表示</string>
     <string name="refetch">再取得</string>
     <string name="share">共有</string>
     <string name="delete">削除</string>

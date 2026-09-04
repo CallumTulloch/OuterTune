@@ -49,8 +49,8 @@ import com.dd3boh.outertune.db.entities.Playlist
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.extensions.toEnum
 import com.dd3boh.outertune.models.DirectoryTree
-import com.dd3boh.outertune.ui.utils.STORAGE_ROOT
 import com.dd3boh.outertune.ui.utils.cacheDirectoryTree
+import com.dd3boh.outertune.ui.utils.decodeFolderPathArgument
 import com.dd3boh.outertune.ui.utils.getDirectoryTree
 import com.dd3boh.outertune.utils.SyncUtils
 import com.dd3boh.outertune.utils.dataStore
@@ -150,7 +150,7 @@ class LibraryFoldersViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     val TAG = LibraryFoldersViewModel::class.simpleName.toString()
-    val path = savedStateHandle.get<String>("path")?.replace(';', '/') ?: STORAGE_ROOT
+    val path = decodeFolderPathArgument(savedStateHandle.get("path"))
 
     val localSongDirectoryTree: MutableStateFlow<DirectoryTree> = MutableStateFlow(getDirectoryTree(path))
     val localSongDtSongCount = MutableStateFlow(0)

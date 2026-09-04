@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.LibraryAddCheck
@@ -71,6 +72,7 @@ import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
 import com.dd3boh.outertune.ui.dialog.ArtistDialog
 import com.dd3boh.outertune.ui.dialog.DetailsDialog
 import com.dd3boh.outertune.ui.dialog.TextFieldDialog
+import com.dd3boh.outertune.ui.screens.library.localSongFolderRoute
 import com.dd3boh.outertune.utils.joinByBullet
 import com.dd3boh.outertune.utils.makeTimeString
 import com.dd3boh.outertune.utils.rememberEnumPreference
@@ -106,6 +108,7 @@ fun SongMenu(
     // YouTubeSongMenu.
     val librarySong by database.song(originalSong.id).collectAsState(initial = originalSong)
     val song = librarySong ?: originalSong
+    val containingFolderRoute = localSongFolderRoute(song.song.isLocal, song.song.localPath)
     val download by LocalDownloadUtil.current.getDownload(originalSong.id).collectAsState(initial = null)
     val coroutineScope =
         CoroutineScope(syncCoroutine) // rememberCoroutineScope has exception "rememberCoroutineScope left the composition"
@@ -230,7 +233,15 @@ fun SongMenu(
                 showSelectArtistDialog = true
             }
         }
-        if (song.song.albumId != null && !song.song.isLocal) {
+        if (containingFolderRoute != null) {
+            GridMenuItem(
+                icon = Icons.Rounded.Folder,
+                title = R.string.view_folder
+            ) {
+                onDismiss()
+                navController.navigate(containingFolderRoute)
+            }
+        } else if (song.song.albumId != null && !song.song.isLocal) {
             GridMenuItem(
                 icon = Icons.Rounded.Album,
                 title = R.string.view_album
