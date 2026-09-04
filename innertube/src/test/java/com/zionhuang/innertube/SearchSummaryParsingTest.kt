@@ -2,8 +2,12 @@ package com.zionhuang.innertube
 
 import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.Artist
+import com.zionhuang.innertube.models.MusicCardShelfRenderer
+import com.zionhuang.innertube.models.Run
+import com.zionhuang.innertube.models.Runs
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.pages.LibraryPage
+import com.zionhuang.innertube.pages.SearchSummaryPage
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -11,6 +15,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SearchSummaryParsingTest {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
+
     @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun `item section search results are included in all results`() {
@@ -158,5 +167,52 @@ class SearchSummaryParsingTest {
         assertEquals(listOf("Nirvana"), repaired.artists.map(Artist::name))
         assertEquals(256, repaired.duration)
         assertEquals("search-thumbnail", repaired.thumbnail)
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    @Test
+    fun `target search card exposes typed metadata endpoint hints without localized labels`() {
+        val renderer = json.decodeFromString<MusicCardShelfRenderer>(
+            requireNotNull(javaClass.getResource("/search-summary-card-menu-metadata.json")).readText()
+        )
+
+        val song = SearchSummaryPage.fromMusicCardShelfRenderer(renderer) as SongItem
+
+        assertEquals("TSZhKssbW2g", song.id)
+        assertEquals(listOf("翟锦彦、8082Audio"), song.artists.map(Artist::name))
+        assertEquals(null, song.album)
+        assertEquals("MPREb_NUdafp1DlA5", song.metadataEndpointHints.album?.browseId)
+        assertEquals(
+            listOf("UChWKQRswWTLRXp98zmgHtdQ"),
+            song.metadataEndpointHints.artistCandidates.map { it.browseId }
+        )
+        assertEquals("MPTCTSZhKssbW2g", song.metadataEndpointHints.credits?.browseId)
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    @Test
+    fun `unlinked combined artist run is not split in Japanese or English`() {
+        val baseRenderer = json.decodeFromString<MusicCardShelfRenderer>(
+            requireNotNull(javaClass.getResource("/search-summary-card-menu-metadata.json")).readText()
+        )
+
+        listOf("Primary、Publisher", "Primary & Publisher").forEach { displayName ->
+            val renderer = baseRenderer.copy(
+                subtitle = Runs(
+                    runs = listOf(
+                        Run(text = "Song", navigationEndpoint = null),
+                        Run(text = " • ", navigationEndpoint = null),
+                        Run(text = displayName, navigationEndpoint = null),
+                        Run(text = " • ", navigationEndpoint = null),
+                        Run(text = "1M views", navigationEndpoint = null),
+                    )
+                )
+            )
+
+            val song = SearchSummaryPage.fromMusicCardShelfRenderer(renderer) as SongItem
+
+            assertEquals(listOf(displayName), song.artists.map(Artist::name))
+            assertEquals(listOf(null), song.artists.map(Artist::id))
+        }
     }
 }

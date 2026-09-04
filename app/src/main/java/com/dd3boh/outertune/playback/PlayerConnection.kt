@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -99,7 +100,22 @@ class PlayerConnection(
         repeatMode.value = player.repeatMode
 
         scope.launch {
-            mediaMetadata.value = player.currentMetadata ?: database.getResumptionQueue()?.getCurrentSong()
+            val resumedMetadata = database.getResumptionQueue()?.getCurrentSong()
+            val currentMetadata = player.currentMetadata
+            if (currentMetadata != null) {
+                mediaMetadata.value = service.currentMediaMetadata.value
+                    ?.takeIf { it.id == currentMetadata.id }
+                    ?: currentMetadata
+            } else if (player.currentMediaItem == null) {
+                mediaMetadata.value = resumedMetadata
+            }
+        }
+        scope.launch {
+            service.currentMediaMetadata.collect { resolvedMetadata ->
+                if (resolvedMetadata != null || player.currentMediaItem == null) {
+                    mediaMetadata.value = resolvedMetadata
+                }
+            }
         }
     }
 
@@ -161,7 +177,10 @@ class PlayerConnection(
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-        mediaMetadata.value = mediaItem?.metadata
+        val rawMetadata = mediaItem?.metadata
+        mediaMetadata.value = service.currentMediaMetadata.value
+            ?.takeIf { it.id == rawMetadata?.id }
+            ?: rawMetadata
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
         updateCanSkipPreviousAndNext()

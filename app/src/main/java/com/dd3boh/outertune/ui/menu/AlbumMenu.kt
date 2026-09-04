@@ -47,6 +47,7 @@ import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.AlbumListItem
@@ -87,6 +88,13 @@ fun AlbumMenu(
 //    }
 
     val coroutineScope = rememberCoroutineScope()
+    val navigableArtists = remember(album.artists) {
+        album.artists.mapNotNull { artist ->
+            artist.artistNavigationId()?.let { artistId ->
+                artist to artistId
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         database.albumSongs(album.id).collect {
@@ -221,15 +229,17 @@ fun AlbumMenu(
                 }
             )
         }
-        GridMenuItem(
-            icon = R.drawable.artist,
-            title = R.string.view_artist
-        ) {
-            if (album.artists.size == 1) {
-                navController.navigate("artist/${album.artists[0].id}")
-                onDismiss()
-            } else {
-                showSelectArtistDialog = true
+        if (navigableArtists.isNotEmpty()) {
+            GridMenuItem(
+                icon = R.drawable.artist,
+                title = R.string.view_artist
+            ) {
+                if (navigableArtists.size == 1) {
+                    navController.navigate("artist/${navigableArtists[0].second}")
+                    onDismiss()
+                } else {
+                    showSelectArtistDialog = true
+                }
             }
         }
         GridMenuItem(

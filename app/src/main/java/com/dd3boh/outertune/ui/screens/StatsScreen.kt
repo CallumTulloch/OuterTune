@@ -35,6 +35,7 @@ import com.dd3boh.outertune.constants.ListThumbnailSize
 import com.dd3boh.outertune.constants.StatPeriod
 import com.dd3boh.outertune.constants.SwipeToQueueKey
 import com.dd3boh.outertune.constants.TopBarInsets
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.ChipsRow
@@ -148,13 +149,14 @@ fun StatsScreen(
                     items = mostPlayedArtists,
                     key = { it.id }
                 ) { artist ->
+                    val artistId = artist.artistNavigationId()
                     ArtistGridItem(
                         artist = artist,
                         modifier = Modifier
                             .fillMaxWidth()
                             .combinedClickable(
                                 onClick = {
-                                    navController.navigate("artist/${artist.id}")
+                                    artistId?.let { navController.navigate("artist/$it") }
                                 },
                                 onLongClick = {
                                     menuState.show {

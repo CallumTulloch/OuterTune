@@ -36,6 +36,8 @@ import com.dd3boh.outertune.LocalDownloadUtil
 import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.extensions.toMediaItem
+import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.YouTubeAlbumRadio
@@ -62,6 +64,13 @@ fun YouTubeAlbumMenu(
     val queueBoard by playerConnection.queueBoard.collectAsState()
     val album by database.albumWithSongs(albumItem.id).collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
+    val artists = remember(albumItem.artists) {
+        albumItem.artists.orEmpty().mapNotNull { artist ->
+            artist.id.artistNavigationId(isLocal = false)?.let { artistId ->
+                MediaMetadata.Artist(id = artistId, name = artist.name)
+            }
+        }
+    }
 
     var showChooseQueueDialog by rememberSaveable {
         mutableStateOf(false)
@@ -174,14 +183,16 @@ fun YouTubeAlbumMenu(
                 }
             }
         )
-        albumItem.artists?.let { artists ->
+        if (artists.isNotEmpty()) {
             GridMenuItem(
                 icon = R.drawable.artist,
                 title = R.string.view_artist
             ) {
                 if (artists.size == 1) {
-                    navController.navigate("artist/${artists[0].id}")
-                    onDismiss()
+                    artists[0].id.artistNavigationId(isLocal = false)?.let { artistId ->
+                        navController.navigate("artist/$artistId")
+                        onDismiss()
+                    }
                 } else {
                     showSelectArtistDialog = true
                 }
@@ -245,7 +256,7 @@ fun YouTubeAlbumMenu(
     if (showSelectArtistDialog) {
         ArtistDialog(
             navController = navController,
-            artists = album?.artists.orEmpty(),
+            artists = artists,
             onDismiss = { showSelectArtistDialog = false }
         )
     }

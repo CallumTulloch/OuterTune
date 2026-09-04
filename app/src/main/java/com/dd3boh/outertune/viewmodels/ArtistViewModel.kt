@@ -7,6 +7,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.db.MusicDatabase
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.pages.ArtistPage
@@ -40,7 +41,13 @@ class ArtistViewModel @Inject constructor(
     fun fetchArtistsFromYTM() {
         viewModelScope.launch {
             isLoading.value = true
-            YouTube.artist(artistId)
+            val artistBrowseId = artistId.artistNavigationId(isLocal = false)
+            if (artistBrowseId == null) {
+                isLoading.value = false
+                return@launch
+            }
+
+            YouTube.artist(artistBrowseId)
                 .onSuccess {
                     artistPage = it
                 }.onFailure {

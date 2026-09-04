@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.constants.StatPeriod
 import com.dd3boh.outertune.db.MusicDatabase
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,9 +53,11 @@ class StatsViewModel @Inject constructor(
                         it.thumbnailUrl == null || Duration.between(it.lastUpdateTime, LocalDateTime.now()) > Duration.ofDays(10)
                     }
                     .forEach { artist ->
-                        YouTube.artist(artist.id).onSuccess { artistPage ->
-                            database.query {
-                                update(artist, artistPage)
+                        artist.artistNavigationId()?.let { artistId ->
+                            YouTube.artist(artistId).onSuccess { artistPage ->
+                                database.query {
+                                    update(artist, artistPage)
+                                }
                             }
                         }
                     }

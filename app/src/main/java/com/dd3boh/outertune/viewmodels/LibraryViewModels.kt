@@ -49,6 +49,7 @@ import com.dd3boh.outertune.db.entities.Playlist
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.extensions.toEnum
 import com.dd3boh.outertune.models.DirectoryTree
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.ui.utils.cacheDirectoryTree
 import com.dd3boh.outertune.ui.utils.decodeFolderPathArgument
 import com.dd3boh.outertune.ui.utils.getDirectoryTree
@@ -247,9 +248,13 @@ class LibraryArtistsViewModel @Inject constructor(
                         ) > Duration.ofDays(10)
                     }
                     ?.forEach { artist ->
-                        YouTube.artist(artist.id).onSuccess { artistPage ->
-                            database.query {
-                                update(artist, artistPage)
+                        if (!artist.isLocal) {
+                            artist.artistNavigationId()?.let { artistId ->
+                                YouTube.artist(artistId).onSuccess { artistPage ->
+                                    database.query {
+                                        update(artist, artistPage)
+                                    }
+                                }
                             }
                         }
                     }

@@ -21,6 +21,7 @@ import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.reversed
 import com.dd3boh.outertune.models.cleanLocalMetadataText
+import com.dd3boh.outertune.models.isYouTubeArtistBrowseId
 import com.dd3boh.outertune.models.selectArtistByNormalizedName
 import com.dd3boh.outertune.ui.utils.resize
 import com.zionhuang.innertube.pages.ArtistPage
@@ -46,13 +47,24 @@ interface ArtistsDao {
             LEFT JOIN song ON sam.songId = song.id AND (
                 song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1
             )
-        WHERE artist.id = :id
+        WHERE artist.id = COALESCE(
+            (
+                SELECT remote_artist.id
+                FROM artist remote_artist
+                WHERE remote_artist.isLocal = 0 AND remote_artist.browseId = :id
+                LIMIT 1
+            ),
+            :id
+        )
         GROUP BY artist.id
     """)
     fun artist(id: String): Flow<Artist?>
 
     @Query("SELECT * FROM artist WHERE id = :id")
     fun artistById(id: String): ArtistEntity?
+
+    @Query("SELECT * FROM artist WHERE isLocal = 0 AND browseId = :browseId LIMIT 1")
+    fun artistByBrowseId(browseId: String): ArtistEntity?
 
     @Query("SELECT * FROM artist WHERE name = :name")
     fun artistByName(name: String): ArtistEntity?
@@ -81,36 +93,78 @@ interface ArtistsDao {
         channelId: String? = null,
     ): ArtistEntity {
         val resolvedName = if (isLocal) cleanLocalMetadataText(name) else name
-        val explicitId = id?.takeIf(String::isNotBlank)
+        val explicitBrowseId = id
+            ?.trim()
+            ?.takeIf { it.isYouTubeArtistBrowseId() }
 
-        if (!isLocal && explicitId != null) {
-            artistById(explicitId)?.let { return it }
+        if (!isLocal && explicitBrowseId != null) {
+            artistByBrowseId(explicitBrowseId)?.let { return it }
+
+            // Some insertion paths use the browse id as their stable primary key. Reuse such a
+            // row without allowing a conflicting local/internal row to consume the browse id.
+            val existingByPrimaryKey = artistById(explicitBrowseId)
+            if (
+                existingByPrimaryKey != null &&
+                !existingByPrimaryKey.isLocal &&
+                (existingByPrimaryKey.browseId == null ||
+                    existingByPrimaryKey.browseId == explicitBrowseId)
+            ) {
+                val resolvedArtist = existingByPrimaryKey.copy(browseId = explicitBrowseId)
+                if (resolvedArtist != existingByPrimaryKey) update(resolvedArtist)
+                return resolvedArtist
+            }
+
             return ArtistEntity(
-                id = explicitId,
+                id = if (existingByPrimaryKey == null) {
+                    explicitBrowseId
+                } else {
+                    ArtistEntity.generateArtistId()
+                },
                 name = resolvedName,
                 thumbnailUrl = thumbnailUrl,
                 channelId = channelId,
                 isLocal = false,
+                browseId = explicitBrowseId,
             )
         }
 
-        artistByNameAndSourceExact(resolvedName, isLocal)?.let { return it }
+        if (!isLocal) {
+            // An unlinked online display name is not proof that it belongs to an existing YouTube
+            // artist page. Reuse only another unlinked row until a typed endpoint is verified.
+            selectArtistByNormalizedName(
+                name = resolvedName,
+                isLocal = false,
+                candidates = artistsBySource(isLocal = false).filter { it.browseId == null },
+            )?.let { return it }
+
+            return ArtistEntity(
+                id = ArtistEntity.generateArtistId(),
+                name = resolvedName,
+                thumbnailUrl = thumbnailUrl,
+                channelId = channelId,
+                isLocal = false,
+                browseId = null,
+            )
+        }
+
+        artistByNameAndSourceExact(resolvedName, isLocal = true)?.let { return it }
         selectArtistByNormalizedName(
             name = resolvedName,
-            isLocal = isLocal,
-            candidates = artistsBySource(isLocal),
+            isLocal = true,
+            candidates = artistsBySource(isLocal = true),
         )?.let { return it }
 
         return ArtistEntity(
-            id = if (isLocal) ArtistEntity.generateArtistId()
-                else explicitId ?: ArtistEntity.generateArtistId(),
+            id = ArtistEntity.generateArtistId(),
             name = resolvedName,
             thumbnailUrl = thumbnailUrl,
             channelId = channelId,
-            isLocal = isLocal,
+            isLocal = true,
+            browseId = null,
         )
     }
 
+    @Transaction
     fun resolveAndInsertArtist(
         id: String?,
         name: String,
@@ -118,6 +172,14 @@ interface ArtistsDao {
         thumbnailUrl: String? = null,
         channelId: String? = null,
     ): ArtistEntity = resolveArtist(id, name, isLocal, thumbnailUrl, channelId).also(::insert)
+
+    /**
+     * Persists an authoritative unlinked online credit without borrowing an unrelated browse id
+     * from an existing artist that merely has the same display name.
+     */
+    fun resolveAndInsertUnidentifiedRemoteArtist(name: String): ArtistEntity {
+        return resolveArtist(id = null, name = name, isLocal = false).also(::insert)
+    }
 
     @Query("SELECT * FROM artist WHERE isLocal = 1 AND name LIKE '%' || :name || '%'")
     fun localArtistsByNameFuzzy(name: String): List<ArtistEntity>
@@ -308,7 +370,15 @@ interface ArtistsDao {
         SELECT song.*
         FROM song_artist_map
             JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = :artistId
+        WHERE artistId = COALESCE(
+            (
+                SELECT remote_artist.id
+                FROM artist remote_artist
+                WHERE remote_artist.isLocal = 0 AND remote_artist.browseId = :artistId
+                LIMIT 1
+            ),
+            :artistId
+        )
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         ORDER BY COALESCE(inLibrary, dateDownload, dateModified, date)
     """)
@@ -319,7 +389,15 @@ interface ArtistsDao {
         SELECT song.*
         FROM song_artist_map
             JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = :artistId
+        WHERE artistId = COALESCE(
+            (
+                SELECT remote_artist.id
+                FROM artist remote_artist
+                WHERE remote_artist.isLocal = 0 AND remote_artist.browseId = :artistId
+                LIMIT 1
+            ),
+            :artistId
+        )
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         ORDER BY title COLLATE NOCASE ASC
     """)
@@ -377,6 +455,7 @@ interface ArtistsDao {
             FROM album_artist_map
             WHERE album_artist_map.artistId = :artistId
         )
+        AND bookmarkedAt IS NULL
         AND id = :artistId
     """)
     fun safeDeleteArtist(artistId: String)

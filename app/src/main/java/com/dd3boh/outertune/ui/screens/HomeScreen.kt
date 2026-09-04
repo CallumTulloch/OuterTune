@@ -76,6 +76,7 @@ import com.dd3boh.outertune.db.entities.LocalItem
 import com.dd3boh.outertune.db.entities.Playlist
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.extensions.togglePlayPause
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.playback.queues.YouTubeAlbumRadio
@@ -241,28 +242,31 @@ fun HomeScreen(
                     )
             )
 
-            is Artist -> ArtistGridItem(
-                artist = it,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = {
-                            navController.navigate("artist/${it.id}")
-                        },
-                        onLongClick = {
-                            haptic.performHapticFeedback(
-                                HapticFeedbackType.LongPress,
-                            )
-                            menuState.show {
-                                ArtistMenu(
-                                    originalArtist = it,
-                                    coroutineScope = scope,
-                                    onDismiss = menuState::dismiss,
+            is Artist -> {
+                val artistId = it.artistNavigationId()
+                ArtistGridItem(
+                    artist = it,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            onClick = {
+                                artistId?.let { id -> navController.navigate("artist/$id") }
+                            },
+                            onLongClick = {
+                                haptic.performHapticFeedback(
+                                    HapticFeedbackType.LongPress,
                                 )
-                            }
-                        },
-                    ),
-            )
+                                menuState.show {
+                                    ArtistMenu(
+                                        originalArtist = it,
+                                        coroutineScope = scope,
+                                        onDismiss = menuState::dismiss,
+                                    )
+                                }
+                            },
+                        ),
+                )
+            }
 
             is Playlist -> {}
         }
@@ -609,13 +613,17 @@ fun HomeScreen(
                                 )
                             }
                         },
-                        onClick = {
-                            when (it.title) {
-                                is Song -> navController.navigate("album/${it.title.album!!.id}")
-                                is Album -> navController.navigate("album/${it.title.id}")
-                                is Artist -> navController.navigate("artist/${it.title.id}")
-                                is Playlist -> {}
+                        onClick = when (val title = it.title) {
+                            is Song -> {
+                                { navController.navigate("album/${title.album!!.id}") }
                             }
+                            is Album -> {
+                                { navController.navigate("album/${title.id}") }
+                            }
+                            is Artist -> title.artistNavigationId()?.let { artistId ->
+                                { navController.navigate("artist/$artistId") }
+                            }
+                            is Playlist -> null
                         },
                         modifier = Modifier.animateItem()
                     )

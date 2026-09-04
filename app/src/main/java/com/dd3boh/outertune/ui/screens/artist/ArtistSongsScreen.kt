@@ -53,6 +53,7 @@ import com.dd3boh.outertune.constants.CONTENT_TYPE_HEADER
 import com.dd3boh.outertune.constants.ListThumbnailSize
 import com.dd3boh.outertune.constants.SwipeToQueueKey
 import com.dd3boh.outertune.constants.TopBarInsets
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.FloatingFooter
@@ -89,6 +90,9 @@ fun ArtistSongsScreen(
     val swipeEnabled by rememberPreference(SwipeToQueueKey, true)
 
     val artist by viewModel.artist.collectAsState()
+    val artistBrowseId = artist?.artist
+        ?.takeUnless { it.isLocal }
+        ?.artistNavigationId()
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val songs by viewModel.songs.collectAsState()
@@ -203,8 +207,10 @@ fun ArtistSongsScreen(
                     thumbnailSize = thumbnailSize,
                     onPlay = {
                         viewModel.viewModelScope.launch(Dispatchers.IO) {
-                            val playlistId = YouTube.artist(artist?.id!!).getOrNull()
-                                ?.artist?.shuffleEndpoint?.playlistId
+                            val playlistId = artistBrowseId?.let {
+                                YouTube.artist(it).getOrNull()
+                                    ?.artist?.shuffleEndpoint?.playlistId
+                            }
 
                             withContext(Dispatchers.Main) {
                                 playerConnection.playQueue(

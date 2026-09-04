@@ -1,0 +1,83 @@
+{
+  "onResponseReceivedActions": [
+    {
+      "openPopupAction": {
+        "popup": {
+          "dismissableDialogRenderer": {
+            "title": "楽曲のクレジット",
+            "sections": [
+              {
+                "dismissableDialogContentSectionRenderer": {
+                  "title": { "runs": [{ "text": "演奏" }] },
+                  "subtitle": {
+                    "runs": [
+                      { "text": "翟锦彦" },
+                      { "text": "\n" },
+                      { "text": "8082Audio" }
+                    ]
+                  }
+                }
+              },
+              {
+                "dismissableDialogContentSectionRenderer": {
+                  "title": { "runs": [{ "text": "作詞・作曲" }] },
+                  "subtitle": {
+                    "runs": [
+                      { "text": "翟锦彦" },
+                      { "text": "\n" },
+                      { "text": "往生咒" }
+                    ]
+                  }
+                }
+              },
+              {
+                "dismissableDialogContentSectionRenderer": {
+                  "title": { "runs": [{ "text": "プロデューサー" }] },
+                  "subtitle": { "runs": [{ "text": "李佳骐" }] }
+                }
+              },
+              {
+                "dismissableDialogContentSectionRenderer": {
+                  "title": { "runs": [{ "text": "音楽のメタデータの提供者" }] },
+                  "subtitle": { "runs": [{ "text": "8082Audio" }] }
+                }
+              }
+            ],
+            "metadata": {
+              "musicMultiRowListItemRenderer": {
+                "subtitle": { "runs": [{ "text": "翟锦彦" }] },
+                "title": {
+                  "runs": [
+                    {
+                      "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+                      "navigationEndpoint": {
+                        "watchEndpoint": {
+                          "videoId": "TSZhKssbW2g",
+                          "watchEndpointMusicSupportedConfigs": {
+                            "watchEndpointMusicConfig": {
+                              "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "secondTitle": {
+                  "runs": [
+                    { "text": "曲" },
+                    { "text": " • " },
+                    { "text": "2024年" }
+                  ]
+                },
+                "description": { "runs": [{ "text": "歌詞を表示できません" }] },
+                "displayStyle": "MUSIC_MULTI_ROW_LIST_ITEM_DISPLAY_STYLE_SIMPLE_EXPANDED"
+              }
+            },
+            "displayStyle": "DISMISSABLE_DIALOG_DISPLAY_STYLE_TRACK_CREDITS"
+          }
+        }
+      }
+    }
+  ]
+}

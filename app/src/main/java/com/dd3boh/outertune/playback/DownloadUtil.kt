@@ -30,6 +30,7 @@ import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.di.AppModule.PlayerCache
 import com.dd3boh.outertune.di.DownloadCache
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.DownloadUtil.Companion.STATE_DOWNLOADING
 import com.dd3boh.outertune.playback.DownloadUtil.Companion.STATE_INVALID
@@ -79,15 +80,26 @@ internal fun mergeResolvedMetadata(
     resolved: MediaMetadata,
 ): MediaMetadata = original.copy(
     artists = original.artists.map { artist ->
-        if (artist.id != null) {
+        if (artist.id.artistNavigationId(artist.isLocal) != null) {
             artist
         } else {
-            resolved.artists.firstOrNull { it.name == artist.name } ?: artist
+            resolved.artists.firstOrNull {
+                it.name == artist.name && it.id.artistNavigationId(it.isLocal) != null
+            } ?: artist
         }
     },
     duration = original.duration.takeIf { it > 0 } ?: resolved.duration,
     thumbnailUrl = original.thumbnailUrl ?: resolved.thumbnailUrl,
-    album = original.album ?: resolved.album,
+    album = if (original.needsAlbumMetadataResolution()) {
+        resolved.album?.takeIf { album ->
+            original.metadataEndpointHints.albumBrowseId
+                ?.takeIf(String::isNotBlank)
+                ?.let { it == album.id }
+                ?: true
+        } ?: original.album
+    } else {
+        original.album
+    },
 )
 
 internal fun downloadIdsToClear(
@@ -257,7 +269,8 @@ class DownloadUtil @Inject constructor(
 
     private suspend fun prepareAndDownload(songs: List<MediaMetadata>) {
         val songsById = songs.associateBy(MediaMetadata::id)
-        val missingAlbumIds = songs.filter { !it.isLocal && it.album == null }.map(MediaMetadata::id)
+        val missingAlbumIds = songs.filter(MediaMetadata::needsAlbumMetadataResolution)
+            .map(MediaMetadata::id)
         val queueSongs = missingAlbumIds.chunked(YouTube.MAX_GET_QUEUE_SIZE).flatMap { videoIds ->
             YouTube.queue(videoIds = videoIds).onFailure {
                 reportException(it)
@@ -266,11 +279,28 @@ class DownloadUtil @Inject constructor(
         }.associateBy(SongItem::id)
 
         songsById.values.forEach { original ->
-            val metadata = queueSongs[original.id]?.let { resolved ->
-                mergeResolvedMetadata(original, resolved.toMediaMetadata())
+            val queueMetadata = queueSongs[original.id]?.toMediaMetadata()
+            val verifiedAlbum = queueMetadata?.album?.takeIf { album ->
+                original.needsAlbumMetadataResolution() &&
+                    original.isCompatibleWithResolvedAlbum(album)
+            }
+            val metadata = queueMetadata?.let { resolved ->
+                mergeResolvedMetadata(original, resolved)
             } ?: original
             database.awaitTransaction {
                 insert(metadata)
+                // Queue metadata is an authoritative album result. Use the dedicated replacement
+                // path so a previously stored album cannot make this verified update seed-only.
+                verifiedAlbum?.let { album ->
+                    replaceResolvedSongAlbumMetadata(
+                        songId = original.id,
+                        albumBrowseId = original.metadataEndpointHints.albumBrowseId,
+                        album = album,
+                        thumbnailUrl = metadata.thumbnailUrl,
+                        duration = metadata.duration,
+                        year = metadata.year,
+                    )
+                }
             }
             CoroutineScope(dlCoroutine).launch {
                 downloadSong(metadata.id, metadata.title)

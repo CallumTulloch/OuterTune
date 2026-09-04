@@ -8,10 +8,12 @@ import com.zionhuang.innertube.models.MusicCardShelfRenderer
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.SongMetadataEndpointHints
 import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.models.clean
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
+import com.zionhuang.innertube.models.songMetadataEndpointHints
 import com.zionhuang.innertube.utils.parseTime
 
 data class SearchSummary(
@@ -46,7 +48,9 @@ data class SearchSummaryPage(
                         thumbnail = renderer.thumbnail.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,
                         explicit = renderer.subtitleBadges?.find {
                             it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
-                        } != null
+                        } != null,
+                        metadataEndpointHints = renderer.menu?.songMetadataEndpointHints()
+                            ?: SongMetadataEndpointHints(),
                     )
                 }
 
@@ -139,7 +143,9 @@ data class SearchSummaryPage(
                         thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,
                         explicit = renderer.badges?.find {
                             it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
-                        } != null
+                        } != null,
+                        metadataEndpointHints = renderer.menu?.songMetadataEndpointHints()
+                            ?: SongMetadataEndpointHints(),
                     )
                 }
 

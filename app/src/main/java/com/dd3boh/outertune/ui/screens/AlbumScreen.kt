@@ -90,6 +90,7 @@ import com.dd3boh.outertune.constants.SwipeToQueueKey
 import com.dd3boh.outertune.constants.ThumbnailCornerRadius
 import com.dd3boh.outertune.constants.TopBarInsets
 import com.dd3boh.outertune.db.entities.Album
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.ListQueue
@@ -235,11 +236,16 @@ fun AlbumScreen(
                                     ).toSpanStyle()
                                 ) {
                                     albumWithSongsLocal.artists.fastForEachIndexed { index, artist ->
-                                        withLink(
-                                            LinkAnnotation.Clickable(artist.id) {
-                                                navController.navigate("artist/${artist.id}")
-                                            }
-                                        ) { append(artist.name) }
+                                        val artistId = artist.artistNavigationId()
+                                        if (artistId != null) {
+                                            withLink(
+                                                LinkAnnotation.Clickable(artistId) {
+                                                    navController.navigate("artist/$artistId")
+                                                }
+                                            ) { append(artist.name) }
+                                        } else {
+                                            append(artist.name)
+                                        }
                                         if (index != albumWithSongsLocal.artists.lastIndex) {
                                             append(", ")
                                         }

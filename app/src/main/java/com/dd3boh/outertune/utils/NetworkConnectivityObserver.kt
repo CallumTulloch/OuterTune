@@ -22,14 +22,23 @@ class NetworkConnectivityObserver(context: Context) {
 
     private val _networkStatus = Channel<Boolean>(Channel.CONFLATED)
     val networkStatus = _networkStatus.receiveAsFlow()
+    private val availableNetworks = mutableSetOf<Network>()
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            _networkStatus.trySend(true)
+            synchronized(availableNetworks) {
+                availableNetworks.add(network)
+                _networkStatus.trySend(true)
+            }
         }
 
         override fun onLost(network: Network) {
-            _networkStatus.trySend(false)
+            synchronized(availableNetworks) {
+                availableNetworks.remove(network)
+                if (availableNetworks.isEmpty()) {
+                    _networkStatus.trySend(false)
+                }
+            }
         }
     }
 

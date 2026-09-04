@@ -252,6 +252,7 @@ fun BoxScope.QueueContent(
     val menuState = LocalMenuState.current
     val playerConnection = LocalPlayerConnection.current ?: return
     val qb by playerConnection.queueBoard.collectAsState()
+    val queueMetadataRevision by qb.metadataRevision.collectAsState()
 
     // preferences
     var lockQueue by rememberPreference(LockQueueKey, defaultValue = false)
@@ -318,12 +319,13 @@ fun BoxScope.QueueContent(
      */
     val mutableSongs = remember { mutableStateListOf<MediaMetadata>() }
     val lazySongsListState = rememberLazyListState()
+    var renderedDetachedQueueId by remember { mutableStateOf<Long?>(detachedQueue?.id) }
 
     // multiselect
     var inSelectMode by remember {
         mutableStateOf(false)
     }
-    val selectedItems = remember { mutableStateListOf<Int>() }
+    val selectedItems = remember { mutableStateListOf<Double>() }
     val onExitSelectionMode = {
         inSelectMode = false
         selectedItems.clear()
@@ -432,16 +434,23 @@ fun BoxScope.QueueContent(
         onExitSelectionMode()
     }
 
-    LaunchedEffect(queueWindows, detachedQueue) { // add to songs list & scroll
+    LaunchedEffect(queueWindows, detachedQueue, queueMetadataRevision, isSearching) { // add to songs list & scroll
         if (isSearching) return@LaunchedEffect
         if (detachedQueue != null) {
+            val updatedSongs = detachedQueue!!.getCurrentQueueShuffled()
+                .mapIndexed { index, song ->
+                    song.copy(composeUidWorkaround = index.toDouble())
+                }
+            val structureChanged = mutableSongs.map { it.id } != updatedSongs.map { it.id }
+            val detachedQueueChanged = renderedDetachedQueueId != detachedQueue!!.id
             mutableSongs.apply {
                 clear()
-                addAll(detachedQueue!!.getCurrentQueueShuffled())
+                addAll(updatedSongs)
             }
-            detachedQueue?.let {
+            if (structureChanged || detachedQueueChanged) detachedQueue?.let {
                 lazySongsListState.scrollToItem(it.getQueuePosShuffled())
             }
+            renderedDetachedQueueId = detachedQueue!!.id
             return@LaunchedEffect
         }
         // fallback queue, for before user plays any song
@@ -449,16 +458,22 @@ fun BoxScope.QueueContent(
             return@LaunchedEffect
         }
 
+        val updatedSongs = queueWindows.mapIndexedNotNull { index, w ->
+            w.mediaItem.metadata?.copy(composeUidWorkaround = index.toDouble())
+        }
+        val structureChanged = mutableSongs.map { it.id } != updatedSongs.map { it.id }
+        val detachedModeChanged = renderedDetachedQueueId != null
         mutableSongs.apply {
             clear()
-            addAll(queueWindows.mapIndexedNotNull { index, w -> w.mediaItem.metadata?.copy(composeUidWorkaround = index.toDouble()) })
+            addAll(updatedSongs)
         }
 
-        if (currentWindowIndex != -1 && !isSearching) {
+        if ((structureChanged || detachedModeChanged) && currentWindowIndex != -1 && !isSearching) {
             lazySongsListState.scrollToItem(currentWindowIndex)
         }
 
-        selectedItems.clear()
+        if (structureChanged || detachedModeChanged) selectedItems.clear()
+        renderedDetachedQueueId = null
     }
 
 
@@ -696,12 +711,12 @@ fun BoxScope.QueueContent(
             val thumbnailSize = (ListThumbnailSize.value * density.density).roundToInt()
             itemsIndexed(
                 items = if (isSearching) filteredSongs else mutableSongs,
-                key = { _, item -> item.hashCode() },
+                key = { _, item -> item.composeUidWorkaround },
                 contentType = { _, _ -> CONTENT_TYPE_SONG }
             ) { index, window ->
                 ReorderableItem(
                     state = reorderableState,
-                    key = window.hashCode()
+                    key = window.composeUidWorkaround
                 ) {
                     val dismissState = rememberSwipeToDismissBoxState(
                         positionalThreshold = { totalDistance ->
@@ -737,9 +752,9 @@ fun BoxScope.QueueContent(
                     val onCheckedChange: (Boolean) -> Unit = {
                         haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                         if (it) {
-                            selectedItems.add(window.hashCode())
+                            selectedItems.add(window.composeUidWorkaround)
                         } else {
-                            selectedItems.remove(window.hashCode())
+                            selectedItems.remove(window.composeUidWorkaround)
                         }
                     }
 
@@ -751,7 +766,7 @@ fun BoxScope.QueueContent(
                             trailingContent = {
                                 if (inSelectMode) {
                                     Checkbox(
-                                        checked = window.hashCode() in selectedItems,
+                                        checked = window.composeUidWorkaround in selectedItems,
                                         onCheckedChange = onCheckedChange
                                     )
                                 } else {
@@ -786,14 +801,17 @@ fun BoxScope.QueueContent(
                                     }
                                 }
                             },
-                            isSelected = inSelectMode && window.hashCode() in selectedItems,
+                            isSelected = inSelectMode &&
+                                window.composeUidWorkaround in selectedItems,
                             preferredSize = thumbnailSize,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .combinedClickable(
                                     onClick = {
                                         if (inSelectMode) {
-                                            onCheckedChange(window.hashCode() !in selectedItems)
+                                            onCheckedChange(
+                                                window.composeUidWorkaround !in selectedItems,
+                                            )
                                         } else {
                                             coroutineScope.launch(Dispatchers.Main) {
                                                 if (index == currentWindowIndex && !detachedHead) {
@@ -816,7 +834,7 @@ fun BoxScope.QueueContent(
                                     onLongClick = {
                                         if (!inSelectMode) {
                                             inSelectMode = true
-                                            selectedItems.add(window.hashCode())
+                                            selectedItems.add(window.composeUidWorkaround)
                                         }
                                     }
                                 )
@@ -911,13 +929,15 @@ fun BoxScope.QueueContent(
                 if (inSelectMode && !isSearching) {
                     SelectHeader(
                         navController = navController,
-                        selectedItems = selectedItems.mapNotNull { uidHash ->
-                            (detachedQueue?.getCurrentQueueShuffled() ?: mutableSongs).find { it.hashCode() == uidHash }
+                        selectedItems = selectedItems.mapNotNull { queueItemKey ->
+                            mutableSongs.find {
+                                it.composeUidWorkaround == queueItemKey
+                            }
                         },
                         totalItemCount = (detachedQueue?.getCurrentQueueShuffled() ?: mutableSongs).size,
                         onSelectAll = {
                             selectedItems.clear()
-                            selectedItems.addAll(mutableSongs.map { it.hashCode() })
+                            selectedItems.addAll(mutableSongs.map { it.composeUidWorkaround })
                         },
                         onDeselectAll = { selectedItems.clear() },
                         menuState = menuState,
@@ -1161,13 +1181,17 @@ fun BoxScope.QueueContent(
                             Row {
                                 SelectHeader(
                                     navController = navController,
-                                    selectedItems = selectedItems.mapNotNull { uidHash ->
-                                        mutableSongs.find { it.hashCode() == uidHash }
+                                    selectedItems = selectedItems.mapNotNull { queueItemKey ->
+                                        mutableSongs.find {
+                                            it.composeUidWorkaround == queueItemKey
+                                        }
                                     },
                                     totalItemCount = mutableSongs.size,
                                     onSelectAll = {
                                         selectedItems.clear()
-                                        selectedItems.addAll(mutableSongs.map { it.hashCode() })
+                                        selectedItems.addAll(
+                                            mutableSongs.map { it.composeUidWorkaround },
+                                        )
                                     },
                                     onDeselectAll = { selectedItems.clear() },
                                     menuState = menuState,
@@ -1212,13 +1236,17 @@ fun BoxScope.QueueContent(
                         Row {
                             SelectHeader(
                                 navController = navController,
-                                selectedItems = selectedItems.mapNotNull { uidHash ->
-                                    filteredSongs.find { it.hashCode() == uidHash }
+                                selectedItems = selectedItems.mapNotNull { queueItemKey ->
+                                    filteredSongs.find {
+                                        it.composeUidWorkaround == queueItemKey
+                                    }
                                 },
                                 totalItemCount = filteredSongs.size,
                                 onSelectAll = {
                                     selectedItems.clear()
-                                    selectedItems.addAll(filteredSongs.map { it.hashCode() })
+                                    selectedItems.addAll(
+                                        filteredSongs.map { it.composeUidWorkaround },
+                                    )
                                 },
                                 onDeselectAll = { selectedItems.clear() },
                                 menuState = menuState,

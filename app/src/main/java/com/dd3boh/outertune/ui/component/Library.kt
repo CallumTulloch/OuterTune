@@ -25,6 +25,7 @@ import androidx.navigation.NavController
 import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.Playlist
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.ui.component.items.AlbumGridItem
 import com.dd3boh.outertune.ui.component.items.AlbumListItem
 import com.dd3boh.outertune.ui.component.items.ArtistGridItem
@@ -71,8 +72,10 @@ fun LibraryArtistListItem(
     },
     modifier = modifier
         .fillMaxWidth()
-        .clickable {
-            navController.navigate("artist/${artist.id}")
+        .clickable(enabled = artist.artistNavigationId() != null) {
+            artist.artistNavigationId()?.let { artistId ->
+                navController.navigate("artist/$artistId")
+            }
         }
 )
 
@@ -91,7 +94,9 @@ fun LibraryArtistGridItem(
         .fillMaxWidth()
         .combinedClickable(
             onClick = {
-                navController.navigate("artist/${artist.id}")
+                artist.artistNavigationId()?.let { artistId ->
+                    navController.navigate("artist/$artistId")
+                }
             },
             onLongClick = {
                 menuState.show {

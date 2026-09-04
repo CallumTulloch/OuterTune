@@ -10,6 +10,7 @@ import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.db.entities.LocalItem
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.models.SimilarRecommendation
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.utils.SyncUtils
 import com.dd3boh.outertune.utils.reportException
 import com.dd3boh.outertune.utils.syncCoroutine
@@ -94,8 +95,9 @@ class HomeViewModel @Inject constructor(
                 .filter { it.artist.isYouTubeArtist }
                 .shuffled().take(3)
                 .mapNotNull {
+                    val artistId = it.artistNavigationId() ?: return@mapNotNull null
                     val items = mutableListOf<YTItem>()
-                    YouTube.artist(it.id).onSuccess { page ->
+                    YouTube.artist(artistId).onSuccess { page ->
                         items += page.sections.getOrNull(page.sections.size - 2)?.items.orEmpty()
                         items += page.sections.lastOrNull()?.items.orEmpty()
                     }

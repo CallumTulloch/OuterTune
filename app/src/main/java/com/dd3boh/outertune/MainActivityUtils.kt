@@ -18,6 +18,7 @@ import com.dd3boh.outertune.constants.OOBE_VERSION
 import com.dd3boh.outertune.constants.OobeStatusKey
 import com.dd3boh.outertune.constants.UpdateAvailableKey
 import com.dd3boh.outertune.db.MusicDatabase
+import com.dd3boh.outertune.models.isYouTubeArtistBrowseId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.DownloadUtil
 import com.dd3boh.outertune.playback.PlayerConnection
@@ -67,9 +68,10 @@ fun youtubeNavigator(
             }
         }
 
-        "channel", "c" -> uri.lastPathSegment?.let { artistId ->
-            navController.navigate("artist/$artistId")
-        }
+        "channel", "c" -> uri.lastPathSegment
+            ?.takeIf(String::isYouTubeArtistBrowseId)
+            ?.let { artistId -> navController.navigate("artist/$artistId") }
+            ?: return false
 
         else -> when {
             path == "watch" -> uri.getQueryParameter("v")

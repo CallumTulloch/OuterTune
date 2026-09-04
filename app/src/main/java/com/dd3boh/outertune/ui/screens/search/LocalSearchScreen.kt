@@ -48,6 +48,7 @@ import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.Playlist
 import com.dd3boh.outertune.db.entities.Song
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.ChipsRow
@@ -210,15 +211,20 @@ fun LocalSearchScreen(
                                 .animateItem()
                         )
 
-                        is Artist -> ArtistListItem(
-                            artist = item,
-                            modifier = Modifier
-                                .clickable {
-                                    onDismiss()
-                                    navController.navigate("artist/${item.id}")
-                                }
-                                .animateItem()
-                        )
+                        is Artist -> {
+                            val artistId = item.artistNavigationId()
+                            ArtistListItem(
+                                artist = item,
+                                modifier = Modifier
+                                    .clickable(enabled = artistId != null) {
+                                        artistId?.let {
+                                            onDismiss()
+                                            navController.navigate("artist/$it")
+                                        }
+                                    }
+                                    .animateItem()
+                            )
+                        }
 
                         is Playlist -> PlaylistListItem(
                             playlist = item,

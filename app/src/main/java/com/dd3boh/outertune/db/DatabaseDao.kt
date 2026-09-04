@@ -35,6 +35,8 @@ import com.dd3boh.outertune.extensions.toSQLiteQuery
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.MultiQueueObject
 import com.dd3boh.outertune.models.cleanLocalMetadataText
+import com.dd3boh.outertune.models.encodeMetadataArtistBrowseIds
+import com.dd3boh.outertune.models.isYouTubeArtistBrowseId
 import com.dd3boh.outertune.models.normalizeLocalMetadataText
 import com.dd3boh.outertune.models.selectMatchingLocalAlbum
 import com.dd3boh.outertune.models.toLocalAlbumCandidates
@@ -275,10 +277,181 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
         replaceAlbumArtistMaps(albumId, artists)
     }
 
+    /**
+     * Replaces a song's artist credits when [artists] came from an authoritative metadata source.
+     * Normal queue/library persistence intentionally remains additive because incomplete search
+     * metadata must not erase already resolved credits.
+     */
+    @Transaction
+    fun replaceSongArtistMaps(
+        songId: String,
+        artists: List<MediaMetadata.Artist>,
+        isLocal: Boolean = false,
+    ) {
+        val previousArtistIds = artistIdsForSong(songId)
+        val resolvedArtists = artists
+            .map { artist ->
+                val resolved = if (
+                    !isLocal && artist.id?.isYouTubeArtistBrowseId() != true
+                ) {
+                    resolveAndInsertUnidentifiedRemoteArtist(artist.name)
+                } else {
+                    resolveAndInsertArtist(
+                        id = artist.id,
+                        name = artist.name,
+                        isLocal = isLocal,
+                    )
+                }
+                if (!isLocal && resolved.name != artist.name) {
+                    // Credits are authoritative. Repair a stale display name even when the
+                    // canonical browse id (and therefore the relation row) did not change.
+                    resolved.copy(name = artist.name).also(::update)
+                } else {
+                    resolved
+                }
+            }
+            .distinctBy { it.id }
+        val newArtistIds = resolvedArtists.map { it.id }
+        markSongArtistCreditsResolved(songId)
+        if (previousArtistIds == newArtistIds) return
+
+        unlinkSongArtists(songId)
+        resolvedArtists.forEachIndexed { index, artist ->
+            insert(
+                SongArtistMap(
+                    songId = songId,
+                    artistId = artist.id,
+                    position = index,
+                )
+            )
+        }
+        previousArtistIds
+            .filterNot(newArtistIds::contains)
+            .forEach(::safeDeleteArtist)
+    }
+
+    /** Atomically records the verified credits provenance and replaces its artist relations. */
+    @Transaction
+    fun replaceResolvedSongArtistMetadata(
+        songId: String,
+        endpointHints: MediaMetadata.MetadataEndpointHints,
+        artists: List<MediaMetadata.Artist>,
+    ) {
+        replaceSongArtistMetadataEndpointHints(
+            songId = songId,
+            artistBrowseIds = endpointHints.artistBrowseIds.encodeMetadataArtistBrowseIds(),
+            creditsBrowseId = endpointHints.creditsBrowseId?.takeIf(String::isNotBlank),
+        )
+        replaceSongArtistMaps(songId = songId, artists = artists, isLocal = false)
+    }
+
+    /** Replaces stale album relations after an authoritative playback lookup. */
+    @Transaction
+    fun replaceSongAlbumMap(
+        songId: String,
+        album: MediaMetadata.Album,
+    ) {
+        albumById(album.id)
+            ?.takeIf { !it.isLocal && it.title != album.title }
+            ?.copy(title = album.title)
+            ?.let(::update)
+        val previousAlbumIds = albumIdsForSong(songId)
+        if (previousAlbumIds != listOf(album.id)) {
+            unlinkSongAlbums(songId)
+            insert(
+                SongAlbumMap(
+                    songId = songId,
+                    albumId = album.id,
+                    index = 0,
+                )
+            )
+            previousAlbumIds
+                .filterNot { it == album.id }
+                .forEach(::safeDeleteAlbum)
+        }
+        updateSongAlbumIdentity(songId, album.id, album.title)
+    }
+
+    /** Atomically records the verified album endpoint and replaces its relation. */
+    @Transaction
+    fun replaceResolvedSongAlbumMetadata(
+        songId: String,
+        albumBrowseId: String?,
+        album: MediaMetadata.Album,
+        thumbnailUrl: String?,
+        duration: Int,
+        year: Int?,
+    ) {
+        // A generic song insert may intentionally protect an older endpoint from an unverified
+        // queue snapshot. The verified path therefore has to create the target AlbumEntity itself
+        // before replacing the foreign-key relation.
+        resolveAndInsertAlbum(
+            albumMetadata = album,
+            isLocal = false,
+            thumbnailUrl = thumbnailUrl,
+            duration = duration,
+            year = year,
+            localPath = null,
+        )
+        replaceSongAlbumMetadataEndpointHint(
+            songId = songId,
+            albumBrowseId = albumBrowseId?.takeIf(String::isNotBlank) ?: album.id,
+        )
+        replaceSongAlbumMap(songId, album)
+    }
+
     @Transaction
     fun insert(mediaMetadata: MediaMetadata, block: (SongEntity) -> SongEntity = { it }) {
-        insert(mediaMetadata.toSongEntity().let(block))
-        mediaMetadata.artists.forEachIndexed { index, artist ->
+        val songEntity = mediaMetadata.toSongEntity().let(block)
+        val songAlreadyExists = songExists(songEntity.id)
+        val artistCreditsWereResolved = areSongArtistCreditsResolved(songEntity.id)
+        val existingAlbumHint = songMetadataAlbumBrowseId(songEntity.id)
+        val incomingAlbumHint = songEntity.metadataAlbumBrowseId?.takeIf(String::isNotBlank)
+        val protectsExistingAlbumSource =
+            !mediaMetadata.isLocal &&
+                songAlreadyExists &&
+                existingAlbumHint != null &&
+                ((incomingAlbumHint != null && existingAlbumHint != incomingAlbumHint) ||
+                    (mediaMetadata.album != null && existingAlbumHint != mediaMetadata.album.id))
+        val protectsResolvedArtistSource =
+            !mediaMetadata.isLocal && artistCreditsWereResolved
+        insert(songEntity)
+        retainSongMetadataEndpointHints(
+            songId = songEntity.id,
+            albumBrowseId = songEntity.metadataAlbumBrowseId.takeUnless {
+                protectsExistingAlbumSource
+            },
+            artistBrowseIds = songEntity.metadataArtistBrowseIds.takeUnless {
+                protectsResolvedArtistSource
+            },
+            creditsBrowseId = songEntity.metadataCreditsBrowseId.takeUnless {
+                protectsResolvedArtistSource
+            },
+        )
+        val authoritativeArtists = !mediaMetadata.isLocal &&
+            !protectsResolvedArtistSource &&
+            songEntity.artistCreditsResolved &&
+            mediaMetadata.artists.isNotEmpty()
+        if (authoritativeArtists) {
+            // A resolved snapshot may seed an unresolved row. Once Room contains authoritative
+            // credits, generic queue/library writes are read-only for their provenance and maps.
+            replaceSongArtistMaps(
+                songId = songEntity.id,
+                artists = mediaMetadata.artists,
+                isLocal = false,
+            )
+        }
+        val artistsToInsert = if (
+            mediaMetadata.isLocal ||
+            (!artistCreditsWereResolved && !authoritativeArtists && !protectsResolvedArtistSource)
+        ) {
+            mediaMetadata.artists
+        } else {
+            // A normal queue/library save is not authoritative and must not append a stale
+            // combined display name after credits have already been resolved.
+            emptyList()
+        }
+        artistsToInsert.forEachIndexed { index, artist ->
             val resolvedArtist = resolveAndInsertArtist(
                 id = artist.id,
                 name = artist.name,
@@ -310,7 +483,7 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
             )
         }
 
-        mediaMetadata.album?.let { albumMetadata ->
+        mediaMetadata.album?.takeUnless { protectsExistingAlbumSource }?.let { albumMetadata ->
             val album = resolveAndInsertAlbum(
                 albumMetadata = albumMetadata,
                 isLocal = mediaMetadata.isLocal,

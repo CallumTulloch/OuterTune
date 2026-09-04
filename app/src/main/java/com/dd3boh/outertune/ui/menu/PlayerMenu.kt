@@ -90,6 +90,7 @@ import com.dd3boh.outertune.LocalShowLyrics
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.YouTubeQueue
 import com.dd3boh.outertune.ui.component.BigSeekBar
@@ -140,6 +141,13 @@ fun PlayerMenu(
     val currentFormat = currentFormatState.value
     val librarySong by database.song(mediaMetadata.id).collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
+    val navigableArtists = remember(mediaMetadata.artists, mediaMetadata.isLocal) {
+        mediaMetadata.artists.mapNotNull { artist ->
+            artist.id.artistNavigationId(isLocal = mediaMetadata.isLocal)?.let { artistId ->
+                artist to artistId
+            }
+        }
+    }
 
     val download by LocalDownloadUtil.current.getDownload(mediaMetadata.id).collectAsState(initial = null)
 
@@ -457,16 +465,18 @@ fun PlayerMenu(
                     )
                 }
             )
-        GridMenuItem(
-            icon = R.drawable.artist,
-            title = R.string.view_artist
-        ) {
-            if (mediaMetadata.artists.size == 1) {
-                navController.navigate("artist/${mediaMetadata.artists[0].id}")
-                playerBottomSheetState.collapseSoft()
-                onDismiss()
-            } else {
-                showSelectArtistDialog = true
+        if (navigableArtists.isNotEmpty()) {
+            GridMenuItem(
+                icon = R.drawable.artist,
+                title = R.string.view_artist
+            ) {
+                if (navigableArtists.size == 1) {
+                    navController.navigate("artist/${navigableArtists[0].second}")
+                    playerBottomSheetState.collapseSoft()
+                    onDismiss()
+                } else {
+                    showSelectArtistDialog = true
+                }
             }
         }
         if (mediaMetadata.album != null && !mediaMetadata.isLocal) {
@@ -612,6 +622,7 @@ fun PlayerMenu(
         ArtistDialog(
             navController = navController,
             artists = mediaMetadata.artists,
+            allowLocalArtistIds = mediaMetadata.isLocal,
             onDismiss = {
                 playerBottomSheetState.collapseSoft()
                 showSelectArtistDialog = false

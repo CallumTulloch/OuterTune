@@ -6,8 +6,10 @@ import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.SongMetadataEndpointHints
 import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.models.artistElements
+import com.zionhuang.innertube.models.songMetadataEndpointHints
 import com.zionhuang.innertube.models.splitBySeparator
 
 object SearchSuggestionPage {
@@ -36,7 +38,9 @@ object SearchSuggestionPage {
                     thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,
                     explicit = renderer.badges?.find {
                         it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"
-                    } != null
+                    } != null,
+                    metadataEndpointHints = renderer.menu?.songMetadataEndpointHints()
+                        ?: SongMetadataEndpointHints(),
                 )
             }
             renderer.isArtist -> {

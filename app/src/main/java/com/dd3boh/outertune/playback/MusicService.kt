@@ -17,6 +17,7 @@ import android.database.SQLException
 import android.media.audiofx.AudioEffect
 import android.net.ConnectivityManager
 import android.os.Binder
+import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.getSystemService
@@ -103,6 +104,7 @@ import com.dd3boh.outertune.extensions.currentMetadata
 import com.dd3boh.outertune.extensions.findNextMediaItemById
 import com.dd3boh.outertune.extensions.metadata
 import com.dd3boh.outertune.extensions.setOffloadEnabled
+import com.dd3boh.outertune.extensions.withMetadata
 import com.dd3boh.outertune.lyrics.LyricsHelper
 import com.dd3boh.outertune.models.HybridCacheDataSinkFactory
 import com.dd3boh.outertune.models.MediaMetadata
@@ -127,9 +129,14 @@ import com.zionhuang.innertube.models.WatchEndpoint
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -141,14 +148,18 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import java.io.File
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.time.LocalDateTime
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlin.math.min
 import kotlin.math.pow
@@ -164,6 +175,7 @@ class MusicService : MediaLibraryService(),
     lateinit var database: MusicDatabase
     private val scope = CoroutineScope(Dispatchers.Main)
     private val offloadScope = CoroutineScope(playerCoroutine)
+    private val metadataPersistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Critical player components
     @Inject
@@ -171,6 +183,9 @@ class MusicService : MediaLibraryService(),
 
     @Inject
     lateinit var lyricsHelper: LyricsHelper
+
+    @Inject
+    lateinit var playbackMetadataEnricher: PlaybackMetadataEnricher
 
     @Inject
     lateinit var mediaLibrarySessionCallback: MediaLibrarySessionCallback
@@ -199,12 +214,65 @@ class MusicService : MediaLibraryService(),
 
     lateinit var connectivityObserver: NetworkConnectivityObserver
     val waitingForNetworkConnection = MutableStateFlow(false)
-    private val isNetworkConnected = MutableStateFlow(true)
+    // Start conservatively: the first onAvailable callback must count as a reconnect, including
+    // when the service itself was created while the device was offline.
+    private val isNetworkConnected = MutableStateFlow(false)
 
     lateinit var sleepTimer: SleepTimer
 
     // Player vars
     val currentMediaMetadata = MutableStateFlow<MediaMetadata?>(null)
+    private val metadataEnrichmentJobs = mutableMapOf<String, Job>()
+    private val metadataEnrichmentRequests = mutableMapOf<String, ActiveMetadataEnrichment>()
+    private val pendingMetadataEnrichment = mutableMapOf<String, MediaMetadata>()
+    private val metadataRetryJobs = mutableMapOf<String, Job>()
+    private val metadataPersistenceJobs = ConcurrentHashMap<String, Job>()
+    private val metadataPersistenceRequests =
+        ConcurrentHashMap<String, MetadataPersistenceRequest>()
+    private val resolvedMetadataCache = LinkedHashMap<String, PlaybackMetadataCacheEntry>()
+
+    private data class ActiveMetadataEnrichment(
+        val source: MediaMetadata,
+        val resolvesAlbum: Boolean,
+        val resolvesArtists: Boolean,
+    ) {
+        fun covers(
+            requested: MediaMetadata,
+            needsAlbum: Boolean,
+            needsArtists: Boolean,
+        ): Boolean =
+            (!needsAlbum || (resolvesAlbum && source.coversAlbumMetadataRequest(requested))) &&
+                (!needsArtists ||
+                    (resolvesArtists && source.coversArtistMetadataRequest(requested)))
+    }
+
+    private enum class MetadataPersistenceField { ALBUM, ARTISTS }
+
+    private data class MetadataPersistenceRequest(
+        val source: MediaMetadata,
+        val field: MetadataPersistenceField,
+        val valid: AtomicBoolean = AtomicBoolean(true),
+    ) {
+        fun isCompatibleWith(selected: MediaMetadata): Boolean {
+            if (!valid.get()) return false
+            if (selected.id != source.id) return true
+            return when (field) {
+                MetadataPersistenceField.ALBUM -> {
+                    val resolvedAlbum = source.album ?: return false
+                    selected.isCompatibleWithResolvedAlbum(resolvedAlbum)
+                }
+
+                MetadataPersistenceField.ARTISTS -> {
+                    if (!source.coversArtistMetadataRequest(selected)) return false
+                    if (selected.artistCreditsResolved && selected.hasVerifiedRemoteArtists()) {
+                        source.artists == selected.artists
+                    } else {
+                        true
+                    }
+                }
+            }
+        }
+    }
 
     private val currentSong = currentMediaMetadata.flatMapLatest { mediaMetadata ->
         database.song(mediaMetadata?.id)
@@ -281,6 +349,9 @@ class MusicService : MediaLibraryService(),
         controllerFuture.addListener({ controllerFuture.get() }, MoreExecutors.directExecutor())
 
         connectivityManager = getSystemService()!!
+        // Network callbacks are registered synchronously with the service lifecycle. Initializing
+        // this inside offloadScope could race onDestroy and leave a callback registered forever.
+        connectivityObserver = NetworkConnectivityObserver(this)
 
         currentSong.collect(scope) {
             updateNotification()
@@ -343,24 +414,23 @@ class MusicService : MediaLibraryService(),
                 }
             }
 
-
             // network connectivity
-            try {
-                connectivityObserver.unregister()
-            } catch (e: UninitializedPropertyAccessException) {
-                // lol
-            }
-            connectivityObserver = NetworkConnectivityObserver(this@MusicService)
-
             offloadScope.launch {
                 connectivityObserver.networkStatus.collect { isConnected ->
+                    val wasConnected = isNetworkConnected.value
                     isNetworkConnected.value = isConnected
 
-                    if (isConnected && waitingForNetworkConnection.value) {
-                        waitingForNetworkConnection.value = false
-                        withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
+                        if (!isConnected) {
+                            cancelMetadataRetryJobs()
+                        }
+                        if (isConnected && waitingForNetworkConnection.value) {
+                            waitingForNetworkConnection.value = false
                             player.prepare()
                             player.play()
+                        }
+                        if (isConnected && !wasConnected) {
+                            retryCurrentMetadataAfterReconnect()
                         }
                     }
                 }
@@ -944,6 +1014,7 @@ class MusicService : MediaLibraryService(),
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         super.onMediaItemTransition(mediaItem, reason)
+        handleCurrentMetadata(mediaItem?.metadata)
         // +2 when and error happens, and -1 when transition. Thus when error, number increments by 1, else doesn't change
         if (consecutivePlaybackErr > 0) {
             consecutivePlaybackErr--
@@ -1016,8 +1087,387 @@ class MusicService : MediaLibraryService(),
             }
         }
         if (events.containsAny(EVENT_TIMELINE_CHANGED, EVENT_POSITION_DISCONTINUITY)) {
-            currentMediaMetadata.value = player.currentMetadata
+            val playerMetadata = player.currentMetadata
+            if (currentMediaMetadata.value?.id != playerMetadata?.id) {
+                handleCurrentMetadata(playerMetadata)
+            }
+            if (events.contains(EVENT_TIMELINE_CHANGED)) {
+                syncCachedMetadataToPlayer()
+            }
         }
+    }
+
+    /**
+     * Starts field-specific metadata enrichment for the selected online song. The raw media item is
+     * playable immediately; resolved values are overlaid onto every presentation path without
+     * changing the underlying URI or any other playback configuration.
+     */
+    internal fun handleCurrentMetadata(source: MediaMetadata?) {
+        if (source == null) {
+            metadataEnrichmentJobs.values.forEach { it.cancel() }
+            metadataEnrichmentJobs.clear()
+            metadataEnrichmentRequests.clear()
+            pendingMetadataEnrichment.clear()
+            metadataRetryJobs.values.forEach { it.cancel() }
+            metadataRetryJobs.clear()
+            currentMediaMetadata.value = null
+            return
+        }
+
+        cancelConflictingMetadataPersistence(source)
+
+        metadataEnrichmentJobs
+            .filterKeys { it != source.id }
+            .forEach { (mediaId, job) ->
+                pendingMetadataEnrichment.remove(mediaId)
+                metadataEnrichmentRequests.remove(mediaId)
+                metadataEnrichmentJobs.remove(mediaId)
+                job.cancel()
+            }
+        metadataRetryJobs
+            .filterKeys { it != source.id }
+            .forEach { (mediaId, job) ->
+                metadataRetryJobs.remove(mediaId)
+                job.cancel()
+            }
+
+        val nowMs = SystemClock.elapsedRealtime()
+        val cached = resolvedMetadataCache[source.id] ?: PlaybackMetadataCacheEntry()
+        val cachedResolution = cached.asEnrichmentFor(source)
+        val effective = cachedResolution.metadata
+        currentMediaMetadata.value = effective
+        queueBoard.value.updateSongMetadata(cachedResolution)
+        syncResolvedMetadataToPlayer(cachedResolution)
+
+        val shouldResolveAlbum = cached.shouldResolveAlbum(source, nowMs)
+        val shouldResolveArtists = cached.shouldResolveArtists(source, nowMs)
+        if (!shouldResolveAlbum && !shouldResolveArtists) {
+            scheduleMetadataRetry(effective)
+            return
+        }
+        if (metadataEnrichmentJobs[source.id]?.isActive == true) {
+            val runningRequest = metadataEnrichmentRequests[source.id]
+            if (
+                runningRequest == null ||
+                !runningRequest.covers(
+                    requested = source,
+                    needsAlbum = shouldResolveAlbum,
+                    needsArtists = shouldResolveArtists,
+                )
+            ) {
+                pendingMetadataEnrichment[source.id] = source
+            } else {
+                // This newer same-ID snapshot is covered by the active request and supersedes any
+                // older incompatible snapshot that may previously have been queued.
+                pendingMetadataEnrichment.remove(source.id)
+            }
+            return
+        }
+
+        metadataEnrichmentRequests[source.id] = ActiveMetadataEnrichment(
+            source = source,
+            resolvesAlbum = shouldResolveAlbum,
+            resolvesArtists = shouldResolveArtists,
+        )
+        lateinit var enrichmentJob: Job
+        enrichmentJob = scope.launch {
+            try {
+                val resolution = withContext(Dispatchers.IO) {
+                    playbackMetadataEnricher.enrich(
+                        original = effective,
+                        shouldResolveAlbum = shouldResolveAlbum,
+                        shouldResolveArtists = shouldResolveArtists,
+                    )
+                }
+                // A request can finish after another same-ID snapshot was selected. Only the
+                // fields which still apply to the latest player item are allowed to reach Room.
+                val latestSource = currentMediaMetadata.value
+                    ?.takeIf { it.id == source.id }
+                    ?: player.currentMetadata?.takeIf { it.id == source.id }
+                val albumForPersistence = resolution.metadata.album?.takeIf { album ->
+                    latestSource != null &&
+                        latestSource.needsAlbumMetadataResolution() &&
+                        resolution.albumIsAuthoritative &&
+                        latestSource.isCompatibleWithResolvedAlbum(album)
+                }
+                val artistsForPersistence = resolution.metadata.artists.takeIf { artists ->
+                        latestSource != null &&
+                        artists.isNotEmpty() &&
+                        resolution.artistsAreAuthoritative &&
+                        latestSource.acceptsAuthoritativeArtistResolution() &&
+                        resolution.metadata.coversArtistMetadataRequest(latestSource)
+                }
+
+                val mergedCache = (resolvedMetadataCache[source.id]
+                    ?: PlaybackMetadataCacheEntry())
+                    .merge(resolution, SystemClock.elapsedRealtime())
+                cacheResolvedMetadata(source.id, mergedCache)
+                val combinedResolution = mergedCache.asEnrichmentFor(source)
+                val persistenceSnapshot = mergedCache.applyTo(latestSource ?: resolution.metadata)
+
+                // Presentation state is intentionally updated before persistence. A slow or failed
+                // database transaction must never delay an already verified album/artist result.
+                queueBoard.value.updateSongMetadata(combinedResolution)
+                if (player.currentMediaItem?.mediaId == source.id) {
+                    val currentSnapshot = currentMediaMetadata.value
+                        ?.takeIf { it.id == source.id }
+                        ?: player.currentMetadata
+                            ?.takeIf { it.id == source.id }
+                        ?: source
+                    currentMediaMetadata.value = mergedCache.applyTo(currentSnapshot)
+                    syncResolvedMetadataToPlayer(combinedResolution)
+                    updateNotification()
+                }
+
+                enqueueMetadataPersistence(
+                    metadata = persistenceSnapshot,
+                    album = albumForPersistence,
+                    artists = artistsForPersistence,
+                )
+                if (player.currentMediaItem?.mediaId == source.id) {
+                    scheduleMetadataRetry(currentMediaMetadata.value ?: source)
+                }
+            } catch (throwable: Throwable) {
+                if (throwable is kotlinx.coroutines.CancellationException) throw throwable
+                Log.w(TAG, "Unable to enrich metadata for ${source.id}", throwable)
+            } finally {
+                if (metadataEnrichmentJobs[source.id] === enrichmentJob) {
+                    metadataEnrichmentJobs.remove(source.id)
+                    metadataEnrichmentRequests.remove(source.id)
+                    pendingMetadataEnrichment.remove(source.id)?.let { pending ->
+                        if (player.currentMediaItem?.mediaId == pending.id) {
+                            handleCurrentMetadata(pending)
+                        }
+                    }
+                }
+            }
+        }
+        metadataEnrichmentJobs[source.id] = enrichmentJob
+    }
+
+    private fun cacheResolvedMetadata(
+        mediaId: String,
+        cacheEntry: PlaybackMetadataCacheEntry,
+    ) {
+        resolvedMetadataCache[mediaId] = cacheEntry
+        while (resolvedMetadataCache.size > MAX_RESOLVED_METADATA_CACHE_SIZE) {
+            val oldestKey = resolvedMetadataCache.keys.firstOrNull() ?: break
+            resolvedMetadataCache.remove(oldestKey)
+        }
+    }
+
+    /**
+     * Persists each newly resolved field in an independent service job. Playback changes cancel
+     * obsolete network work, but must not cancel a verified result while Room is writing it. A
+     * transient database failure is retried with the same bounded backoff as network enrichment.
+     */
+    private fun enqueueMetadataPersistence(
+        metadata: MediaMetadata,
+        album: MediaMetadata.Album?,
+        artists: List<MediaMetadata.Artist>?,
+    ) {
+        album?.let { resolvedAlbum ->
+            val request = MetadataPersistenceRequest(metadata, MetadataPersistenceField.ALBUM)
+            launchMetadataPersistence("${metadata.id}:album", request) {
+                database.awaitTransaction {
+                    if (!request.isCompatibleWithCurrentSelection()) {
+                        throw CancellationException("Album metadata source was superseded")
+                    }
+                    val fullSnapshot = metadata.copy(album = resolvedAlbum)
+                    if (songExists(metadata.id)) {
+                        // For an existing row only the resolved field is inserted, avoiding stale
+                        // raw artist relations. A new row needs the complete playback snapshot so
+                        // a field-specific job cannot win the queue-save race with missing data.
+                        insert(fullSnapshot.copy(artists = emptyList()))
+                    } else {
+                        insert(fullSnapshot)
+                    }
+                    replaceResolvedSongAlbumMetadata(
+                        songId = metadata.id,
+                        albumBrowseId = metadata.metadataEndpointHints.albumBrowseId,
+                        album = resolvedAlbum,
+                        thumbnailUrl = fullSnapshot.thumbnailUrl,
+                        duration = fullSnapshot.duration,
+                        year = fullSnapshot.year,
+                    )
+                    if (!request.isCompatibleWithCurrentSelection()) {
+                        throw CancellationException("Album metadata source changed while persisting")
+                    }
+                }
+            }
+        }
+        artists?.let { resolvedArtists ->
+            val request = MetadataPersistenceRequest(metadata, MetadataPersistenceField.ARTISTS)
+            launchMetadataPersistence("${metadata.id}:artists", request) {
+                database.awaitTransaction {
+                    if (!request.isCompatibleWithCurrentSelection()) {
+                        throw CancellationException("Artist metadata source was superseded")
+                    }
+                    val fullSnapshot = metadata.copy(
+                        artists = resolvedArtists,
+                        artistCreditsResolved = true,
+                    )
+                    if (songExists(metadata.id)) {
+                        // Album relations on an existing row are left untouched. If this job is
+                        // first to create the song, retain every known field from the latest item.
+                        insert(fullSnapshot.copy(album = null))
+                    } else {
+                        insert(fullSnapshot)
+                    }
+                    replaceResolvedSongArtistMetadata(
+                        songId = metadata.id,
+                        endpointHints = metadata.metadataEndpointHints,
+                        artists = resolvedArtists,
+                    )
+                    if (!request.isCompatibleWithCurrentSelection()) {
+                        throw CancellationException("Artist metadata source changed while persisting")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun launchMetadataPersistence(
+        key: String,
+        request: MetadataPersistenceRequest,
+        persist: suspend MusicDatabase.() -> Unit,
+    ) {
+        metadataPersistenceRequests.remove(key)?.valid?.set(false)
+        metadataPersistenceJobs.remove(key)?.cancel()
+        while (metadataPersistenceJobs.size >= MAX_METADATA_PERSISTENCE_JOBS) {
+            val oldestKey = metadataPersistenceJobs.keys.firstOrNull() ?: break
+            metadataPersistenceRequests.remove(oldestKey)?.valid?.set(false)
+            metadataPersistenceJobs.remove(oldestKey)?.cancel()
+        }
+        metadataPersistenceRequests[key] = request
+        lateinit var persistenceJob: Job
+        persistenceJob = metadataPersistenceScope.launch(start = CoroutineStart.LAZY) {
+            var failureCount = 0
+            try {
+                while (true) {
+                    try {
+                        withContext(Dispatchers.IO) { database.persist() }
+                        return@launch
+                    } catch (throwable: Throwable) {
+                        if (throwable is kotlinx.coroutines.CancellationException) throw throwable
+                        failureCount++
+                        Log.w(TAG, "Unable to persist resolved metadata ($key)", throwable)
+                        if (failureCount >= MAX_METADATA_PERSISTENCE_ATTEMPTS) {
+                            Log.e(TAG, "Giving up resolved metadata persistence ($key)")
+                            return@launch
+                        }
+                        delay(retryDelayMs(failureCount))
+                    }
+                }
+            } finally {
+                if (metadataPersistenceJobs.remove(key, persistenceJob)) {
+                    metadataPersistenceRequests.remove(key, request)
+                }
+            }
+        }
+        metadataPersistenceJobs[key] = persistenceJob
+        persistenceJob.start()
+    }
+
+    private fun MetadataPersistenceRequest.isCompatibleWithCurrentSelection(): Boolean {
+        if (!valid.get()) return false
+        val selected = currentMediaMetadata.value?.takeIf { it.id == source.id }
+            ?: return true
+        return isCompatibleWith(selected)
+    }
+
+    private fun cancelConflictingMetadataPersistence(selected: MediaMetadata) {
+        metadataPersistenceRequests
+            .filterValues { request ->
+                request.source.id == selected.id && !request.isCompatibleWith(selected)
+            }
+            .keys
+            .toList()
+            .forEach { key ->
+                metadataPersistenceRequests.remove(key)?.valid?.set(false)
+                metadataPersistenceJobs.remove(key)?.cancel()
+            }
+    }
+
+    private fun syncResolvedMetadataToPlayer(resolution: PlaybackMetadataEnrichment) {
+        if (!resolution.albumIsAuthoritative && !resolution.artistsAreAuthoritative) return
+        val mediaId = resolution.metadata.id
+        for (index in 0 until player.mediaItemCount) {
+            val mediaItem = player.getMediaItemAt(index)
+            if (mediaItem.mediaId != mediaId) continue
+            val existing = mediaItem.metadata ?: continue
+            val updated = resolution.applyTo(existing).also {
+                it.shuffleIndex = existing.shuffleIndex
+            }
+            if (updated == existing) continue
+            player.replaceMediaItem(index, mediaItem.withMetadata(updated))
+        }
+    }
+
+    /** Applies prior verified fields to matching items that were added to the timeline later. */
+    private fun syncCachedMetadataToPlayer() {
+        for (index in 0 until player.mediaItemCount) {
+            val mediaItem = player.getMediaItemAt(index)
+            val existing = mediaItem.metadata ?: continue
+            val cache = resolvedMetadataCache[existing.id] ?: continue
+            val resolution = cache.asEnrichmentFor(existing)
+            if (!resolution.albumIsAuthoritative && !resolution.artistsAreAuthoritative) continue
+            // QueueBoard owns the snapshots later written by persistent queues. Keep it in sync
+            // before a newly-added raw duplicate can reintroduce lower-quality relations.
+            queueBoard.value.updateSongMetadata(resolution)
+            val updated = resolution.applyTo(existing).also {
+                it.shuffleIndex = existing.shuffleIndex
+            }
+            if (updated == existing) continue
+            player.replaceMediaItem(index, mediaItem.withMetadata(updated))
+        }
+    }
+
+    private fun scheduleMetadataRetry(source: MediaMetadata) {
+        val retryAtMs = resolvedMetadataCache[source.id]?.nextRetryAt(source)
+        metadataRetryJobs.remove(source.id)?.cancel()
+        if (
+            retryAtMs == null ||
+            !isNetworkConnected.value ||
+            player.currentMediaItem?.mediaId != source.id
+        ) return
+
+        lateinit var retryJob: Job
+        retryJob = scope.launch {
+            delay((retryAtMs - SystemClock.elapsedRealtime()).coerceAtLeast(0))
+            if (metadataRetryJobs[source.id] === retryJob) {
+                metadataRetryJobs.remove(source.id)
+                val current = currentMediaMetadata.value
+                    ?.takeIf { it.id == source.id }
+                    ?: player.currentMetadata?.takeIf { it.id == source.id }
+                if (current != null && player.currentMediaItem?.mediaId == source.id) {
+                    handleCurrentMetadata(current)
+                }
+            }
+        }
+        metadataRetryJobs[source.id] = retryJob
+    }
+
+    private fun retryCurrentMetadataAfterReconnect() {
+        val source = currentMediaMetadata.value
+            ?: player.currentMetadata
+            ?: return
+        resolvedMetadataCache[source.id]?.let { cache ->
+            cacheResolvedMetadata(source.id, cache.retryFailuresNow(source))
+        }
+        metadataRetryJobs.remove(source.id)?.cancel()
+        // A reconnect is an explicit retry signal. Replace an in-flight request which may still be
+        // waiting on the dead connection instead of allowing the normal covered-request path to
+        // discard the retry.
+        metadataEnrichmentJobs.remove(source.id)?.cancel()
+        metadataEnrichmentRequests.remove(source.id)
+        pendingMetadataEnrichment.remove(source.id)
+        handleCurrentMetadata(source)
+    }
+
+    private fun cancelMetadataRetryJobs() {
+        metadataRetryJobs.values.forEach { it.cancel() }
+        metadataRetryJobs.clear()
     }
 
     override fun onPlaybackStatsReady(eventTime: AnalyticsListener.EventTime, playbackStats: PlaybackStats) {
@@ -1096,7 +1546,33 @@ class MusicService : MediaLibraryService(),
 
     override fun onDestroy() {
         Log.i(TAG, "Terminating MusicService.")
+        // Stop consumers before unregistering their callback. The observer itself is initialized
+        // synchronously in onCreate, so no background registration can race this teardown.
+        offloadScope.cancel()
+        if (::connectivityObserver.isInitialized) {
+            runCatching { connectivityObserver.unregister() }
+                .onFailure { Log.w(TAG, "Unable to unregister connectivity observer", it) }
+        }
+        metadataEnrichmentJobs.values.forEach { it.cancel() }
+        metadataEnrichmentJobs.clear()
+        metadataEnrichmentRequests.clear()
+        pendingMetadataEnrichment.clear()
+        cancelMetadataRetryJobs()
+        // Metadata is visible before Room writes by design. Give the normally short verified
+        // writes a bounded chance to commit so an immediate service stop cannot discard them.
+        val pendingPersistence = metadataPersistenceJobs.values.toList()
+        runBlocking {
+            withTimeoutOrNull(METADATA_PERSISTENCE_SHUTDOWN_GRACE_MS) {
+                pendingPersistence.joinAll()
+            }
+        }
+        metadataPersistenceRequests.values.forEach { it.valid.set(false) }
+        metadataPersistenceJobs.values.forEach { it.cancel() }
+        metadataPersistenceJobs.clear()
+        metadataPersistenceRequests.clear()
+        metadataPersistenceScope.cancel()
         deInitQueue()
+        scope.cancel()
 
         mediaSession.player.stop()
         mediaSession.release()
@@ -1138,6 +1614,10 @@ class MusicService : MediaLibraryService(),
         const val NOTIFICATION_ID = 888
         const val ERROR_CODE_NO_STREAM = 1000001
         const val CHUNK_LENGTH = 512 * 1024L
+        const val MAX_RESOLVED_METADATA_CACHE_SIZE = 100
+        const val MAX_METADATA_PERSISTENCE_JOBS = 100
+        const val MAX_METADATA_PERSISTENCE_ATTEMPTS = 5
+        const val METADATA_PERSISTENCE_SHUTDOWN_GRACE_MS = 500L
 
         const val COMMAND_GET_BINDER = "GET_BINDER"
     }

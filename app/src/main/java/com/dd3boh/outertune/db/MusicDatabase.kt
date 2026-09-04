@@ -81,7 +81,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 22
+        const val MUSIC_DATABASE_VERSION = 23
     }
 }
 
@@ -150,6 +150,7 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_16_17)
                     .addMigrations(MIGRATION_20_21)
                     .addMigrations(MIGRATION_21_22)
+                    .fallbackToDestructiveMigration(true)
                     .build()
             )
 

@@ -10,6 +10,7 @@ data class MusicCardShelfRenderer(
     val header: Header?,
     val contents: List<Content>?,
     val buttons: List<Button>,
+    val menu: Menu? = null,
     val onTap: NavigationEndpoint,
     val subtitleBadges: List<Badges>?,
 ) {

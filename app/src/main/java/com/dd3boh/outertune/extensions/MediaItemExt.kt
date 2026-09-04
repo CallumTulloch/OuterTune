@@ -16,16 +16,7 @@ fun Song.toMediaItem() = MediaItem.Builder()
     .setUri(song.id)
     .setCustomCacheKey(song.id)
     .setTag(toMediaMetadata())
-    .setMediaMetadata(
-        androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(song.title)
-            .setSubtitle(artists.joinToString { it.name })
-            .setArtist(artists.joinToString { it.name })
-            .setArtworkUri(song.thumbnailUrl?.toUri())
-            .setAlbumTitle(song.albumName)
-            .setMediaType(MEDIA_TYPE_MUSIC)
-            .build()
-    )
+    .setMediaMetadata(toMediaMetadata().toMedia3Metadata())
     .build()
 
 fun SongItem.toMediaItem() = MediaItem.Builder()
@@ -33,17 +24,30 @@ fun SongItem.toMediaItem() = MediaItem.Builder()
     .setUri(id)
     .setCustomCacheKey(id)
     .setTag(toMediaMetadata())
-    .setMediaMetadata(
-        androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(title)
-            .setSubtitle(artists.joinToString { it.name })
-            .setArtist(artists.joinToString { it.name })
-            .setArtworkUri(thumbnail.toUri())
-            .setAlbumTitle(album?.name)
-            .setMediaType(MEDIA_TYPE_MUSIC)
-            .build()
-    )
+    .setMediaMetadata(toMediaMetadata().toMedia3Metadata())
     .build()
+
+internal fun MediaMetadata.toMedia3Metadata(
+    base: androidx.media3.common.MediaMetadata? = null,
+) = (base?.buildUpon() ?: androidx.media3.common.MediaMetadata.Builder()).apply {
+    setTitle(title)
+    setSubtitle(artists.joinToString { it.name })
+    setArtist(artists.joinToString { it.name })
+    // This object is a complete logical snapshot. Explicitly clear fields that disappeared when
+    // switching between same-ID queue items, while retaining unrelated Media3 extras from base.
+    setArtworkUri(thumbnailUrl?.toUri())
+    setAlbumTitle(album?.title)
+    setMediaType(MEDIA_TYPE_MUSIC)
+}.build()
+
+/** Updates presentation metadata while preserving every playback-related MediaItem property. */
+internal fun MediaItem.withMetadata(metadata: MediaMetadata): MediaItem {
+    if (mediaId != metadata.id) return this
+    return buildUpon()
+        .setTag(metadata)
+        .setMediaMetadata(metadata.toMedia3Metadata(mediaMetadata))
+        .build()
+}
 
 fun MediaMetadata.toMediaItem() = MediaItem.Builder()
     .setMediaId(id)

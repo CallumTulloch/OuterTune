@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,24 +24,34 @@ import com.dd3boh.outertune.constants.ListItemHeight
 import com.dd3boh.outertune.constants.ListThumbnailSize
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.models.artistNavigationId
 
 @JvmName("ArtistDialogMediaMetadataArtist")
 @Composable
 fun ArtistDialog(
     navController: NavController,
     artists: List<MediaMetadata.Artist>,
+    allowLocalArtistIds: Boolean = false,
     onDismiss: () -> Unit,
 ) {
+    val navigableArtists = remember(artists, allowLocalArtistIds) {
+        artists.mapNotNull { artist ->
+            artist.id.artistNavigationId(isLocal = allowLocalArtistIds)?.let { artistId ->
+                artist to artistId
+            }
+        }
+    }
+
     ListDialog(
         onDismiss = onDismiss
     ) {
-        items(artists) { artist ->
+        items(navigableArtists) { (artist, artistId) ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .height(ListItemHeight)
                     .clickable {
-                        navController.navigate("artist/${artist.id}")
+                        navController.navigate("artist/$artistId")
                         onDismiss()
                     }
                     .padding(horizontal = 12.dp),
@@ -51,7 +62,7 @@ fun ArtistDialog(
                         .fillParentMaxWidth()
                         .height(ListItemHeight)
                         .clickable {
-                            navController.navigate("artist/${artist.id}")
+                            navController.navigate("artist/$artistId")
                             onDismiss()
                         }
                         .padding(horizontal = 24.dp),
@@ -76,19 +87,27 @@ fun ArtistDialog(
     artists: List<ArtistEntity>,
     onDismiss: () -> Unit,
 ) {
+    val navigableArtists = remember(artists) {
+        artists.mapNotNull { artist ->
+            artist.artistNavigationId()?.let { artistId ->
+                artist to artistId
+            }
+        }
+    }
+
     ListDialog(
         onDismiss = onDismiss
     ) {
         items(
-            items = artists,
-            key = { it.id }
-        ) { artist ->
+            items = navigableArtists,
+            key = { (_, artistId) -> artistId }
+        ) { (artist, artistId) ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .height(ListItemHeight)
                     .clickable {
-                        navController.navigate("artist/${artist.id}")
+                        navController.navigate("artist/$artistId")
                         onDismiss()
                     }
                     .padding(horizontal = 12.dp),

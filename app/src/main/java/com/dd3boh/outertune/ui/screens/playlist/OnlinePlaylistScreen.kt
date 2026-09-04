@@ -109,6 +109,7 @@ import com.dd3boh.outertune.db.entities.PlaylistSongMap
 import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.extensions.togglePlayPause
 import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.AutoResizeText
@@ -339,6 +340,7 @@ fun OnlinePlaylistScreen(
                                         )
 
                                         playlist.author?.let { artist ->
+                                            val artistId = artist.id.artistNavigationId(isLocal = false)
                                             val annotatedString = buildAnnotatedString {
                                                 withStyle(
                                                     style = MaterialTheme.typography.titleMedium.copy(
@@ -346,10 +348,10 @@ fun OnlinePlaylistScreen(
                                                         color = MaterialTheme.colorScheme.onBackground
                                                     ).toSpanStyle()
                                                 ) {
-                                                    if (artist.id != null) {
+                                                    if (artistId != null) {
                                                         withLink(
-                                                            LinkAnnotation.Clickable(artist.id!!) {
-                                                                navController.navigate("artist/${artist.id}")
+                                                            LinkAnnotation.Clickable(artistId) {
+                                                                navController.navigate("artist/$artistId")
                                                             }
                                                         ) { append(artist.name) }
                                                     } else append(artist.name)

@@ -31,6 +31,7 @@ import com.zionhuang.innertube.models.response.GetTranscriptResponse
 import com.zionhuang.innertube.models.response.NextResponse
 import com.zionhuang.innertube.models.response.PlayerResponse
 import com.zionhuang.innertube.models.response.SearchResponse
+import com.zionhuang.innertube.models.response.TrackCreditsResponse
 import com.zionhuang.innertube.pages.AlbumPage
 import com.zionhuang.innertube.pages.ArtistItemsContinuationPage
 import com.zionhuang.innertube.pages.ArtistItemsPage
@@ -53,6 +54,7 @@ import com.zionhuang.innertube.pages.SearchResult
 import com.zionhuang.innertube.pages.SearchSuggestionPage
 import com.zionhuang.innertube.pages.SearchSummary
 import com.zionhuang.innertube.pages.SearchSummaryPage
+import com.zionhuang.innertube.pages.TrackCredits
 import io.ktor.client.call.body
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.runBlocking
@@ -233,6 +235,11 @@ object YouTube {
             items = items.withResolvedArtists(fetchMissingArtists(items)),
             continuation = continuationPage.continuations?.getContinuation()
         )
+    }
+
+    suspend fun trackCredits(browseId: String): Result<TrackCredits> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, browseId).body<TrackCreditsResponse>()
+        TrackCredits.fromResponse(response) ?: error("Missing track credits content")
     }
 
     suspend fun album(browseId: String, withSongs: Boolean = true): Result<AlbumPage> = runCatching {

@@ -21,6 +21,7 @@ import com.dd3boh.outertune.db.entities.QueueEntity
 import com.dd3boh.outertune.extensions.currentMetadata
 import com.dd3boh.outertune.extensions.move
 import com.dd3boh.outertune.extensions.toMediaItem
+import com.dd3boh.outertune.extensions.withMetadata
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.MultiQueueObject
 import com.dd3boh.outertune.utils.dataStore
@@ -34,6 +35,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.PriorityQueue
@@ -52,6 +54,9 @@ class QueueBoard(
     private var maxQueues: Int
 ) {
     private val TAG = QueueBoard::class.simpleName.toString()
+
+    /** Invalidates detached queue views after an in-place metadata snapshot replacement. */
+    val metadataRevision = MutableStateFlow(0L)
 
     private var masterIndex: Int // current queue index
     var detachedHead = false
@@ -802,6 +807,19 @@ class QueueBoard(
                     queuePos + 1, Int.MAX_VALUE,
                     mediaItems.subList(queuePos + 1, mediaItems.size).map { it.toMediaItem() })
             }
+            // The retained ExoPlayer item may have come from an older queue without the typed
+            // menu endpoints present in this queue's snapshot. Replace only its metadata so the
+            // MediaSession and future transitions share the new logical source without restarting
+            // playback, then enrich that same snapshot explicitly.
+            val retainedIndex = player.player.currentMediaItemIndex
+            val retainedItem = player.player.currentMediaItem
+            if (retainedIndex >= 0 && retainedItem?.mediaId == mediaItems[queuePos].id) {
+                player.player.replaceMediaItem(
+                    retainedIndex,
+                    retainedItem.withMetadata(mediaItems[queuePos]),
+                )
+            }
+            player.handleCurrentMetadata(mediaItems[queuePos])
         } else {
             Log.d(TAG, "Seamless is not supported. Loading songs in directly")
             player.player.setMediaItems(mediaItems.map { it.toMediaItem() }, queuePos, lastSongPos)
@@ -824,6 +842,29 @@ class QueueBoard(
             it.setCurrentQueuePos(index)
             saveQueue(it)
         }
+    }
+
+    /**
+     * Replaces metadata snapshots kept by the queue manager without touching ExoPlayer's current
+     * media item. This lets asynchronously resolved metadata become the source of truth for later
+     * queue persistence while playback continues uninterrupted.
+     */
+    fun updateSongMetadata(resolution: PlaybackMetadataEnrichment) {
+        var changed = false
+        masterQueues.forEach { queue ->
+            queue.queue.forEachIndexed { index, existing ->
+                if (existing.id == resolution.metadata.id) {
+                    val updated = resolution.applyTo(existing).also {
+                        it.shuffleIndex = existing.shuffleIndex
+                    }
+                    if (updated != existing) {
+                        queue.queue[index] = updated
+                        changed = true
+                    }
+                }
+            }
+        }
+        if (changed) metadataRevision.value++
     }
 
 

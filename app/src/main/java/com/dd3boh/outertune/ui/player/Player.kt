@@ -138,6 +138,7 @@ import com.dd3boh.outertune.extensions.supportsWideScreen
 import com.dd3boh.outertune.extensions.tabMode
 import com.dd3boh.outertune.extensions.togglePlayPause
 import com.dd3boh.outertune.extensions.toggleRepeatMode
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.playback.PlayerConnection
 import com.dd3boh.outertune.playback.QueueBoard
 import com.dd3boh.outertune.ui.component.BottomSheet
@@ -820,6 +821,9 @@ fun ControlsContent(
 
                         Row {
                             mediaMetadata?.artists?.fastForEachIndexed { index, artist ->
+                                val artistId = artist.id.artistNavigationId(
+                                    isLocal = mediaMetadata?.isLocal == true,
+                                )
                                 Text(
                                     text = artist.name,
                                     style = MaterialTheme.typography.titleMedium,
@@ -830,9 +834,11 @@ fun ControlsContent(
                                             iterations = 1,
                                             initialDelayMillis = 5000
                                         )
-                                        .clickable(enabled = artist.id != null) {
-                                            navController.navigate("artist/${artist.id}")
-                                            playerSheetState.collapseSoft()
+                                        .clickable(enabled = artistId != null) {
+                                            artistId?.let {
+                                                navController.navigate("artist/$it")
+                                                playerSheetState.collapseSoft()
+                                            }
                                         }
                                 )
 

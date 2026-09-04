@@ -29,6 +29,15 @@ data class MediaMetadata(
     val isLocal: Boolean = false,
     val localPath: String? = null,
     val liked: Boolean = false,
+    /** True after the displayed credits were replaced from the track-credits endpoint. */
+    val artistCreditsResolved: Boolean = false,
+    /**
+     * Typed browse endpoints advertised by the source renderer.
+     *
+     * These are discovery hints only. In particular, an artist endpoint must not be assigned to
+     * a display credit until its browse page name has been verified.
+     */
+    val metadataEndpointHints: MetadataEndpointHints = MetadataEndpointHints(),
     val composeUidWorkaround: Double = Math.random(), // compose will crash without this hax
 
     var shuffleIndex: Int = -1
@@ -53,6 +62,12 @@ data class MediaMetadata(
         val isLocal: Boolean = false,
     ) : Serializable
 
+    data class MetadataEndpointHints(
+        val albumBrowseId: String? = null,
+        val artistBrowseIds: List<String> = emptyList(),
+        val creditsBrowseId: String? = null,
+    ) : Serializable
+
     fun toSongEntity() = SongEntity(
         id = id,
         title = title,
@@ -62,6 +77,12 @@ data class MediaMetadata(
         discNumber = discNumber,
         albumId = album?.id,
         albumName = album?.title,
+        metadataAlbumBrowseId = metadataEndpointHints.albumBrowseId
+            ?: album?.id?.takeIf { !isLocal },
+        metadataArtistBrowseIds = metadataEndpointHints.artistBrowseIds
+            .encodeMetadataArtistBrowseIds(),
+        metadataCreditsBrowseId = metadataEndpointHints.creditsBrowseId,
+        artistCreditsResolved = artistCreditsResolved,
         year = year,
         date = date,
         dateModified = dateModified,
@@ -118,7 +139,7 @@ fun Song.toMediaMetadata() = MediaMetadata(
     title = song.title,
     artists = artists.map {
         MediaMetadata.Artist(
-            id = it.id,
+            id = it.navigationId,
             name = it.name,
             isLocal = it.isLocal
         )
@@ -153,9 +174,31 @@ fun Song.toMediaMetadata() = MediaMetadata(
     dateModified = song.dateModified,
     inLibrary = song.inLibrary,
     liked = song.liked,
+    artistCreditsResolved = song.artistCreditsResolved,
     isLocal = song.isLocal,
-    localPath = song.localPath
+    localPath = song.localPath,
+    metadataEndpointHints = MediaMetadata.MetadataEndpointHints(
+        albumBrowseId = song.metadataAlbumBrowseId,
+        artistBrowseIds = song.metadataArtistBrowseIds.decodeMetadataArtistBrowseIds(),
+        creditsBrowseId = song.metadataCreditsBrowseId,
+    )
 )
+
+private const val METADATA_ARTIST_ID_SEPARATOR = "\u001F"
+
+internal fun List<String>.encodeMetadataArtistBrowseIds(): String? = asSequence()
+    .map(String::trim)
+    .filter(String::isNotEmpty)
+    .distinct()
+    .joinToString(METADATA_ARTIST_ID_SEPARATOR)
+    .takeIf(String::isNotEmpty)
+
+internal fun String?.decodeMetadataArtistBrowseIds(): List<String> = this
+    ?.split(METADATA_ARTIST_ID_SEPARATOR)
+    ?.map(String::trim)
+    ?.filter(String::isNotEmpty)
+    ?.distinct()
+    .orEmpty()
 
 fun SongItem.toMediaMetadata() = MediaMetadata(
     id = id,
@@ -175,5 +218,12 @@ fun SongItem.toMediaMetadata() = MediaMetadata(
         )
     },
     genre = null,
-    setVideoId = setVideoId
+    setVideoId = setVideoId,
+    metadataEndpointHints = MediaMetadata.MetadataEndpointHints(
+        albumBrowseId = metadataEndpointHints.album?.browseId,
+        artistBrowseIds = metadataEndpointHints.artistCandidates
+            .map { it.browseId }
+            .distinct(),
+        creditsBrowseId = metadataEndpointHints.credits?.browseId,
+    ),
 )

@@ -180,6 +180,7 @@ interface AlbumsDao : ArtistsDao {
             FROM song_album_map
             WHERE song_album_map.albumId = :albumId
         )
+        AND bookmarkedAt IS NULL
         AND id = :albumId
     """
     )
@@ -230,10 +231,28 @@ interface AlbumsDao : ArtistsDao {
             JOIN song ON song.id = song_album_map.songId
             LEFT JOIN album_artist_map
                 ON album_artist_map.albumId = album.id
-                AND album_artist_map.artistId = :artistId
+                AND album_artist_map.artistId = COALESCE(
+                    (
+                        SELECT remote_artist.id
+                        FROM artist remote_artist
+                        WHERE remote_artist.isLocal = 0
+                            AND remote_artist.browseId = :artistId
+                        LIMIT 1
+                    ),
+                    :artistId
+                )
             LEFT JOIN song_artist_map
                 ON song_artist_map.songId = song.id
-                AND song_artist_map.artistId = :artistId
+                AND song_artist_map.artistId = COALESCE(
+                    (
+                        SELECT remote_artist.id
+                        FROM artist remote_artist
+                        WHERE remote_artist.isLocal = 0
+                            AND remote_artist.browseId = :artistId
+                        LIMIT 1
+                    ),
+                    :artistId
+                )
         WHERE (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1)
             AND (
                 album_artist_map.artistId IS NOT NULL

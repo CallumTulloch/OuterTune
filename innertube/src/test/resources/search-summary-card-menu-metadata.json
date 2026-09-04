@@ -1,0 +1,113 @@
+{
+  "title": {
+    "runs": [
+      {
+        "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+        "navigationEndpoint": {
+          "watchEndpoint": {
+            "videoId": "TSZhKssbW2g",
+            "watchEndpointMusicSupportedConfigs": {
+              "watchEndpointMusicConfig": {
+                "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "subtitle": {
+    "runs": [
+      { "text": "曲" },
+      { "text": " • " },
+      { "text": "翟锦彦、8082Audio" },
+      { "text": " • " },
+      { "text": "3:58" }
+    ],
+    "accessibility": {
+      "accessibilityData": {
+        "label": "曲 • 翟锦彦、8082Audio • 3 分 58 秒"
+      }
+    }
+  },
+  "thumbnail": {
+    "musicThumbnailRenderer": {
+      "thumbnail": {
+        "thumbnails": [
+          {
+            "url": "https://yt3.googleusercontent.com/target-cover=w120-h120-l90-rj",
+            "width": 120,
+            "height": 120
+          }
+        ]
+      },
+      "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+      "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+    }
+  },
+  "buttons": [],
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": { "runs": [{ "text": "アルバムに移動" }] },
+            "icon": { "iconType": "ALBUM" },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPREb_NUdafp1DlA5",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": { "runs": [{ "text": "アーティストに移動" }] },
+            "icon": { "iconType": "ARTIST" },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": { "runs": [{ "text": "曲のクレジットを表示" }] },
+            "icon": { "iconType": "PEOPLE_GROUP" },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPTCTSZhKssbW2g",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "onTap": {
+    "watchEndpoint": {
+      "videoId": "TSZhKssbW2g",
+      "watchEndpointMusicSupportedConfigs": {
+        "watchEndpointMusicConfig": {
+          "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      }
+    }
+  }
+}

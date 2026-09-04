@@ -46,6 +46,37 @@ class DownloadUtilTest {
     }
 
     @Test
+    fun `queue album replaces a stale album only when it matches the typed hint`() {
+        val hinted = original.copy(
+            album = MediaMetadata.Album("MPRE_stale", "Stale"),
+            metadataEndpointHints = MediaMetadata.MetadataEndpointHints(
+                albumBrowseId = resolved.album!!.id,
+            ),
+        )
+
+        assertEquals(resolved.album, mergeResolvedMetadata(hinted, resolved).album)
+        assertEquals(
+            hinted.album,
+            mergeResolvedMetadata(
+                hinted,
+                resolved.copy(album = MediaMetadata.Album("MPRE_other", "Other")),
+            ).album,
+        )
+    }
+
+    @Test
+    fun `generated online artist id is not treated as a resolved browse id`() {
+        val merged = mergeResolvedMetadata(
+            original.copy(
+                artists = listOf(MediaMetadata.Artist(id = "LAgvxYyqZN", name = "椎名林檎")),
+            ),
+            resolved,
+        )
+
+        assertEquals("UCbrWU0y_rLsEOYgaTX5Y74A", merged.artists.single().id)
+    }
+
+    @Test
     fun `completed download is persisted with its update time`() {
         val updateTimeMs = 1_700_000_000_000L
 

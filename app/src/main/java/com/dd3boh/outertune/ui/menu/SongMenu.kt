@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -62,6 +63,7 @@ import com.dd3boh.outertune.db.entities.PlaylistSong
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.playback.queues.YouTubeQueue
@@ -109,6 +111,13 @@ fun SongMenu(
     val librarySong by database.song(originalSong.id).collectAsState(initial = originalSong)
     val song = librarySong ?: originalSong
     val containingFolderRoute = localSongFolderRoute(song.song.isLocal, song.song.localPath)
+    val navigableArtists = remember(song.artists) {
+        song.artists.mapNotNull { artist ->
+            artist.artistNavigationId()?.let { artistId ->
+                artist to artistId
+            }
+        }
+    }
     val download by LocalDownloadUtil.current.getDownload(originalSong.id).collectAsState(initial = null)
     val coroutineScope =
         CoroutineScope(syncCoroutine) // rememberCoroutineScope has exception "rememberCoroutineScope left the composition"
@@ -222,15 +231,17 @@ fun SongMenu(
                 }
             )
 
-        GridMenuItem(
-            icon = R.drawable.artist,
-            title = R.string.view_artist
-        ) {
-            if (song.artists.size == 1) {
-                navController.navigate("artist/${song.artists[0].id}")
-                onDismiss()
-            } else {
-                showSelectArtistDialog = true
+        if (navigableArtists.isNotEmpty()) {
+            GridMenuItem(
+                icon = R.drawable.artist,
+                title = R.string.view_artist
+            ) {
+                if (navigableArtists.size == 1) {
+                    navController.navigate("artist/${navigableArtists[0].second}")
+                    onDismiss()
+                } else {
+                    showSelectArtistDialog = true
+                }
             }
         }
         if (containingFolderRoute != null) {

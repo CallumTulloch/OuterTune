@@ -44,6 +44,12 @@ data class SongEntity(
     val discNumber: Int? = null,
     val albumId: String? = null,
     val albumName: String? = null,
+    /** Typed endpoints retained so interrupted playback enrichment can resume after restart. */
+    val metadataAlbumBrowseId: String? = null,
+    val metadataArtistBrowseIds: String? = null,
+    val metadataCreditsBrowseId: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val artistCreditsResolved: Boolean = false,
     // Album artists are normalized through AlbumArtistMap instead of being duplicated per song.
     val year: Int? = null,
     val date: LocalDateTime? = null, // ID3 tag property

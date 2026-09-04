@@ -24,6 +24,7 @@ import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.ArtistSongSortType
 import com.dd3boh.outertune.db.entities.Artist
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.button.IconButton
@@ -47,6 +48,9 @@ fun ArtistMenu(
     val isNetworkConnected = LocalNetworkConnected.current
     val artistState = database.artist(originalArtist.id).collectAsState(initial = originalArtist)
     val artist = artistState.value ?: originalArtist
+    val artistBrowseId = artist.artist
+        .takeUnless { it.isLocal }
+        ?.artistNavigationId()
 
     ArtistListItem(
         artist = artist,
@@ -90,7 +94,9 @@ fun ArtistMenu(
                     }
 
                     val playlistId = withContext(Dispatchers.IO) {
-                        YouTube.artist(artist.id).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                        artistBrowseId?.let { browseId ->
+                            YouTube.artist(browseId).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                        }
                     }
 
                     playerConnection.playQueue(
@@ -115,7 +121,9 @@ fun ArtistMenu(
                     }
 
                     val playlistId = withContext(Dispatchers.IO) {
-                        YouTube.artist(artist.id).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                        artistBrowseId?.let { browseId ->
+                            YouTube.artist(browseId).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                        }
                     }
 
                     playerConnection.playQueue(
@@ -129,7 +137,7 @@ fun ArtistMenu(
                 onDismiss()
             }
         }
-        if (artist.artist.isYouTubeArtist) {
+        if (artistBrowseId != null) {
             GridMenuItem(
                 icon = Icons.Rounded.Share,
                 title = R.string.share
@@ -138,7 +146,7 @@ fun ArtistMenu(
                 val intent = Intent().apply {
                     action = Intent.ACTION_SEND
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/channel/${artist.id}")
+                    putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/channel/$artistBrowseId")
                 }
                 context.startActivity(Intent.createChooser(intent, null))
             }

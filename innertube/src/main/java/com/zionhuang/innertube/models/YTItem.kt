@@ -18,6 +18,18 @@ data class Album(
     val id: String,
 )
 
+/**
+ * Browse endpoints advertised by a song menu.
+ *
+ * These are discovery hints, not resolved metadata. In particular, an artist endpoint is not
+ * necessarily associated with any one of the display artist runs returned alongside the song.
+ */
+data class SongMetadataEndpointHints(
+    val album: BrowseEndpoint? = null,
+    val artistCandidates: List<BrowseEndpoint> = emptyList(),
+    val credits: BrowseEndpoint? = null,
+)
+
 data class SongItem(
     override val id: String,
     override val title: String,
@@ -28,6 +40,7 @@ data class SongItem(
     override val explicit: Boolean = false,
     val endpoint: WatchEndpoint? = null,
     val setVideoId: String? = null,
+    val metadataEndpointHints: SongMetadataEndpointHints = SongMetadataEndpointHints(),
 ) : YTItem() {
     override val shareLink: String
         get() = "https://music.youtube.com/watch?v=$id"

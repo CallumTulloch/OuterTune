@@ -195,7 +195,15 @@ interface SongsDao {
         SELECT song.*
         FROM song_artist_map
             JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = :artistId
+        WHERE artistId = COALESCE(
+            (
+                SELECT remote_artist.id
+                FROM artist remote_artist
+                WHERE remote_artist.isLocal = 0 AND remote_artist.browseId = :artistId
+                LIMIT 1
+            ),
+            :artistId
+        )
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         LIMIT :previewSize
     """)
@@ -501,6 +509,66 @@ interface SongsDao {
 
     @Query("UPDATE song SET lyricsOffsetMs = :offsetMs WHERE id = :songId")
     fun updateLyricsOffset(songId: String, offsetMs: Long)
+
+    @Query("SELECT artistCreditsResolved FROM song WHERE id = :songId")
+    fun areSongArtistCreditsResolved(songId: String): Boolean
+
+    @Query("SELECT metadataAlbumBrowseId FROM song WHERE id = :songId")
+    fun songMetadataAlbumBrowseId(songId: String): String?
+
+    @Query("UPDATE song SET artistCreditsResolved = 1 WHERE id = :songId")
+    fun markSongArtistCreditsResolved(songId: String)
+
+    @Query(
+        """
+        UPDATE song SET
+            artistCreditsResolved = CASE
+                WHEN NULLIF(:creditsBrowseId, '') IS NOT NULL
+                    AND COALESCE(metadataCreditsBrowseId, '') != NULLIF(:creditsBrowseId, '')
+                THEN 0
+                ELSE artistCreditsResolved
+            END,
+            metadataAlbumBrowseId = COALESCE(
+                NULLIF(:albumBrowseId, ''),
+                metadataAlbumBrowseId
+            ),
+            metadataArtistBrowseIds = CASE
+                WHEN NULLIF(:creditsBrowseId, '') IS NULL THEN metadataArtistBrowseIds
+                WHEN COALESCE(metadataCreditsBrowseId, '') = NULLIF(:creditsBrowseId, '')
+                    THEN COALESCE(NULLIF(:artistBrowseIds, ''), metadataArtistBrowseIds)
+                ELSE NULLIF(:artistBrowseIds, '')
+            END,
+            metadataCreditsBrowseId = COALESCE(
+                NULLIF(:creditsBrowseId, ''),
+                metadataCreditsBrowseId
+            )
+        WHERE id = :songId
+        """,
+    )
+    fun retainSongMetadataEndpointHints(
+        songId: String,
+        albumBrowseId: String?,
+        artistBrowseIds: String?,
+        creditsBrowseId: String?,
+    )
+
+    @Query("UPDATE song SET metadataAlbumBrowseId = :albumBrowseId WHERE id = :songId")
+    fun replaceSongAlbumMetadataEndpointHint(songId: String, albumBrowseId: String?)
+
+    @Query(
+        """
+        UPDATE song SET
+            metadataArtistBrowseIds = :artistBrowseIds,
+            metadataCreditsBrowseId = :creditsBrowseId,
+            artistCreditsResolved = 0
+        WHERE id = :songId
+        """,
+    )
+    fun replaceSongArtistMetadataEndpointHints(
+        songId: String,
+        artistBrowseIds: String?,
+        creditsBrowseId: String?,
+    )
 
     @Query("UPDATE playCount SET count = count + 1 WHERE song = :songId AND year = :year AND month = :month")
     fun incrementPlayCount(songId: String, year: Int, month: Int)

@@ -48,6 +48,7 @@ import com.dd3boh.outertune.constants.ThumbnailCornerRadius
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.models.artistNavigationId
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.ListQueue
@@ -81,9 +82,9 @@ fun YouTubeSongMenu(
 
     val librarySong by database.song(song.id).collectAsState(initial = null)
     val download by LocalDownloadUtil.current.getDownload(song.id).collectAsState(initial = null)
-    val artists = remember {
+    val artists = remember(song.artists) {
         song.artists.mapNotNull {
-            it.id?.let { artistId ->
+            it.id.artistNavigationId(isLocal = false)?.let { artistId ->
                 MediaMetadata.Artist(id = artistId, name = it.name)
             }
         }
@@ -206,8 +207,10 @@ fun YouTubeSongMenu(
                 title = R.string.view_artist
             ) {
                 if (artists.size == 1) {
-                    navController.navigate("artist/${artists[0].id}")
-                    onDismiss()
+                    artists[0].id.artistNavigationId(isLocal = false)?.let { artistId ->
+                        navController.navigate("artist/$artistId")
+                        onDismiss()
+                    }
                 } else {
                     showSelectArtistDialog = true
                 }
