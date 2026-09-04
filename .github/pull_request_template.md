@@ -29,6 +29,15 @@
 
 - Fixes #
 
+### Verification
+
+<!-- For code, build configuration, database, or behavior changes, link the concise record described in docs/verification/README.md. Do not mark deferred or skipped checks as passed. -->
+
+- Verification record: `docs/verification/records/...`
+- Automated result:
+- Manual result:
+- Deferred check IDs:
+
 ### Relies on the following changes
 
 <!-- Tag any pull requests that are required before this can be merged.

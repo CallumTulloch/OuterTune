@@ -57,7 +57,12 @@ To make everyone's life easier, there are a set of guidelines that are to be fol
 - Write a descriptive title and a meaningful description
 - Upload images/video for any UI changes
 - In the event of merge conflicts, you may be required to rebase onto the current `dev` branch
-- **You are required to build and test the app before submitting a pull request**
+- **Before submitting a pull request, run and record the checks required by the
+  [development workflow](./docs/development-workflow.md).** Code changes require the relevant build and tests;
+  documentation-only changes normally require static document checks instead of an app build
+- Follow the repository's [development workflow](./docs/development-workflow.md) for risk-based testing and efficient builds
+- For code, build configuration, database, or behavior changes, add a concise
+  [verification record](./docs/verification/README.md). Record failures, skipped tests, and deferred checks separately
 
 ## Commiting guidelines
 
@@ -65,6 +70,7 @@ To make everyone's life easier, there are a set of guidelines that are to be fol
   `tag: commit_name`. [Example](https://github.com/OuterTune/OuterTune/commit/798e8366227dd2cc38355224c733dbf7e8ffcee0)
     - A list of tags commonly used is provided below
 - Commit descriptions are not required, but highly recommended
+- When a verification record exists, add `Verification: docs/verification/records/<record>.md` to the commit description
 - When porting/cherry-picking/stealing from other repositories or sources:
     - Maintain
       authorship. [Example](https://github.com/OuterTune/OuterTune/commit/b0dc59682190b41f0200e9df5174322acaa3d40d)
@@ -133,6 +139,7 @@ To make everyone's life easier, there are a set of guidelines that are to be fol
 ## Database schema changes
 
 - Clearly state if a database version increment is required
-- You are require to make sure migration works from the previous database version
+- Provide and verify a migration from the previous database version, unless an explicitly documented and approved
+  destructive-reset policy applies. A destructive reset must state that existing local data will be deleted
 - Commits modifying the database version should be all be contained in that single commit
     - These include generating JSON, Entity classes, migration conflict resolution, bumping database version etc.

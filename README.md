@@ -68,6 +68,10 @@ OuterTune is a supercharged fork of [InnerTune](https://github.com/z-huang/Inner
 We are looking for contributors, translators, and maintainers! If you would like to help out, or just wish to build the
 app yourself, please see the [building and contribution notes](./CONTRIBUTING.md).
 
+Repository-specific implementation and test practices are documented in the
+[development workflow](./docs/development-workflow.md). Completed checks and deferred follow-ups are indexed in the
+[verification records](./docs/verification/README.md).
+
 ### Submitting Translations
 
 We use Weblate to translate OuterTune. For more details or to submit translations, visit our [Weblate page](https://hosted.weblate.org/projects/outertune/).
