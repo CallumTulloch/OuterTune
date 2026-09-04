@@ -56,6 +56,7 @@ import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.DEFAULT_ENABLED_TABS
 import com.dd3boh.outertune.constants.EnabledTabsKey
+import com.dd3boh.outertune.constants.LocalLibraryEnableKey
 import com.dd3boh.outertune.constants.PauseSearchHistoryKey
 import com.dd3boh.outertune.constants.SearchSource
 import com.dd3boh.outertune.constants.SearchSourceKey
@@ -107,10 +108,13 @@ fun SearchBarContainer(
     val playerConnection = LocalPlayerConnection.current
 
     val enabledTabs by rememberPreference(EnabledTabsKey, defaultValue = DEFAULT_ENABLED_TABS)
+    val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
     var searchSource by rememberEnumPreference(SearchSourceKey, SearchSource.ONLINE)
     val updateAvailable by rememberPreference(UpdateAvailableKey, defaultValue = false)
 
-    val navigationItems = remember { Screens.getScreens(enabledTabs) }
+    val navigationItems = remember(enabledTabs, localLibEnable) {
+        Screens.getScreens(enabledTabs, localLibEnable)
+    }
     val searchBarFocusRequester = remember { FocusRequester() }
     val snackbarHostState = remember { SnackbarHostState() }
 

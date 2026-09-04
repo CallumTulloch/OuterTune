@@ -80,6 +80,9 @@ interface SongsDao {
     @Query("SELECT count from playCount WHERE song = :songId AND year = :year AND month = :month")
     fun getPlayCountByMonth(songId: String?, year: Int, month: Int): Flow<Int>
 
+    @Query("SELECT EXISTS(SELECT 1 FROM song WHERE id = :songId)")
+    fun songExists(songId: String): Boolean
+
     @Transaction
     @Query("SELECT * FROM song WHERE liked AND dateDownload IS NULL")
     fun likedSongsNotDownloaded(): Flow<List<Song>>
@@ -505,7 +508,12 @@ interface SongsDao {
     /**
      * Increment by one the play count with today's year and month.
      */
+    @Transaction
     fun incrementPlayCount(songId: String) {
+        // playCount has no foreign key. Keeping this check in the same transaction as the
+        // increment prevents a delayed playback callback from recreating an orphan after purge.
+        if (!songExists(songId)) return
+
         val time = LocalDateTime.now().atOffset(ZoneOffset.UTC)
         var oldCount: Int
         runBlocking {

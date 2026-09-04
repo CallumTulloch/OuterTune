@@ -92,12 +92,12 @@ import com.dd3boh.outertune.ui.utils.clearDtCache
 import com.dd3boh.outertune.utils.lmScannerCoroutine
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
-import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.destroyScanner
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.getScanner
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scannerProgressCurrent
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scannerProgressTotal
-import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scannerRequestCancel
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.scannerState
+import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.requestScannerCancellation
+import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.withScannerOperation
 import com.dd3boh.outertune.utils.scanners.ScannerAbortException
 import com.dd3boh.outertune.utils.scanners.absoluteFilePathFromUri
 import com.dd3boh.outertune.utils.scanners.stringFromUriList
@@ -170,7 +170,7 @@ fun ColumnScope.LocalScannerFrag() {
             onClick = {
                 // cancel button
                 if (scannerState > 0) {
-                    scannerRequestCancel = true
+                    requestScannerCancellation()
                     return@Button
                 }
 
@@ -207,74 +207,66 @@ fun ColumnScope.LocalScannerFrag() {
                     if (scannerState > 0) {
                         return@launch
                     }
-                    // full rescan
-                    if (fullRescan) {
-                        try {
+                    try {
+                        withScannerOperation(SCANNER_OWNER_LM) {
                             val scanner = getScanner(context, scannerImpl, SCANNER_OWNER_LM)
-                            if (scannerImpl == ScannerImpl.MEDIASTORE) {
-                                scanner.fullMediaStoreSync(
-                                    database,
-                                    uriListFromString(scanPaths),
-                                    uriListFromString(excludedScanPaths),
-                                    scannerSensitivity,
-                                    strictExtensions,
-                                    strictFilePaths,
-                                    true,
-                                )
+
+                            if (fullRescan) {
+                                if (scannerImpl == ScannerImpl.MEDIASTORE) {
+                                    scanner.fullMediaStoreSync(
+                                        database,
+                                        uriListFromString(scanPaths),
+                                        uriListFromString(excludedScanPaths),
+                                        scannerSensitivity,
+                                        strictExtensions,
+                                        strictFilePaths,
+                                        true,
+                                    )
+                                } else {
+                                    val uris = scanner.scanLocal(scanPaths, excludedScanPaths)
+                                    scanner.fullSync(
+                                        database,
+                                        uris,
+                                        scannerSensitivity,
+                                        strictExtensions,
+                                        strictFilePaths,
+                                    )
+                                }
                             } else {
-                                val uris = scanner.scanLocal(scanPaths, excludedScanPaths)
-                                scanner.fullSync(database, uris, scannerSensitivity, strictExtensions, strictFilePaths)
+                                if (scannerImpl == ScannerImpl.MEDIASTORE) {
+                                    scanner.fullMediaStoreSync(
+                                        database,
+                                        uriListFromString(scanPaths),
+                                        uriListFromString(excludedScanPaths),
+                                        scannerSensitivity,
+                                        strictExtensions,
+                                        strictFilePaths,
+                                        false,
+                                    )
+                                } else {
+                                    val uris = scanner.scanLocal(scanPaths, excludedScanPaths)
+                                    scanner.quickSync(
+                                        database,
+                                        uris,
+                                        scannerSensitivity,
+                                        strictExtensions,
+                                        strictFilePaths,
+                                    )
+                                }
                             }
 
                             delay(1000)
-                        } catch (e: ScannerAbortException) {
-                            scannerFailure = true
-
-                            snackbarHostState.showSnackbar(
-                                message = "${context.getString(R.string.scanner_scan_fail)}: ${e.message}",
-                                withDismissAction = true,
-                                duration = SnackbarDuration.Short
-                            )
-                        } finally {
-                            clearDtCache()
-                            destroyScanner(SCANNER_OWNER_LM)
                         }
-                    } else {
-                        // quick scan
-                        try {
-                            val scanner = getScanner(context, scannerImpl, SCANNER_OWNER_LM)
+                    } catch (e: ScannerAbortException) {
+                        scannerFailure = true
 
-                            if (scannerImpl == ScannerImpl.MEDIASTORE) {
-                                scanner.fullMediaStoreSync(
-                                    database,
-                                    uriListFromString(scanPaths),
-                                    uriListFromString(excludedScanPaths),
-                                    scannerSensitivity,
-                                    strictExtensions,
-                                    strictFilePaths,
-                                    false
-                                )
-                            } else {
-                                val uris = scanner.scanLocal(scanPaths, excludedScanPaths)
-                                scanner.quickSync(
-                                    database, uris, scannerSensitivity, strictExtensions,
-                                    strictFilePaths
-                                )
-                            }
-
-                            delay(1000)
-                        } catch (e: ScannerAbortException) {
-                            scannerFailure = true
-
-                            snackbarHostState.showSnackbar(
-                                message = "${context.getString(R.string.scanner_scan_fail)}: ${e.message}",
-                                withDismissAction = true,
-                                duration = SnackbarDuration.Short
-                            )
-                        } finally {
-                            clearDtCache()
-                            destroyScanner(SCANNER_OWNER_LM)
-                        }
+                        snackbarHostState.showSnackbar(
+                            message = "${context.getString(R.string.scanner_scan_fail)}: ${e.message}",
+                            withDismissAction = true,
+                            duration = SnackbarDuration.Short
+                        )
+                    } finally {
+                        clearDtCache()
                     }
 
                     // post scan actions

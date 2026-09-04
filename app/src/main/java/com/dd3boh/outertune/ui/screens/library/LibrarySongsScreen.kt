@@ -216,12 +216,13 @@ fun LibrarySongsScreen(
         unfilteredSongs,
         appliedContentFilters,
         likedFilterApplied,
+        localLibEnable,
         sortType,
         sortDescending,
     ) {
         unfilteredSongs
             ?.filter { song ->
-                songMatchesFilters(
+                (localLibEnable || !song.song.isLocal) && songMatchesFilters(
                     song = song.song,
                     contentFilters = appliedContentFilters,
                     likedOnly = likedFilterApplied,

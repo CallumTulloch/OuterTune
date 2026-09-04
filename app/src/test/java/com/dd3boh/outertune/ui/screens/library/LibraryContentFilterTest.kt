@@ -6,6 +6,8 @@ import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.constants.PlaylistFilter
 import com.dd3boh.outertune.ui.screens.Screens.LibraryFilter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LibraryContentFilterTest {
@@ -40,6 +42,19 @@ class LibraryContentFilterTest {
                 libraryChips(category, LibraryFilter.entries),
             )
         }
+    }
+
+    @Test
+    fun `disabled local media hides folder category and folder secondary filters`() {
+        val chips = libraryChipUniverse(
+            enabledCategories = LibraryFilter.entries,
+            includeFolderContent = false,
+        )
+
+        assertFalse(chips.any { it.category == LibraryFilter.FOLDERS })
+        assertFalse(chips.any { it.contentFilter == LibraryContentFilter.FOLDER })
+        assertTrue(chips.any { it.contentFilter == LibraryContentFilter.DOWNLOADED })
+        assertTrue(chips.any { it.contentFilter == LibraryContentFilter.LIBRARY })
     }
 
     @Test

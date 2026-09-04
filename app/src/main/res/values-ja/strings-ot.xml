@@ -55,6 +55,7 @@
     <string name="remote_history">リモート</string>
     <string name="delete_lyric_confirm">\"%s\"の保存された歌詞を本当に削除しますか？</string>
     <string name="local_library_enable_description">無効なら、アプリに端末内ライブラリを表示しません</string>
+    <string name="local_library_enable_delete_description">OFFにすると取り込んだフォルダ曲をアプリから削除します。端末上のファイルとスキャン対象フォルダは残ります。</string>
     <string name="flat_subfolders_description">無効にすると、ディスク上のファイル構造が保持されます</string>
     <string name="flat_subfolders_title">サブフォルダを展開して表示する</string>
     <string name="lyrics_prefer_local_description">すべてのクラウド提供元を使用する前に、端末内の歌詞ファイルの解決を優先します。クラウドからの提供を優先するには、これをオフにします</string>
@@ -172,6 +173,8 @@
     <string name="attribution_title">帰属</string>
     <string name="m3u_ytm_lookup">アプリのデータベースに見つからない曲をYouTube Musicで検索する</string>
     <string name="disable_lm_confirm">端末内メディアを無効にしますか？ライブラリ内のコンテンツに影響はありません。</string>
+    <string name="disable_lm_delete_confirm">端末内メディアを無効にしますか？取り込んだフォルダ曲とアプリ内の関連情報を削除します。端末上の音楽ファイルとスキャン対象フォルダ設定は削除されません。</string>
+    <string name="local_media_disable_failed">端末内メディアを無効にできませんでした。DBの一部だけが削除されることはありません。</string>
     <string name="clear_song_cache_confirm">曲のキャッシュを削除しますか？</string>
     <string name="scanner_progress_processing">処理中…</string>
     <string name="lyrics_karaoke_hz_title">カラオケ風の歌詞の更新速度を調整する</string>

@@ -30,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -876,8 +877,16 @@ class QueueBoard(
     }
 
     fun shutdown() {
+        // Queue save jobs may re-insert SongEntity rows through DatabaseDao.saveQueue(). Cancel
+        // the complete board scope before a destructive local-media purge drops those songs.
+        coroutineScope.cancel()
         queueSongMap.clear()
         queueEntity.clear()
+    }
+
+    /** Wait until all database writes owned by this queue board have stopped. */
+    suspend fun awaitShutdown() {
+        coroutineScope.coroutineContext[Job]?.join()
     }
 
     private fun saveQueueSongs(mq: MultiQueueObject) {

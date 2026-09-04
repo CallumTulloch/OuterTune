@@ -759,13 +759,14 @@ fun HomeScreen(
         )
 
         HideOnScrollFAB(
-            visible = allLocalItems.isNotEmpty() || allYtItems.isNotEmpty(),
+            visible = (localLibEnable && allLocalItems.isNotEmpty()) || allYtItems.isNotEmpty(),
             lazyListState = lazylistState,
             icon = Icons.Rounded.Casino,
             onClick = {
                 val local = when {
-                    allLocalItems.isNotEmpty() && allYtItems.isNotEmpty() -> Random.nextFloat() < 0.5
-                    allLocalItems.isNotEmpty() -> true
+                    localLibEnable && allLocalItems.isNotEmpty() && allYtItems.isNotEmpty() ->
+                        Random.nextFloat() < 0.5
+                    localLibEnable && allLocalItems.isNotEmpty() -> true
                     else -> false
                 }
                 if (local) {

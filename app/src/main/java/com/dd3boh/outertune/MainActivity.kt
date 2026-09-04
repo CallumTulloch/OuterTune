@@ -118,6 +118,7 @@ import com.dd3boh.outertune.constants.DynamicThemeKey
 import com.dd3boh.outertune.constants.EnabledTabsKey
 import com.dd3boh.outertune.constants.HighContrastKey
 import com.dd3boh.outertune.constants.LibraryFilterKey
+import com.dd3boh.outertune.constants.LocalLibraryEnableKey
 import com.dd3boh.outertune.constants.MinMiniPlayerHeight
 import com.dd3boh.outertune.constants.MiniPlayerHeight
 import com.dd3boh.outertune.constants.NavigationBarAnimationSpec
@@ -282,8 +283,9 @@ class MainActivity : ComponentActivity() {
             var filter by rememberEnumPreference(LibraryFilterKey, Screens.LibraryFilter.ALL)
             val (slimNav) = rememberPreference(SlimNavBarKey, defaultValue = false)
             val (enabledTabs) = rememberPreference(EnabledTabsKey, defaultValue = DEFAULT_ENABLED_TABS)
-            val navigationItems = remember {
-                Screens.getScreens(enabledTabs)
+            val (localLibEnable) = rememberPreference(LocalLibraryEnableKey, defaultValue = true)
+            val navigationItems = remember(enabledTabs, localLibEnable) {
+                Screens.getScreens(enabledTabs, localLibEnable)
             }
             val (defaultOpenTab, onDefaultOpenTabChange) = rememberPreference(
                 DefaultOpenTabKey,
@@ -335,8 +337,9 @@ class MainActivity : ComponentActivity() {
 
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val initialNavigationRoute = remember(defaultOpenTab) {
+                val initialNavigationRoute = remember(defaultOpenTab, localLibEnable) {
                     Screens.getAllScreens().find { it.route == defaultOpenTab }?.route
+                        ?.takeUnless { !localLibEnable && it == Screens.Folders.route }
                         ?: Screens.Home.route
                 }
                 var activeNavigationRoute by rememberSaveable {
@@ -347,6 +350,20 @@ class MainActivity : ComponentActivity() {
                     navigationItems.firstOrNull {
                         it.route == navBackStackEntry?.destination?.route
                     }?.let { activeNavigationRoute = it.route }
+                }
+
+                LaunchedEffect(localLibEnable, navBackStackEntry?.destination?.route) {
+                    if (!localLibEnable &&
+                        navBackStackEntry?.destination?.route?.startsWith(Screens.Folders.route) == true
+                    ) {
+                        activeNavigationRoute = Screens.Home.route
+                        navController.navigate(Screens.Home.route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
+                    }
                 }
 
                 val tabOpenedFromShortcut = remember {

@@ -39,9 +39,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -124,9 +126,12 @@ internal fun libraryChips(
     activeCategory: LibraryFilter,
     enabledCategories: List<LibraryFilter>,
     showContentFilters: Boolean = true,
+    includeFolderContent: Boolean = true,
 ): List<LibraryChip> = if (activeCategory == LibraryFilter.ALL) {
     enabledCategories
-        .filterNot { it == LibraryFilter.ALL }
+        .filterNot {
+            it == LibraryFilter.ALL || (!includeFolderContent && it == LibraryFilter.FOLDERS)
+        }
         .map(::LibraryChip)
 } else {
     buildList {
@@ -134,22 +139,29 @@ internal fun libraryChips(
         if (showContentFilters && activeCategory in libraryCategoriesWithContentFilter) {
             add(LibraryChip(activeCategory, LibraryContentFilter.DOWNLOADED))
             add(LibraryChip(activeCategory, LibraryContentFilter.LIBRARY))
-            add(LibraryChip(activeCategory, LibraryContentFilter.FOLDER))
+            if (includeFolderContent) {
+                add(LibraryChip(activeCategory, LibraryContentFilter.FOLDER))
+            }
         }
     }
 }
 
 internal fun libraryChipUniverse(
     enabledCategories: List<LibraryFilter>,
+    includeFolderContent: Boolean = true,
 ): List<LibraryChip> = buildList {
     enabledCategories
-        .filterNot { it == LibraryFilter.ALL }
+        .filterNot {
+            it == LibraryFilter.ALL || (!includeFolderContent && it == LibraryFilter.FOLDERS)
+        }
         .forEach { category ->
             add(LibraryChip(category))
             if (category in libraryCategoriesWithContentFilter) {
                 add(LibraryChip(category, LibraryContentFilter.DOWNLOADED))
                 add(LibraryChip(category, LibraryContentFilter.LIBRARY))
-                add(LibraryChip(category, LibraryContentFilter.FOLDER))
+                if (includeFolderContent) {
+                    add(LibraryChip(category, LibraryContentFilter.FOLDER))
+                }
             }
         }
 }
@@ -196,6 +208,12 @@ fun LibraryScreen(
     )
     val localLibEnable by rememberPreference(LocalLibraryEnableKey, defaultValue = true)
 
+    LaunchedEffect(localLibEnable, filter) {
+        if (!localLibEnable && filter == LibraryFilter.FOLDERS) {
+            filter = LibraryFilter.ALL
+        }
+    }
+
     val albumSelectedFilterMask = if (libraryContentFilterDefaultsMigrated) {
         albumContentFilterMask
     } else {
@@ -237,7 +255,20 @@ fun LibraryScreen(
     val (sortDescending, onSortDescendingChange) = rememberPreference(LibrarySortDescendingKey, true)
     val (showLikedAndDownloadedPlaylist) = rememberPreference(ShowLikedAndDownloadedPlaylist, true)
 
-    val allItems by viewModel.allItems.collectAsState()
+    val unfilteredAllItems by viewModel.allItems.collectAsState()
+    val allItems = remember(unfilteredAllItems, localLibEnable) {
+        if (localLibEnable) {
+            unfilteredAllItems
+        } else {
+            unfilteredAllItems.filterNot { item ->
+                when (item) {
+                    is Album -> item.album.isLocal
+                    is Artist -> item.artist.isLocal
+                    else -> false
+                }
+            }
+        }
+    }
 
     val isSyncingRemotePlaylists by viewModel.isSyncingRemotePlaylists.collectAsState()
     val isSyncingRemoteAlbums by viewModel.isSyncingRemoteAlbums.collectAsState()
@@ -267,18 +298,15 @@ fun LibraryScreen(
     val categoryTransitionClock = remember { Animatable(0f) }
     val visibleCategory = categoryTransitionTarget ?: filter
 
-    LaunchedEffect(filter, categoryTransitionTarget) {
-        if (categoryTransitionTarget == filter) {
-            categoryTransitionTarget = null
-        }
-    }
-
     var contentFiltersVisibleFor by remember { mutableStateOf<LibraryFilter?>(null) }
     LaunchedEffect(filter) {
         contentFiltersVisibleFor = filter.takeIf { it in libraryCategoriesWithContentFilter }
     }
 
-    val chipValues = libraryChipUniverse(Screens.getFilters(enabledFilters))
+    val chipValues = libraryChipUniverse(
+        enabledCategories = Screens.getFilters(enabledFilters),
+        includeFolderContent = localLibEnable,
+    )
     val chips = chipValues.map { chip ->
         chip to when (chip.contentFilter) {
             LibraryContentFilter.DOWNLOADED -> stringResource(R.string.filter_downloaded)
@@ -295,7 +323,7 @@ fun LibraryScreen(
         }
     }
 
-    val filterContent = @Composable {
+    val filterContentBody = @Composable {
         var showStoragePerm by remember {
             mutableStateOf(context.checkSelfPermission(MEDIA_PERMISSION_LEVEL) != PackageManager.PERMISSION_GRANTED)
         }
@@ -333,6 +361,7 @@ fun LibraryScreen(
                                     else -> {
                                         val target = chip.category
                                         categoryTransitionTarget = target
+                                        filter = target
                                         coroutineScope.launch {
                                             categoryTransitionClock.snapTo(0f)
                                             categoryTransitionClock.animateTo(
@@ -341,7 +370,9 @@ fun LibraryScreen(
                                                     durationMillis = CHIP_ITEM_TRANSITION_DURATION_MILLIS,
                                                 ),
                                             )
-                                            filter = target
+                                            if (categoryTransitionTarget == target) {
+                                                categoryTransitionTarget = null
+                                            }
                                         }
                                     }
                                 }
@@ -425,6 +456,15 @@ fun LibraryScreen(
                     }
                 }
             }
+        }
+    }
+
+    // The chip row is hosted by a different list after a category is selected. Move the same
+    // composition between those hosts so its in-flight visibility animations keep their state.
+    val currentFilterContentBody = rememberUpdatedState(filterContentBody)
+    val filterContent = remember {
+        movableContentOf {
+            currentFilterContentBody.value()
         }
     }
 

@@ -80,6 +80,9 @@ sealed class Screens(
             return screens.toCharArray().map { char -> charToScreenMap[char] ?: Home }
         }
 
+        fun getScreens(screens: String, localMediaEnabled: Boolean): List<Screens> =
+            getScreens(screens).filterNot { !localMediaEnabled && it == Folders }
+
         fun encodeScreens(list: List<Screens>): String {
             val charToScreenMap = screenPairs.associate { (screen, char) -> char to screen }
 

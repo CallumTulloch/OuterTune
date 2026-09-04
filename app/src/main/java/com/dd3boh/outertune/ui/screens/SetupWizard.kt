@@ -102,11 +102,7 @@ import com.dd3boh.outertune.BuildConfig
 import com.dd3boh.outertune.LocalDownloadUtil
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.AutomaticScannerKey
-import com.dd3boh.outertune.constants.DEFAULT_ENABLED_FILTERS
-import com.dd3boh.outertune.constants.DEFAULT_ENABLED_TABS
 import com.dd3boh.outertune.constants.DownloadPathKey
-import com.dd3boh.outertune.constants.EnabledFiltersKey
-import com.dd3boh.outertune.constants.EnabledTabsKey
 import com.dd3boh.outertune.constants.InnerTubeCookieKey
 import com.dd3boh.outertune.constants.LibraryFilterKey
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
@@ -165,22 +161,6 @@ fun SetupWizard(
     // local media prefs
     val (localLibEnable, onLocalLibEnableChange) = rememberPreference(LocalLibraryEnableKey, defaultValue = true)
     val (autoScan, onAutoScanChange) = rememberPreference(AutomaticScannerKey, defaultValue = true)
-    val (enabledTabs, onEnabledTabsChange) = rememberPreference(EnabledTabsKey, defaultValue = DEFAULT_ENABLED_TABS)
-    val (enabledFilters, onEnabledFiltersChange) = rememberPreference(EnabledFiltersKey, defaultValue = DEFAULT_ENABLED_FILTERS)
-
-    LaunchedEffect(localLibEnable) {
-        var containsFolders = enabledTabs.contains('F')
-        if (localLibEnable && !containsFolders) {
-            onEnabledTabsChange(enabledTabs + "F")
-        } else if (!localLibEnable && containsFolders) {
-            onEnabledTabsChange(enabledTabs.filterNot { it == 'F' })
-        }
-
-        containsFolders = enabledFilters.contains('F')
-        if (!localLibEnable && containsFolders) {
-            onEnabledFiltersChange(enabledFilters.filterNot { it == 'F' })
-        }
-    }
 
     BackHandler {
         if (oobeStatus > 0) {

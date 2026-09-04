@@ -119,7 +119,10 @@ fun LibraryArtistsScreen(
             viewModel.artists(libraryContentFilters, sortType, sortDescending)
         }.collectAsState(initial = null)
     }
-    val artists by artistsState
+    val unfilteredArtists by artistsState
+    val artists = remember(unfilteredArtists, localLibEnable) {
+        if (localLibEnable) unfilteredArtists else unfilteredArtists?.filterNot { it.artist.isLocal }
+    }
     val isSyncingRemoteArtists by viewModel.isSyncingRemoteArtists.collectAsState()
     val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
     val isLibraryRefreshRunning = isSyncingRemoteArtists || isManualLibraryRefresh

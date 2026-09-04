@@ -122,7 +122,10 @@ fun LibraryAlbumsScreen(
             viewModel.albums(libraryContentFilters, sortType, sortDescending)
         }.collectAsState(initial = null)
     }
-    val albums by albumsState
+    val unfilteredAlbums by albumsState
+    val albums = remember(unfilteredAlbums, localLibEnable) {
+        if (localLibEnable) unfilteredAlbums else unfilteredAlbums?.filterNot { it.album.isLocal }
+    }
     val isSyncingLibraryAlbums by viewModel.isSyncingRemoteAlbums.collectAsState()
     val isManualLibraryRefresh by viewModel.isRefreshingLibrary.collectAsState()
     val isLibraryRefreshRunning = isSyncingLibraryAlbums || isManualLibraryRefresh

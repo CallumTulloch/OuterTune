@@ -67,12 +67,15 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.util.concurrent.atomic.AtomicLong
 
 class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
     private val TAG = LocalMediaScanner::class.simpleName.toString()
@@ -1090,8 +1093,15 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
 
         private var ownerId = -1
         private var localScanner: LocalMediaScanner? = null
+        private val scannerOperationMutex = Mutex()
+        private val scannerControlLock = Any()
 
+        private val scannerCancellationGeneration = AtomicLong(0L)
 
+        @Volatile
+        private var scannerOperationsBlocked = false
+
+        @Volatile
         var scannerRequestCancel = false
 
         /**
@@ -1149,11 +1159,73 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
             return localScanner!!
         }
 
+        /**
+         * Serializes complete scanner runs, including their database synchronization phase.
+         * Callers should acquire the scanner through [getScanner] inside [action].
+         */
+        suspend fun <T> withScannerOperation(owner: Int, action: suspend () -> T): T =
+            scannerCancellationGeneration.get().let { operationGeneration ->
+                scannerOperationMutex.withLock {
+                    if (scannerOperationsBlocked ||
+                        operationGeneration != scannerCancellationGeneration.get()
+                    ) {
+                        throw ScannerAbortException("Scanner operation canceled before it started")
+                    }
+
+                    scannerRequestCancel = false
+                    try {
+                        action()
+                    } finally {
+                        destroyScanner(owner)
+                    }
+                }
+            }
+
+        fun requestScannerCancellation() {
+            scannerRequestCancel = true
+        }
+
+        fun requestScannerShutdown(): Long = synchronized(scannerControlLock) {
+            scannerOperationsBlocked = true
+            scannerRequestCancel = true
+            scannerCancellationGeneration.incrementAndGet()
+        }
+
+        /**
+         * Allows scanner work again after local media has been explicitly enabled. Incrementing
+         * the generation rejects operations that were queued while local media was disabled.
+         */
+        fun resumeScannerOperations() = synchronized(scannerControlLock) {
+            if (scannerOperationsBlocked) {
+                scannerCancellationGeneration.incrementAndGet()
+                scannerRequestCancel = false
+                scannerOperationsBlocked = false
+            }
+        }
+
+        /**
+         * Requests cancellation and waits until the complete scanner operation has left its
+         * critical section. This prevents a late scanner write from restoring rows after an
+         * explicit local-media purge.
+         */
+        suspend fun cancelScannerAndAwaitIdle() {
+            requestScannerShutdown()
+            scannerOperationMutex.withLock {
+                resetScannerState()
+            }
+        }
+
         suspend fun destroyScanner(owner: Int) {
             if (owner != ownerId && ownerId != -1) {
                 Log.w(TAG, "Scanner instance can only be destroyed by the owner. Aborting. Check your ownerId.")
                 return
             }
+            resetScannerState()
+
+            Log.i(TAG, "Scanner instance destroyed")
+        }
+
+        private fun resetScannerState() {
             ownerId = -1
             localScanner = null
             scannerState.value = -1
@@ -1161,8 +1233,6 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
             scannerProgressTotal.value = -1
             scannerProgressCurrent.value = -1
             scannerProgressProbe.value = -1
-
-            Log.i(TAG, "Scanner instance destroyed")
         }
 
 
@@ -1187,6 +1257,9 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
                 }
 
             resultingPaths.forEach { path ->
+                if (scannerRequestCancel) {
+                    throw ScannerAbortException("Scanner canceled while discovering local media")
+                }
                 try {
                     val file = documentFileFromUri(context, path)
                     if (file != null) {
@@ -1230,6 +1303,9 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
         ): DocumentFile? {
             val files = dir.listFiles()
             for (file in files) {
+                if (scannerRequestCancel) {
+                    throw ScannerAbortException("Scanner canceled while discovering local media")
+                }
                 if (!scanHidden && file.name?.startsWith(".") == true) continue
                 if (file.isDirectory && (scanHidden || !file.listFiles().any { it.name == ".nomedia" })) {
                     // look into subdirs

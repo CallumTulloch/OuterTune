@@ -384,10 +384,24 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
     }
 
     @Upsert
-    fun upsert(lyrics: LyricsEntity)
+    fun upsertLyricsUnchecked(lyrics: LyricsEntity)
+
+    @Transaction
+    fun upsert(lyrics: LyricsEntity) {
+        if (songExists(lyrics.id)) {
+            upsertLyricsUnchecked(lyrics)
+        }
+    }
 
     @Upsert
-    fun upsert(format: FormatEntity)
+    fun upsertFormatUnchecked(format: FormatEntity)
+
+    @Transaction
+    fun upsert(format: FormatEntity) {
+        if (songExists(format.id)) {
+            upsertFormatUnchecked(format)
+        }
+    }
 
     @Delete
     fun delete(lyrics: LyricsEntity)
@@ -515,6 +529,9 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
      * Nukes
      */
 
+    @Query("SELECT EXISTS(SELECT 1 FROM song WHERE isLocal = 1 LIMIT 1)")
+    fun hasLocalSongs(): Boolean
+
     @Transaction
     @Query("DELETE FROM genre WHERE isLocal = 1")
     fun nukeLocalGenre()
@@ -534,6 +551,14 @@ AND NOT EXISTS (
     fun nukeLocalLyrics()
 
     @Transaction
+    @Query("DELETE FROM playCount WHERE playCount.song IN (SELECT song.id FROM song WHERE song.isLocal = 1)")
+    fun nukeLocalPlayCounts()
+
+    @Transaction
+    @Query("DELETE FROM format WHERE format.id IN (SELECT song.id FROM song WHERE song.isLocal = 1)")
+    fun nukeLocalFormats()
+
+    @Transaction
     @Query("DELETE FROM lyrics WHERE lyrics.id NOT IN (SELECT song.id FROM song)")
     fun nukeDanglingLyrics()
 
@@ -543,6 +568,13 @@ AND NOT EXISTS (
 
     @Transaction
     fun nukeLocalData() {
+        // These tables do not have foreign keys to SongEntity. Resolve their local song IDs
+        // before deleting the songs so downloaded/online song data is never included.
+        nukeLocalPlayCounts()
+        nukeLocalLyrics()
+        nukeLocalFormats()
+
+        // Song deletion cascades through playlist, queue, history, relation and mapping tables.
         nukeLocalSongs()
         nukeLocalArtists()
         nukeLocalAlbums()

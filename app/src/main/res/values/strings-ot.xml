@@ -186,10 +186,13 @@ while also allowing users to translate our app as well. New, specific strings to
 <!-- Local player settings -->
     <string name="local_library_enable_title">Enable local media</string>
     <string name="local_library_enable_description">Disabling will hide local library from the app</string>
+    <string name="local_library_enable_delete_description">Turning this off removes imported folder songs from the app. Device files and scan folders remain.</string>
     <string name="local_player_settings_title">Local media</string>
     <string name="flat_subfolders_title">Flatten subfolders</string>
     <string name="flat_subfolders_description">Disable to preserve the file structure as on disk</string>
     <string name="disable_lm_confirm">Are you sure you want to disable local media features? Your library contents will not be affected.</string>
+    <string name="disable_lm_delete_confirm">Disable local media? Imported folder songs and their related app data will be deleted. Music files and scan folder settings on this device will not be deleted.</string>
+    <string name="local_media_disable_failed">Could not disable local media. No partial database deletion was applied.</string>
 
 <!-- Scanner settings -->
     <string name="auto_scanner_title">Scan automatically</string>
