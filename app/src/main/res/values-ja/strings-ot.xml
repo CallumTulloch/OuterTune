@@ -65,6 +65,7 @@
     <string name="lyrics_prefer_local">端末内の歌詞ファイルを優先する</string>
     <string name="import_innertune_tooltip">InnerTune のバックアップの復元に対応していますが、技術的な制限により異常が発生する可能性があります</string>
     <string name="auto_scanner_description">アプリを開いたら曲を自動でスキャンします。既存の曲のメタデータは再読み込みしません。</string>
+    <string name="auto_scanner_tooltip">端末内メディアの自動スキャンでは、既存の曲のメタデータは再読み込みされません。メタデータも更新する場合は、手動スキャンでライブラリ全体を再スキャンする項目を選択してください。</string>
     <string name="library">ライブラリ</string>
     <string name="grp_extra_scanner_settings">ほかのスキャン設定</string>
     <string name="grp_lyrics_source">歌詞の提供元</string>

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
@@ -163,9 +164,24 @@ fun ColumnScope.LocalScannerFrag() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically, // WHY WON'T YOU CENTER
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(
+            imageVector = Icons.Rounded.Sync,
+            contentDescription = null,
+        )
+
+        Spacer(Modifier.width(12.dp))
+
+        Text(
+            text = stringResource(R.string.scanner_manual_btn),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
+
+        Spacer(Modifier.width(12.dp))
+
         Button(
             onClick = {
                 // cancel button
@@ -290,55 +306,56 @@ fun ColumnScope.LocalScannerFrag() {
                 }
             )
         }
+    }
 
-
-        // progress indicator
-        if (scannerState <= 0) {
-            return@Row
-        }
-
-        Spacer(Modifier.width(8.dp))
-
-        CircularProgressIndicator(
+    // Keep progress details on their own line so the action remains readable in
+    // every language and at larger display/font scales.
+    if (scannerState > 0) {
+        Row(
             modifier = Modifier
-                .size(32.dp),
-            color = MaterialTheme.colorScheme.secondary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-        )
-
-        Spacer(Modifier.width(8.dp))
-
-        Column {
-//            val isSyncing = scannerState > 3
-            Text(
-                text = when (scannerState) {
-                    1 -> stringResource(R.string.scanner_progress_discovering)
-                    3 -> stringResource(R.string.scanner_progress_syncing)
-                    5 -> stringResource(R.string.scanner_ytm_link_start)
-                    else -> stringResource(R.string.scanner_progress_processing)
-                },
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(32.dp),
                 color = MaterialTheme.colorScheme.secondary,
-                fontSize = 12.sp
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
-            Text(
-                text = "${if (scannerProgressCurrent >= 0) "$scannerProgressCurrent" else "—"}/${
-                    if (scannerProgressTotal >= 0) {
-                        if (scannerState == 1) {
-                            pluralStringResource(
-                                R.plurals.scanner_n_song_found, scannerProgressTotal, scannerProgressTotal
-                            )
+
+            Spacer(Modifier.width(8.dp))
+
+            Column {
+                Text(
+                    text = when (scannerState) {
+                        1 -> stringResource(R.string.scanner_progress_discovering)
+                        3 -> stringResource(R.string.scanner_progress_syncing)
+                        5 -> stringResource(R.string.scanner_ytm_link_start)
+                        else -> stringResource(R.string.scanner_progress_processing)
+                    },
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontSize = 12.sp
+                )
+                Text(
+                    text = "${if (scannerProgressCurrent >= 0) "$scannerProgressCurrent" else "—"}/${
+                        if (scannerProgressTotal >= 0) {
+                            if (scannerState == 1) {
+                                pluralStringResource(
+                                    R.plurals.scanner_n_song_found, scannerProgressTotal, scannerProgressTotal
+                                )
+                            } else {
+                                pluralStringResource(
+                                    R.plurals.scanner_n_song_processed, scannerProgressTotal, scannerProgressTotal
+                                )
+                            }
                         } else {
-                            pluralStringResource(
-                                R.plurals.scanner_n_song_processed, scannerProgressTotal, scannerProgressTotal
-                            )
+                            "—"
                         }
-                    } else {
-                        "—"
-                    }
-                }",
-                color = MaterialTheme.colorScheme.secondary,
-                fontSize = 12.sp
-            )
+                    }",
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontSize = 12.sp
+                )
+            }
         }
     }
     // scanner checkboxes

@@ -166,36 +166,46 @@ fun LocalPlayerSettings(
             .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        SwitchPreference(
-            title = { Text(stringResource(R.string.local_library_enable_title)) },
-            description = stringResource(R.string.local_library_enable_delete_description),
-            icon = { Icon(Icons.Rounded.SdCard, null) },
-            isEnabled = localMediaLifecycleState != LocalMediaLifecycleState.REMOVING,
-            checked = localLibEnable,
-            onCheckedChange = { enabled ->
-                if (localLibEnable) {
-                    showLmDisableDialog = true
-                } else if (enabled) {
-                    activity.lifecycleScope.launch {
-                        context.dataStore.edit { settings ->
-                            settings[LocalLibraryEnableKey] = true
-                            settings[LastLocalScanKey] = 0L
-                            settings[EnabledTabsKey] = restoreFolderTab(
-                                settings[EnabledTabsKey] ?: DEFAULT_ENABLED_TABS,
-                            )
-                        }
+        PreferenceGroupTitle(
+            title = stringResource(R.string.grp_general)
+        )
 
-                        if (context.checkSelfPermission(MEDIA_PERMISSION_LEVEL) ==
-                            PackageManager.PERMISSION_GRANTED
-                        ) {
-                            startSavedMediaImport()
-                        } else {
-                            mediaPermissionLauncher.launch(MEDIA_PERMISSION_LEVEL)
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            SwitchPreference(
+                title = { Text(stringResource(R.string.local_library_enable_title)) },
+                description = stringResource(R.string.local_library_enable_delete_description),
+                icon = { Icon(Icons.Rounded.SdCard, null) },
+                isEnabled = localMediaLifecycleState != LocalMediaLifecycleState.REMOVING,
+                checked = localLibEnable,
+                onCheckedChange = { enabled ->
+                    if (localLibEnable) {
+                        showLmDisableDialog = true
+                    } else if (enabled) {
+                        activity.lifecycleScope.launch {
+                            context.dataStore.edit { settings ->
+                                settings[LocalLibraryEnableKey] = true
+                                settings[LastLocalScanKey] = 0L
+                                settings[EnabledTabsKey] = restoreFolderTab(
+                                    settings[EnabledTabsKey] ?: DEFAULT_ENABLED_TABS,
+                                )
+                            }
+
+                            if (context.checkSelfPermission(MEDIA_PERMISSION_LEVEL) ==
+                                PackageManager.PERMISSION_GRANTED
+                            ) {
+                                startSavedMediaImport()
+                            } else {
+                                mediaPermissionLauncher.launch(MEDIA_PERMISSION_LEVEL)
+                            }
                         }
                     }
                 }
-            }
-        )
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         ElevatedCard(
             modifier = Modifier.fillMaxWidth()
