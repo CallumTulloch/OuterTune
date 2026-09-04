@@ -212,13 +212,13 @@ enum class SongFilter {
     LIBRARY, LIKED, DOWNLOADED, FOLDER, ALL
 }
 
-enum class SongSourceFilter(val mask: Int) {
+enum class SongContentFilter(val mask: Int) {
     LIBRARY(1 shl 0),
     DOWNLOADED(1 shl 1),
     FOLDER(1 shl 2);
 
     companion object {
-        fun fromMask(mask: Int): Set<SongSourceFilter> =
+        fun fromMask(mask: Int): Set<SongContentFilter> =
             entries.filterTo(linkedSetOf()) { filter -> mask and filter.mask != 0 }
     }
 }

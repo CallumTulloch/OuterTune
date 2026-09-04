@@ -1,7 +1,7 @@
 package com.dd3boh.outertune.ui.screens.library
 
 import com.dd3boh.outertune.constants.SongFilter
-import com.dd3boh.outertune.constants.SongSourceFilter
+import com.dd3boh.outertune.constants.SongContentFilter
 import com.dd3boh.outertune.db.entities.SongEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -11,34 +11,34 @@ import java.time.LocalDateTime
 
 class LibrarySongsScreenTest {
     @Test
-    fun `source selections toggle independently and preserve liked selection`() {
+    fun `content selections toggle independently and preserve liked selection`() {
         val libraryOnly = nextSongFilterSelection(
-            currentSourceFilterMask = 0,
+            currentContentFilterMask = 0,
             likedOnly = true,
             selectedFilter = SongFilter.LIBRARY,
         )
         assertEquals(
-            SongFilterSelection(SongSourceFilter.LIBRARY.mask, likedOnly = true),
+            SongFilterSelection(SongContentFilter.LIBRARY.mask, likedOnly = true),
             libraryOnly,
         )
 
         val libraryAndDownloaded = nextSongFilterSelection(
-            currentSourceFilterMask = libraryOnly.sourceFilterMask,
+            currentContentFilterMask = libraryOnly.contentFilterMask,
             likedOnly = libraryOnly.likedOnly,
             selectedFilter = SongFilter.DOWNLOADED,
         )
         assertEquals(
             SongFilterSelection(
-                SongSourceFilter.LIBRARY.mask or SongSourceFilter.DOWNLOADED.mask,
+                SongContentFilter.LIBRARY.mask or SongContentFilter.DOWNLOADED.mask,
                 likedOnly = true,
             ),
             libraryAndDownloaded,
         )
 
         assertEquals(
-            SongFilterSelection(SongSourceFilter.DOWNLOADED.mask, likedOnly = true),
+            SongFilterSelection(SongContentFilter.DOWNLOADED.mask, likedOnly = true),
             nextSongFilterSelection(
-                currentSourceFilterMask = libraryAndDownloaded.sourceFilterMask,
+                currentContentFilterMask = libraryAndDownloaded.contentFilterMask,
                 likedOnly = libraryAndDownloaded.likedOnly,
                 selectedFilter = SongFilter.LIBRARY,
             ),
@@ -46,19 +46,19 @@ class LibrarySongsScreenTest {
     }
 
     @Test
-    fun `liked selection toggles without changing source selections`() {
+    fun `liked selection toggles without changing content selections`() {
         assertEquals(
-            SongFilterSelection(SongSourceFilter.FOLDER.mask, likedOnly = true),
+            SongFilterSelection(SongContentFilter.FOLDER.mask, likedOnly = true),
             nextSongFilterSelection(
-                currentSourceFilterMask = SongSourceFilter.FOLDER.mask,
+                currentContentFilterMask = SongContentFilter.FOLDER.mask,
                 likedOnly = false,
                 selectedFilter = SongFilter.LIKED,
             ),
         )
         assertEquals(
-            SongFilterSelection(SongSourceFilter.FOLDER.mask, likedOnly = false),
+            SongFilterSelection(SongContentFilter.FOLDER.mask, likedOnly = false),
             nextSongFilterSelection(
-                currentSourceFilterMask = SongSourceFilter.FOLDER.mask,
+                currentContentFilterMask = SongContentFilter.FOLDER.mask,
                 likedOnly = true,
                 selectedFilter = SongFilter.LIKED,
             ),
@@ -66,28 +66,28 @@ class LibrarySongsScreenTest {
     }
 
     @Test
-    fun `legacy single source selection migrates to source mask`() {
+    fun `legacy single selection migrates to content mask`() {
         assertEquals(
-            SongFilterSelection(SongSourceFilter.LIBRARY.mask, likedOnly = false),
+            SongFilterSelection(SongContentFilter.LIBRARY.mask, likedOnly = false),
             migrateLegacySongFilterSelection(SongFilter.LIBRARY, likedOnly = false),
         )
         assertEquals(
-            SongFilterSelection(sourceFilterMask = 0, likedOnly = true),
+            SongFilterSelection(contentFilterMask = 0, likedOnly = true),
             migrateLegacySongFilterSelection(SongFilter.LIKED, likedOnly = false),
         )
         assertEquals(
-            SongFilterSelection(sourceFilterMask = 0, likedOnly = false),
+            SongFilterSelection(contentFilterMask = 0, likedOnly = false),
             migrateLegacySongFilterSelection(null, likedOnly = false),
         )
     }
 
     @Test
-    fun `liked and source filters follow the specified truth table`() {
+    fun `liked and content filters follow the specified truth table`() {
         val likedLibrarySong = song(id = "liked-library", liked = true, inLibrary = true)
         val unlikedLibrarySong = song(id = "unliked-library", liked = false, inLibrary = true)
         val likedOutsideLibrary = song(id = "liked-outside", liked = true, inLibrary = false)
         val unlikedOutsideLibrary = song(id = "unliked-outside", liked = false, inLibrary = false)
-        val libraryFilter = setOf(SongSourceFilter.LIBRARY)
+        val libraryFilter = setOf(SongContentFilter.LIBRARY)
 
         listOf(likedLibrarySong, unlikedLibrarySong, likedOutsideLibrary, unlikedOutsideLibrary)
             .forEach { candidate ->
@@ -108,27 +108,83 @@ class LibrarySongsScreenTest {
     }
 
     @Test
-    fun `multiple source selections use or semantics`() {
-        val sourceFilters = setOf(SongSourceFilter.DOWNLOADED, SongSourceFilter.FOLDER)
+    fun `library and folder content filters use distinct song sources`() {
+        val onlineLibrarySong = song(id = "online-library", inLibrary = true)
+        val folderSong = song(id = "folder", local = true, inLibrary = true)
+        val downloadedOnlineSong = song(id = "online-download", downloaded = true)
+        val localSongWithDownloadDate = song(
+            id = "folder-with-download-date",
+            downloaded = true,
+            local = true,
+            inLibrary = true,
+        )
+
+        assertTrue(
+            songMatchesFilters(
+                onlineLibrarySong,
+                setOf(SongContentFilter.LIBRARY),
+                likedOnly = false,
+            )
+        )
+        assertFalse(
+            songMatchesFilters(
+                folderSong,
+                setOf(SongContentFilter.LIBRARY),
+                likedOnly = false,
+            )
+        )
+        assertTrue(
+            songMatchesFilters(
+                folderSong,
+                setOf(SongContentFilter.FOLDER),
+                likedOnly = false,
+            )
+        )
+        assertFalse(
+            songMatchesFilters(
+                onlineLibrarySong,
+                setOf(SongContentFilter.FOLDER),
+                likedOnly = false,
+            )
+        )
+        assertTrue(
+            songMatchesFilters(
+                downloadedOnlineSong,
+                setOf(SongContentFilter.DOWNLOADED),
+                likedOnly = false,
+            )
+        )
+        assertFalse(
+            songMatchesFilters(
+                localSongWithDownloadDate,
+                setOf(SongContentFilter.DOWNLOADED),
+                likedOnly = false,
+            )
+        )
+    }
+
+    @Test
+    fun `multiple content selections use or semantics`() {
+        val contentFilters = setOf(SongContentFilter.DOWNLOADED, SongContentFilter.FOLDER)
 
         assertTrue(
             songMatchesFilters(
                 song(id = "downloaded", downloaded = true),
-                sourceFilters,
+                contentFilters,
                 likedOnly = false,
             )
         )
         assertTrue(
             songMatchesFilters(
                 song(id = "folder", local = true, inLibrary = true),
-                sourceFilters,
+                contentFilters,
                 likedOnly = false,
             )
         )
         assertFalse(
             songMatchesFilters(
                 song(id = "neither"),
-                sourceFilters,
+                contentFilters,
                 likedOnly = false,
             )
         )

@@ -159,7 +159,8 @@ val ArtistSongSortDescendingKey = booleanPreferencesKey("artistSongSortDescendin
 
 val SongFilterKey = stringPreferencesKey("songFilter")
 val SongLikedFilterKey = booleanPreferencesKey("songLikedFilter")
-val SongSourceFilterMaskKey = intPreferencesKey("songSourceFilterMask")
+// Keep the persisted key name so existing selections survive the terminology change.
+val SongContentFilterMaskKey = intPreferencesKey("songSourceFilterMask")
 val ArtistFilterKey = stringPreferencesKey("artistFilter")
 val ArtistViewTypeKey = stringPreferencesKey("artistViewType")
 val AlbumFilterKey = stringPreferencesKey("albumFilter")
