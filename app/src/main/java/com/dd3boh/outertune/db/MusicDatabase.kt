@@ -20,6 +20,7 @@ import com.dd3boh.outertune.db.MusicDatabase.Companion.MUSIC_DATABASE_VERSION
 import com.dd3boh.outertune.db.entities.AlbumArtistMap
 import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.ArtistEntity
+import com.dd3boh.outertune.db.entities.ArtistAlias
 import com.dd3boh.outertune.db.entities.Event
 import com.dd3boh.outertune.db.entities.FormatEntity
 import com.dd3boh.outertune.db.entities.GenreEntity
@@ -81,7 +82,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 22
+        const val MUSIC_DATABASE_VERSION = 23
     }
 }
 
@@ -89,6 +90,7 @@ class MusicDatabase(
     entities = [
         SongEntity::class,
         ArtistEntity::class,
+        ArtistAlias::class,
         AlbumEntity::class,
         PlaylistEntity::class,
         SongArtistMap::class,
@@ -141,20 +143,12 @@ abstract class InternalDatabase : RoomDatabase() {
         const val DB_NAME = "song.db"
         const val TEST_DB_NAME = "probe_song.db"
 
-        fun newInstance(context: Context): MusicDatabase =
-            MusicDatabase(
-                delegate = Room.databaseBuilder(context, InternalDatabase::class.java, DB_NAME)
-                    .addMigrations(MIGRATION_1_2)
-                    .addMigrations(MIGRATION_14_15)
-                    .addMigrations(MIGRATION_15_16)
-                    .addMigrations(MIGRATION_16_17)
-                    .addMigrations(MIGRATION_20_21)
-                    .addMigrations(MIGRATION_21_22)
-                    .build()
-            )
+        fun newInstance(context: Context): MusicDatabase = createDatabase(context, DB_NAME)
 
         // keep this separate in the rare case we come across concepts of a plan to support migrations from other forks
-        fun newTestInstance(context: Context, dbName: String): MusicDatabase =
+        fun newTestInstance(context: Context, dbName: String): MusicDatabase = createDatabase(context, dbName)
+
+        private fun createDatabase(context: Context, dbName: String): MusicDatabase =
             MusicDatabase(
                 delegate = Room.databaseBuilder(context, InternalDatabase::class.java, dbName)
                     .addMigrations(MIGRATION_1_2)
@@ -163,6 +157,9 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_16_17)
                     .addMigrations(MIGRATION_20_21)
                     .addMigrations(MIGRATION_21_22)
+                    // This development restart intentionally has no 22 -> 23 migration.
+                    // A version-specific fallback conflicts with the retained 21 -> 22 migration.
+                    .fallbackToDestructiveMigration(true)
                     .build()
             )
     }

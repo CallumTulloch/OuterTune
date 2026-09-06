@@ -54,6 +54,8 @@ import com.dd3boh.outertune.ui.dialog.AddToPlaylistDialog
 import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
 import com.dd3boh.outertune.ui.dialog.ArtistDialog
 import com.dd3boh.outertune.utils.getDownloadState
+import com.dd3boh.outertune.utils.artistDisplayText
+import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.zionhuang.innertube.YouTube
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -225,7 +227,8 @@ fun AlbumMenu(
             icon = R.drawable.artist,
             title = R.string.view_artist
         ) {
-            if (album.artists.size == 1) {
+            if (album.artists.size == 1 && (album.artistCredit == null ||
+                        album.artistCredit?.status == ArtistCreditStatus.COMPLETE)) {
                 navController.navigate("artist/${album.artists[0].id}")
                 onDismiss()
             } else {
@@ -312,6 +315,7 @@ fun AlbumMenu(
         ArtistDialog(
             navController = navController,
             artists = album.artists,
+            rawText = album.artistDisplayText(),
             onDismiss = { showSelectArtistDialog = false }
         )
     }

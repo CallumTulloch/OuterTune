@@ -241,15 +241,20 @@ class LibraryArtistsViewModel @Inject constructor(
                 artists
                     ?.map { it.artist }
                     ?.filter {
-                        it.thumbnailUrl == null || Duration.between(
+                        it.onlineArtistId != null && (it.thumbnailUrl == null || Duration.between(
                             it.lastUpdateTime,
                             LocalDateTime.now()
-                        ) > Duration.ofDays(10)
+                        ) > Duration.ofDays(10))
                     }
                     ?.forEach { artist ->
-                        YouTube.artist(artist.id).onSuccess { artistPage ->
+                        val onlineId = artist.onlineArtistId ?: return@forEach
+                        YouTube.artist(onlineId).onSuccess { artistPage ->
                             database.query {
-                                update(artist, artistPage)
+                                update(artist.copy(
+                                    thumbnailUrl = artistPage.artist.thumbnail,
+                                    channelId = artistPage.artist.channelId,
+                                    lastUpdateTime = LocalDateTime.now(),
+                                ))
                             }
                         }
                     }

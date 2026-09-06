@@ -94,6 +94,9 @@ import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.PlayingIndicator
 import com.dd3boh.outertune.ui.component.PlayingIndicatorBox
 import com.dd3boh.outertune.utils.LocalArtworkPath
+import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.ui.utils.rememberResolvedArtistSong
+import com.dd3boh.outertune.ui.utils.rememberResolvedArtistMetadata
 import com.dd3boh.outertune.utils.getDownloadState
 import com.dd3boh.outertune.utils.joinByBullet
 import com.dd3boh.outertune.utils.makeTimeString
@@ -332,7 +335,7 @@ fun MediaMetadataListItem(
 ) = ListItem(
     title = mediaMetadata.title,
     subtitle = joinByBullet(
-        mediaMetadata.artists.joinToString { it.name },
+        rememberResolvedArtistMetadata(mediaMetadata).artistDisplayText(),
         makeTimeString(mediaMetadata.duration * 1000L)
     ),
     badges = {
@@ -419,24 +422,41 @@ fun YouTubeListItem(
     },
     isActive: Boolean = false,
     isPlaying: Boolean = false,
+    showSearchMetadata: Boolean = false,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
+    val subtitle = when (item) {
+        is SongItem -> joinByBullet(
+            rememberResolvedArtistSong(item).artistDisplayText(),
+            makeTimeString(item.duration?.times(1000L))
+        )
+
+        is AlbumItem -> joinByBullet(
+            item.artistDisplayText(),
+            item.year?.toString()
+        )
+
+        is ArtistItem -> null
+        is PlaylistItem -> joinByBullet(item.author?.name, item.songCountText)
+    }
+    if (showSearchMetadata && (item is SongItem || item is AlbumItem)) {
+        SearchResultListItem(
+            item = item,
+            subtitle = subtitle,
+            modifier = modifier,
+            albumIndex = albumIndex,
+            isSelected = isSelected,
+            isActive = isActive,
+            isPlaying = isPlaying,
+            badges = badges,
+            trailingContent = trailingContent,
+        )
+        return
+    }
+
     ListItem(
         title = item.title,
-        subtitle = when (item) {
-            is SongItem -> joinByBullet(
-                item.artists.joinToString { it.name },
-                makeTimeString(item.duration?.times(1000L))
-            )
-
-            is AlbumItem -> joinByBullet(
-                item.artists?.joinToString { it.name },
-                item.year?.toString()
-            )
-
-            is ArtistItem -> null
-            is PlaylistItem -> joinByBullet(item.author?.name, item.songCountText)
-        },
+        subtitle = subtitle,
         badges = badges,
         thumbnailContent = {
             if (item is ArtistItem) {
@@ -508,11 +528,11 @@ fun YouTubeGridItem(
     subtitle = {
         val subtitle = when (item) {
             is SongItem -> joinByBullet(
-                item.artists.joinToString { it.name },
+                rememberResolvedArtistSong(item).artistDisplayText(),
                 makeTimeString(item.duration?.times(1000L))
             )
 
-            is AlbumItem -> joinByBullet(item.artists?.joinToString { it.name }, item.year?.toString())
+            is AlbumItem -> joinByBullet(item.artistDisplayText(), item.year?.toString())
             is ArtistItem -> null
             is PlaylistItem -> joinByBullet(item.author?.name, item.songCountText)
         }
@@ -678,6 +698,7 @@ fun ItemThumbnail(
     shape: Shape,
     modifier: Modifier = Modifier,
     albumIndex: Int? = null,
+    showPauseIcon: Boolean = false,
 ) {
     val context = LocalContext.current
 
@@ -739,6 +760,7 @@ fun ItemThumbnail(
         PlayingIndicatorBox(
             isActive = isActive,
             playWhenReady = isPlaying,
+            showPauseIcon = showPauseIcon,
             color = Color.White,
             modifier = Modifier
                 .fillMaxSize()

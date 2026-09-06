@@ -366,4 +366,21 @@ while also allowing users to translate our app as well. New, specific strings to
     <string name="lyrics_timing">Lyrics timing</string>
     <string name="lyrics_timing_earlier">Earlier</string>
     <string name="lyrics_timing_later">Later</string>
+    <string name="artist_information">Artist information</string>
+    <string name="artist_credit_unresolved">Individual artists have not been confirmed. The original artist text is shown above.</string>
+    <string name="artist_credit_partial">Only some artists have been confirmed. The original text still includes the unconfirmed part.</string>
+    <string name="artist_credit_conflict">The available artist information disagrees. Previously confirmed artists are kept below.</string>
+    <string name="artist_credit_from_credits">Artists confirmed using this song’s credits</string>
+    <string name="artist_credit_from_song">Artists confirmed using this song’s artist information</string>
+    <string name="artist_source_songs">Songs opened from</string>
+    <string name="artist_library_songs">Songs in your library</string>
+    <string name="artist_page_unavailable">Artist information is not available yet.</string>
+    <string name="search_result_song">Song</string>
+    <string name="search_result_album">Album</string>
+    <string name="search_result_video">Video</string>
+    <string name="search_result_song_or_video">Song / video</string>
+    <string name="search_result_playing">Playing</string>
+    <string name="search_result_paused">Paused</string>
+    <string name="search_result_album_track_playing">Track from this album is playing</string>
+    <string name="search_result_album_track_paused">Track from this album is paused</string>
 </resources>

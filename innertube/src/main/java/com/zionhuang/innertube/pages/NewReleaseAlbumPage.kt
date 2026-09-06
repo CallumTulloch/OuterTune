@@ -3,12 +3,14 @@ package com.zionhuang.innertube.pages
 import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.MusicTwoRowItemRenderer
+import com.zionhuang.innertube.models.toAlbumArtistCredit
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
 object NewReleaseAlbumPage {
     fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer): AlbumItem? {
         return AlbumItem(
+            artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("NewReleaseAlbumPage", com.zionhuang.innertube.YouTube.locale.hl),
             browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
             playlistId = renderer.thumbnailOverlay
                 ?.musicItemThumbnailOverlayRenderer?.content

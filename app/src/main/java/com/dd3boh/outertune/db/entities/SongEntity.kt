@@ -50,6 +50,7 @@ data class SongEntity(
     val dateModified: LocalDateTime? = null, // file property
     @ColumnInfo(defaultValue = "0")
     val lyricsOffsetMs: Long = 0L,
+    val artistCreditJson: String? = null,
 ) {
 
     fun localToggleLike() = copy(

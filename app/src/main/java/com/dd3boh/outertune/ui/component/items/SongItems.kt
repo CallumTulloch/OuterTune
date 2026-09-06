@@ -59,6 +59,8 @@ import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.extensions.togglePlayPause
 import com.dd3boh.outertune.models.DirectoryTree
+import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.ui.utils.rememberResolvedArtistMetadata
 import com.dd3boh.outertune.ui.component.PlayingIndicatorBox
 import com.dd3boh.outertune.ui.component.SwipeToQueueBox
 import com.dd3boh.outertune.ui.component.button.IconButton
@@ -66,6 +68,7 @@ import com.dd3boh.outertune.ui.menu.FolderMenu
 import com.dd3boh.outertune.ui.menu.MenuState
 import com.dd3boh.outertune.ui.menu.SongMenu
 import com.dd3boh.outertune.utils.joinByBullet
+import com.dd3boh.outertune.utils.artistDisplayText
 import com.dd3boh.outertune.utils.makeTimeString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -109,7 +112,7 @@ fun SongListItem(
             title = song.song.title,
             subtitle = joinByBullet(
                 (if (BuildConfig.DEBUG) song.song.id else ""),
-                song.artists.joinToString { it.name },
+                rememberResolvedArtistMetadata(song.toMediaMetadata(), request = true).artistDisplayText(),
                 makeTimeString(song.song.duration * 1000L)
             ),
             badges = {
@@ -347,7 +350,7 @@ fun SongGridItem(
 ) = GridItem(
     title = song.song.title,
     subtitle = joinByBullet(
-        song.artists.joinToString { it.name },
+        rememberResolvedArtistMetadata(song.toMediaMetadata(), request = true).artistDisplayText(),
         makeTimeString(song.song.duration * 1000L)
     ),
     badges = badges,

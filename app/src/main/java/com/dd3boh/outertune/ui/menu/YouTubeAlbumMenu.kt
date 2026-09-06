@@ -44,6 +44,10 @@ import com.dd3boh.outertune.ui.component.items.YouTubeListItem
 import com.dd3boh.outertune.ui.dialog.AddToPlaylistDialog
 import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
 import com.dd3boh.outertune.ui.dialog.ArtistDialog
+import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.ui.utils.rememberArtistCreditRepository
+import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.dd3boh.outertune.utils.getDownloadState
 import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
@@ -57,6 +61,7 @@ fun YouTubeAlbumMenu(
 ) {
     val context = LocalContext.current
     val database = LocalDatabase.current
+    val artistCredits = rememberArtistCreditRepository()
     val downloadUtil = LocalDownloadUtil.current
     val playerConnection = LocalPlayerConnection.current ?: return
     val queueBoard by playerConnection.queueBoard.collectAsState()
@@ -79,7 +84,7 @@ fun YouTubeAlbumMenu(
             if (album == null) {
                 YouTube.album(albumItem.id).onSuccess { albumPage ->
                     database.transaction {
-                        insert(albumPage)
+                        insert(albumPage.copy(songs = albumPage.songs.map(artistCredits::withCredit)))
                     }
                 }.onFailure {
                     reportException(it)
@@ -174,13 +179,17 @@ fun YouTubeAlbumMenu(
                 }
             }
         )
-        albumItem.artists?.let { artists ->
+        run {
+            val credit = album?.artistCredit ?: albumItem.artistCredit
+            val artists = credit?.artists ?: albumItem.artists.orEmpty()
             GridMenuItem(
                 icon = R.drawable.artist,
-                title = R.string.view_artist
+                title = R.string.artist_information
             ) {
-                if (artists.size == 1) {
-                    navController.navigate("artist/${artists[0].id}")
+                val artist = artists.singleOrNull()
+                val target = artist?.ref ?: artist?.id
+                if (target != null && (credit == null || credit.status == ArtistCreditStatus.COMPLETE)) {
+                    navController.navigate("artist/$target")
                     onDismiss()
                 } else {
                     showSelectArtistDialog = true
@@ -243,9 +252,13 @@ fun YouTubeAlbumMenu(
     }
 
     if (showSelectArtistDialog) {
+        val credit = album?.artistCredit ?: albumItem.artistCredit
         ArtistDialog(
             navController = navController,
-            artists = album?.artists.orEmpty(),
+            artists = (credit?.artists ?: albumItem.artists.orEmpty()).map { artist ->
+                MediaMetadata.Artist(artist.ref ?: artist.id, artist.name, onlineId = artist.id)
+            },
+            rawText = album?.artistDisplayText() ?: albumItem.artistDisplayText(),
             onDismiss = { showSelectArtistDialog = false }
         )
     }

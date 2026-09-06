@@ -5,6 +5,9 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.Ignore
+import com.dd3boh.outertune.models.artistCreditFromJson
+import com.zionhuang.innertube.models.ArtistCredit
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.zionhuang.innertube.YouTube
 import kotlinx.coroutines.CoroutineScope
@@ -31,8 +34,12 @@ data class AlbumEntity(
     val lastUpdateTime: LocalDateTime = LocalDateTime.now(),
     val bookmarkedAt: LocalDateTime? = null,
     @ColumnInfo(name = "isLocal", defaultValue = false.toString())
-    val isLocal: Boolean = false
+    val isLocal: Boolean = false,
+    val artistCreditJson: String? = null,
 ) {
+    @get:Ignore
+    val artistCredit: ArtistCredit?
+        get() = artistCreditFromJson(artistCreditJson)
 
     fun localToggleLike() = copy(
         bookmarkedAt = if (bookmarkedAt != null) null else LocalDateTime.now()

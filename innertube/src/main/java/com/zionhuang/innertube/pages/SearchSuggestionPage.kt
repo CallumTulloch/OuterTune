@@ -7,6 +7,10 @@ import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
+import com.zionhuang.innertube.models.toAlbumArtistCredit
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
@@ -15,6 +19,9 @@ object SearchSuggestionPage {
         return when {
             renderer.isSong -> {
                 SongItem(
+                    endpoint = PageHelper.searchWatchEndpoint(renderer),
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty().splitBySeparator().getOrNull(1).orEmpty()).toArtistCredit("SearchSuggestionPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistBrowseIds = renderer.menu.artistBrowseIds(),
                     id = renderer.playlistItemData?.videoId ?: return null,
                     title = renderer.flexColumns.firstOrNull()
                         ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
@@ -56,6 +63,7 @@ object SearchSuggestionPage {
                 val secondaryLine = renderer.flexColumns.getOrNull(1)
                     ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator() ?: return null
                 AlbumItem(
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchSuggestionPage", com.zionhuang.innertube.YouTube.locale.hl),
                     browseId = renderer.navigationEndpoint?.browseEndpoint?.browseId ?: return null,
                     playlistId = renderer.menu?.menuRenderer?.items?.find {
                         it.menuNavigationItemRenderer?.icon?.iconType == "MUSIC_SHUFFLE"

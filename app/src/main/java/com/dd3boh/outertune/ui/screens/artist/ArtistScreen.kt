@@ -2,6 +2,7 @@ package com.dd3boh.outertune.ui.screens.artist
 
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -96,6 +97,8 @@ import com.dd3boh.outertune.ui.component.SwipeToQueueBox
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.AlbumGridItem
 import com.dd3boh.outertune.ui.component.items.SongListItem
+import com.dd3boh.outertune.ui.component.items.MediaMetadataListItem
+import com.dd3boh.outertune.ui.component.items.ArtistThumbnail
 import com.dd3boh.outertune.ui.component.items.YouTubeGridItem
 import com.dd3boh.outertune.ui.component.items.YouTubeListItem
 import com.dd3boh.outertune.ui.component.shimmer.ArtistPagePlaceholder
@@ -137,13 +140,23 @@ fun ArtistScreen(
 
     val artistPage = viewModel.artistPage
     val libraryArtist by viewModel.libraryArtist.collectAsState()
+    val artistContext by viewModel.artistContext.collectAsState()
+    val onlineArtistId by viewModel.onlineArtistId.collectAsState()
+    val artistContextToken = viewModel.currentContextToken()
+    LaunchedEffect(artistContextToken) { viewModel.refreshArtistContext() }
     val librarySongs by viewModel.librarySongs.collectAsState()
     val libraryAlbums by viewModel.libraryAlbums.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     val lazyListState = rememberLazyListState()
     val snackbarHostState = LocalSnackbarHostState.current
-    var showLocal by rememberSaveable { mutableStateOf(false) }
+    var showLocal by rememberSaveable(viewModel.artistId) { mutableStateOf(viewModel.initiallyInternal) }
+    val sourceSongs = artistContext?.sourceSongs.orEmpty()
+        .filterNot { source -> librarySongs.any { it.id == source.id } }
+    val internalSongs = (librarySongs.map { it.toMediaMetadata() } + sourceSongs).distinctBy { it.id }
+    val artistName = if (showLocal) {
+        libraryArtist?.artist?.name ?: artistContext?.name ?: artistPage?.artist?.title
+    } else artistPage?.artist?.title ?: libraryArtist?.artist?.name ?: artistContext?.name
 
     val transparentAppBar by remember {
         derivedStateOf {
@@ -151,18 +164,17 @@ fun ArtistScreen(
         }
     }
 
-    LaunchedEffect(libraryArtist, isNetworkConnected) {
+    LaunchedEffect(libraryArtist, onlineArtistId, isNetworkConnected) {
         // Local artists and offline sessions can only use the local page. Do not reset a
         // user's explicit local selection when the library artist arrives asynchronously.
-        if (!isNetworkConnected || libraryArtist?.artist?.isLocal == true) {
+        if (!isNetworkConnected || libraryArtist?.artist?.isLocal == true || onlineArtistId == null) {
             showLocal = true
         }
     }
 
     val artistHead = @Composable {
-        if (artistPage != null || libraryArtist != null) {
+        if (artistPage != null || libraryArtist != null || artistContext != null) {
             val thumbnail = artistPage?.artist?.thumbnail ?: libraryArtist?.artist?.thumbnailUrl
-            val artistName = artistPage?.artist?.title ?: libraryArtist?.artist?.name
 
             Column {
                 Box(
@@ -185,6 +197,15 @@ fun ArtistScreen(
                                     bottom = 64.dp
                                 )
                         )
+                    } else {
+                        ArtistThumbnail(
+                            thumbnailUrl = null,
+                            isLocal = libraryArtist?.artist?.isLocal == true,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = WindowInsets.systemBars.asPaddingValues().calculateTopPadding() + AppBarHeight)
+                                .size(96.dp),
+                        )
                     }
                     AutoResizeText(
                         text = artistName
@@ -203,7 +224,7 @@ fun ArtistScreen(
                                     Modifier.padding(
                                         top = WindowInsets.systemBars
                                             .asPaddingValues()
-                                            .calculateTopPadding() + AppBarHeight
+                                            .calculateTopPadding() + AppBarHeight + 112.dp
                                     )
                                 } else {
                                     Modifier
@@ -223,13 +244,14 @@ fun ArtistScreen(
                                 if (!showLocal && watchEndpoint != null) YouTubeQueue(watchEndpoint)
                                 else ListQueue(
                                     title = artistName,
-                                    items = librarySongs.map { it.toMediaMetadata() },
+                                    items = internalSongs,
                                     startShuffled = true,
                                 ),
                                 isRadio = true,
                                 title = artistName
                             )
                         },
+                        enabled = internalSongs.isNotEmpty() || (!showLocal && artistPage != null),
                         contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -296,10 +318,31 @@ fun ArtistScreen(
                 }
 
                 if (showLocal) {
+                    if (sourceSongs.isNotEmpty()) {
+                        item {
+                            NavigationTitle(title = stringResource(R.string.artist_source_songs))
+                        }
+                        itemsIndexed(sourceSongs, key = { _, song -> "source:${song.id}" }) { index, song ->
+                            MediaMetadataListItem(
+                                mediaMetadata = song,
+                                preferredSize = (ListThumbnailSize.value * density.density).roundToInt(),
+                                isActive = song.id == mediaMetadata?.id,
+                                isPlaying = isPlaying,
+                                showInLibraryIcon = false,
+                                modifier = Modifier.clickable {
+                                    playerConnection.playQueue(ListQueue(
+                                        title = artistName,
+                                        items = sourceSongs,
+                                        startIndex = index,
+                                    ))
+                                },
+                            )
+                        }
+                    }
                     if (librarySongs.isNotEmpty()) {
                         item {
                             NavigationTitle(
-                                title = stringResource(R.string.songs),
+                                title = stringResource(R.string.artist_library_songs),
                                 onClick = {
                                     navController.navigate("artist/${viewModel.artistId}/songs")
                                 }
@@ -548,7 +591,7 @@ fun ArtistScreen(
         )
 
         HideOnScrollFAB(
-            visible = isNetworkConnected && librarySongs.isNotEmpty() && libraryArtist?.artist?.isLocal != true,
+            visible = isNetworkConnected && onlineArtistId != null && libraryArtist?.artist?.isLocal != true,
             lazyListState = lazyListState,
             icon = if (showLocal) Icons.Rounded.Language else Icons.Rounded.LibraryMusic,
             onClick = {
@@ -558,7 +601,7 @@ fun ArtistScreen(
         )
 
         TopAppBar(
-            title = { if (!transparentAppBar) Text(artistPage?.artist?.title.orEmpty()) },
+            title = { if (!transparentAppBar) Text(artistName.orEmpty()) },
             navigationIcon = {
                 IconButton(
                     onClick = navController::navigateUp,
@@ -577,11 +620,21 @@ fun ArtistScreen(
                             val artist = libraryArtist?.artist
                             if (artist != null) {
                                 update(artist.toggleLike())
+                            } else if (artistContext != null) {
+                                artistContext?.let {
+                                    insert(ArtistEntity(
+                                        id = it.id,
+                                        name = it.name,
+                                        onlineId = it.onlineId,
+                                        thumbnailUrl = artistPage?.artist?.thumbnail,
+                                    ).toggleLike())
+                                }
                             } else {
                                 artistPage?.artist?.let {
                                     insert(
                                         ArtistEntity(
                                             id = it.id,
+                                            onlineId = it.id,
                                             name = it.title,
                                             channelId = it.channelId,
                                             thumbnailUrl = it.thumbnail,
@@ -600,6 +653,7 @@ fun ArtistScreen(
                 }
 
                 IconButton(
+                    enabled = artistPage?.artist?.shareLink != null,
                     onClick = {
                         viewModel.artistPage?.artist?.shareLink?.let { link ->
                             val intent = Intent().apply {

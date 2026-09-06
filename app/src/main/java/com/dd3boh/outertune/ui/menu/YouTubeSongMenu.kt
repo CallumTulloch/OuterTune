@@ -56,7 +56,11 @@ import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.ListItem
 import com.dd3boh.outertune.ui.dialog.AddToPlaylistDialog
 import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
-import com.dd3boh.outertune.ui.dialog.ArtistDialog
+import com.dd3boh.outertune.ui.dialog.ArtistInformationDialog
+import com.dd3boh.outertune.ui.utils.rememberResolvedArtistSong
+import com.dd3boh.outertune.ui.utils.rememberArtistCreditRepository
+import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.singleArtistTarget
 import com.dd3boh.outertune.utils.joinByBullet
 import com.dd3boh.outertune.utils.makeTimeString
 import com.dd3boh.outertune.utils.syncCoroutine
@@ -71,6 +75,8 @@ fun YouTubeSongMenu(
     navController: NavController,
     onDismiss: () -> Unit,
 ) {
+    val song = rememberResolvedArtistSong(song, priority = true)
+    val artistCreditRepository = rememberArtistCreditRepository()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val downloadUtil = LocalDownloadUtil.current
@@ -81,13 +87,7 @@ fun YouTubeSongMenu(
 
     val librarySong by database.song(song.id).collectAsState(initial = null)
     val download by LocalDownloadUtil.current.getDownload(song.id).collectAsState(initial = null)
-    val artists = remember {
-        song.artists.mapNotNull {
-            it.id?.let { artistId ->
-                MediaMetadata.Artist(id = artistId, name = it.name)
-            }
-        }
-    }
+    val metadata = song.toMediaMetadata()
 
     var showChooseQueueDialog by rememberSaveable {
         mutableStateOf(false)
@@ -103,7 +103,7 @@ fun YouTubeSongMenu(
     ListItem(
         title = song.title,
         subtitle = joinByBullet(
-            song.artists.joinToString { it.name },
+            song.artistDisplayText(),
             song.duration?.let { makeTimeString(it * 1000L) }
         ),
         thumbnailContent = {
@@ -119,18 +119,10 @@ fun YouTubeSongMenu(
             IconButton(
                 onClick = {
                     database.transaction {
-                        librarySong.let { librarySong ->
-                            val s: SongEntity
-                            if (librarySong == null) {
-                                insert(song.toMediaMetadata(), SongEntity::toggleLike)
-                                s = song.toMediaMetadata().toSongEntity().let(SongEntity::toggleLike)
-                            } else {
-                                s = librarySong.song.toggleLike()
-                                update(s)
-                            }
-
-                            syncUtils.likeSong(s)
-                        }
+                        insert(artistCreditRepository.withCredit(song.toMediaMetadata()))
+                        val updated = songForArtistCredit(song.id)?.toggleLike() ?: return@transaction
+                        update(updated)
+                        syncUtils.likeSong(updated)
                     }
                 }
             ) {
@@ -159,11 +151,10 @@ fun YouTubeSongMenu(
                 title = R.string.remove_from_library
             ) {
                 database.transaction {
-                    librarySong?.song?.let { s ->
-                        val updated = s.toggleLibrary()
-                        update(updated)
-                        syncUtils.changeInLibrary(updated)
-                    }
+                    insert(artistCreditRepository.withCredit(song.toMediaMetadata()))
+                    val updated = songForArtistCredit(song.id)?.copy(inLibrary = null) ?: return@transaction
+                    update(updated)
+                    syncUtils.changeInLibrary(updated)
                 }
             }
         } else {
@@ -172,12 +163,9 @@ fun YouTubeSongMenu(
                 title = R.string.add_to_library
             ) {
                 database.transaction {
-                    val updated = if (librarySong == null) {
-                        insert(song.toMediaMetadata())
-                        song.toMediaMetadata().toSongEntity().copy(inLibrary = LocalDateTime.now())
-                    } else {
-                        librarySong!!.song.toggleLibrary()
-                    }
+                    insert(artistCreditRepository.withCredit(song.toMediaMetadata()))
+                    val updated = songForArtistCredit(song.id)?.copy(inLibrary = LocalDateTime.now())
+                        ?: return@transaction
                     update(updated)
                     syncUtils.changeInLibrary(updated)
                 }
@@ -187,7 +175,7 @@ fun YouTubeSongMenu(
             localDateTime = download,
             onDownload = {
                 database.transaction {
-                    insert(song.toMediaMetadata())
+                    insert(artistCreditRepository.withCredit(song.toMediaMetadata()))
                 }
                 downloadUtil.download(song.toMediaMetadata())
             },
@@ -200,17 +188,16 @@ fun YouTubeSongMenu(
                 )
             }
         )
-        if (artists.isNotEmpty()) {
-            GridMenuItem(
-                icon = Icons.Rounded.Person,
-                title = R.string.view_artist
-            ) {
-                if (artists.size == 1) {
-                    navController.navigate("artist/${artists[0].id}")
-                    onDismiss()
-                } else {
-                    showSelectArtistDialog = true
-                }
+        GridMenuItem(
+            icon = Icons.Rounded.Person,
+            title = R.string.artist_information
+        ) {
+            val target = metadata.singleArtistTarget()
+            if (target != null) {
+                navController.navigate("artist/$target")
+                onDismiss()
+            } else {
+                showSelectArtistDialog = true
             }
         }
         song.album?.let { album ->
@@ -304,7 +291,7 @@ fun YouTubeSongMenu(
             songIds = null,
             onPreAdd = { playlist ->
                 database.transaction {
-                    insert(song.toMediaMetadata())
+                    insert(artistCreditRepository.withCredit(song.toMediaMetadata()))
                 }
 
                 coroutineScope.launch(syncCoroutine) {
@@ -320,10 +307,14 @@ fun YouTubeSongMenu(
     }
 
     if (showSelectArtistDialog) {
-        ArtistDialog(
+        ArtistInformationDialog(
             navController = navController,
-            artists = artists,
-            onDismiss = { showSelectArtistDialog = false }
+            metadata = metadata,
+            onDismiss = { showSelectArtistDialog = false },
+            onNavigate = {
+                showSelectArtistDialog = false
+                onDismiss()
+            }
         )
     }
 }

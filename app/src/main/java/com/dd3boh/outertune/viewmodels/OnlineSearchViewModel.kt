@@ -8,6 +8,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.models.ItemsPage
+import com.dd3boh.outertune.repositories.ArtistCreditRepository
+import com.zionhuang.innertube.models.SongItem
 import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.pages.SearchSummaryPage
@@ -19,6 +21,7 @@ import javax.inject.Inject
 @HiltViewModel
 class OnlineSearchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
+    val artistCredits: ArtistCreditRepository,
 ) : ViewModel() {
     val query = savedStateHandle.get<String>("query")!!
     val filter = MutableStateFlow<YouTube.SearchFilter?>(null)
@@ -26,6 +29,24 @@ class OnlineSearchViewModel @Inject constructor(
     val viewStateMap = mutableStateMapOf<String, ItemsPage?>()
 
     init {
+        viewModelScope.launch {
+            artistCredits.updates.collect { (videoId, _) ->
+                summaryPage = summaryPage?.let { page ->
+                    page.copy(summaries = page.summaries.map { group ->
+                        group.copy(items = group.items.map {
+                            if (it is SongItem && it.id == videoId) artistCredits.withCredit(it) else it
+                        })
+                    })
+                }
+                viewStateMap.keys.toList().forEach { key ->
+                    viewStateMap[key]?.let { page ->
+                        viewStateMap[key] = page.copy(items = page.items.map {
+                            if (it is SongItem && it.id == videoId) artistCredits.withCredit(it) else it
+                        })
+                    }
+                }
+            }
+        }
         viewModelScope.launch {
             filter.collect { filter ->
                 if (filter == null) {

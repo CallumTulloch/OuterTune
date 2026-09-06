@@ -6,6 +6,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.dd3boh.outertune.utils.syncCoroutine
+import com.dd3boh.outertune.models.ArtistIdentity
 import com.zionhuang.innertube.YouTube
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -16,7 +17,7 @@ import java.time.LocalDateTime
 @Immutable
 @Entity(
     tableName = "artist",
-    indices = [Index(value = ["isLocal", "name"])],
+    indices = [Index(value = ["isLocal", "name"]), Index(value = ["onlineId"])],
 )
 data class ArtistEntity(
     @PrimaryKey val id: String,
@@ -26,19 +27,24 @@ data class ArtistEntity(
     val lastUpdateTime: LocalDateTime = LocalDateTime.now(),
     val bookmarkedAt: LocalDateTime? = null,
     @ColumnInfo(name = "isLocal", defaultValue = false.toString())
-    val isLocal: Boolean = false
+    val isLocal: Boolean = false,
+    val onlineId: String? = null,
 ) {
+    val onlineArtistId: String?
+        get() = if (isLocal) null else ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id)
+
     val isYouTubeArtist: Boolean
-        get() = id.startsWith("UC") || id.startsWith("FEmusic_library_privately_owned_artist")
+        get() = onlineArtistId != null
 
     fun localToggleLike() = copy(
         bookmarkedAt = if (bookmarkedAt != null) null else LocalDateTime.now(),
     )
 
     fun toggleLike() = localToggleLike().also {
+        val remoteId = onlineArtistId ?: return@also
         CoroutineScope(syncCoroutine).launch {
             if (channelId == null)
-                YouTube.subscribeChannel(YouTube.getChannelId(id), bookmarkedAt == null)
+                YouTube.subscribeChannel(YouTube.getChannelId(remoteId), bookmarkedAt == null)
             else
                 YouTube.subscribeChannel(channelId, bookmarkedAt == null)
             this.cancel()

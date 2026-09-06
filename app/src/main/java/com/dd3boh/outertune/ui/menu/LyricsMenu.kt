@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.menu
 
+import com.dd3boh.outertune.utils.artistDisplayText
+
 import android.app.SearchManager
 import android.content.Intent
 import androidx.compose.animation.animateContentSize
@@ -131,7 +133,7 @@ fun LyricsMenu(
     val (artistField, onArtistFieldChange) = rememberSaveable(showSearchDialog, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(
             TextFieldValue(
-                text = mediaMetadataProvider().artists.joinToString { it.name }
+                text = mediaMetadataProvider().artistDisplayText()
             )
         )
     }

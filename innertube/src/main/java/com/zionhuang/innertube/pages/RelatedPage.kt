@@ -9,6 +9,10 @@ import com.zionhuang.innertube.models.MusicTwoRowItemRenderer
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
+import com.zionhuang.innertube.models.toAlbumArtistCredit
 import com.zionhuang.innertube.models.artistElements
 
 data class RelatedPage(
@@ -20,6 +24,8 @@ data class RelatedPage(
     companion object {
         fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
             return SongItem(
+                artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("RelatedPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()
                     ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
@@ -47,6 +53,7 @@ data class RelatedPage(
         fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer): YTItem? {
             return when {
                 renderer.isAlbum -> AlbumItem(
+                    artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("RelatedPage", com.zionhuang.innertube.YouTube.locale.hl),
                     browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                     playlistId = renderer.thumbnailOverlay?.musicItemThumbnailOverlayRenderer
                         ?.content?.musicPlayButtonRenderer?.playNavigationEndpoint

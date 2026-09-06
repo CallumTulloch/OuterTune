@@ -1,0 +1,172 @@
+{
+  "title": {
+    "runs": [
+      {
+        "text": "ダイ・ウィズ・ア・スマイル"
+      }
+    ]
+  },
+  "longBylineText": {
+    "runs": [
+      {
+        "text": "レディー・ガガ",
+        "navigationEndpoint": {
+          "browseEndpoint": {
+            "browseId": "UCGKXb1syicud01CJOOFRykg",
+            "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+              }
+            }
+          }
+        }
+      },
+      {
+        "text": "、"
+      },
+      {
+        "text": "ブルーノ・マーズ",
+        "navigationEndpoint": {
+          "browseEndpoint": {
+            "browseId": "UCZn4r7heNOPY-C43YIywnVA",
+            "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+              }
+            }
+          }
+        }
+      },
+      {
+        "text": " • "
+      },
+      {
+        "text": "Die With A Smile",
+        "navigationEndpoint": {
+          "browseEndpoint": {
+            "browseId": "MPREb_awgUw0NYaZA",
+            "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+              }
+            }
+          }
+        }
+      },
+      {
+        "text": " • "
+      },
+      {
+        "text": "2024年"
+      }
+    ]
+  },
+  "thumbnail": {
+    "thumbnails": [
+      {
+        "url": "https://yt3.googleusercontent.com/x5ST0wHIxD__IIxHF1UqUgXP4QW58ouj1EHROC9I5yHIb8cmoNr9rL54RfA-BnYay_eWmmOJfXNuFqmPEA=w544-h544-l90-rj",
+        "width": 544,
+        "height": 544
+      }
+    ]
+  },
+  "lengthText": {
+    "runs": [
+      {
+        "text": "4:12"
+      }
+    ]
+  },
+  "selected": false,
+  "navigationEndpoint": {
+    "watchEndpoint": {
+      "videoId": "RVDCeVG90Rg",
+      "params": "OAHyAQIIAQ%3D%3D",
+      "watchEndpointMusicSupportedConfigs": {
+        "watchEndpointMusicConfig": {
+          "hasPersistentPlaylistPanel": true,
+          "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      }
+    }
+  },
+  "videoId": "RVDCeVG90Rg",
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "アルバムに移動"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ALBUM"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPREb_awgUw0NYaZA",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "アーティストに移動"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ARTIST"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UCGKXb1syicud01CJOOFRykg",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "曲のクレジットを表示"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "PEOPLE_GROUP"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPTCRVDCeVG90Rg",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

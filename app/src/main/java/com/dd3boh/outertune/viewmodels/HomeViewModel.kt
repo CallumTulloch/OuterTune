@@ -95,7 +95,8 @@ class HomeViewModel @Inject constructor(
                 .shuffled().take(3)
                 .mapNotNull {
                     val items = mutableListOf<YTItem>()
-                    YouTube.artist(it.id).onSuccess { page ->
+                    val onlineId = it.artist.onlineArtistId ?: return@mapNotNull null
+                    YouTube.artist(onlineId).onSuccess { page ->
                         items += page.sections.getOrNull(page.sections.size - 2)?.items.orEmpty()
                         items += page.sections.lastOrNull()?.items.orEmpty()
                     }

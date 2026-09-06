@@ -90,7 +90,9 @@ fun ArtistMenu(
                     }
 
                     val playlistId = withContext(Dispatchers.IO) {
-                        YouTube.artist(artist.id).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                        artist.artist.onlineArtistId?.takeIf { isNetworkConnected }?.let {
+                            YouTube.artist(it).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                        }
                     }
 
                     playerConnection.playQueue(
@@ -115,7 +117,9 @@ fun ArtistMenu(
                     }
 
                     val playlistId = withContext(Dispatchers.IO) {
-                        YouTube.artist(artist.id).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                        artist.artist.onlineArtistId?.takeIf { isNetworkConnected }?.let {
+                            YouTube.artist(it).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                        }
                     }
 
                     playerConnection.playQueue(
@@ -138,7 +142,7 @@ fun ArtistMenu(
                 val intent = Intent().apply {
                     action = Intent.ACTION_SEND
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/channel/${artist.id}")
+                    putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/channel/${artist.artist.onlineArtistId}")
                 }
                 context.startActivity(Intent.createChooser(intent, null))
             }

@@ -30,11 +30,14 @@ import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.di.AppModule.PlayerCache
 import com.dd3boh.outertune.di.DownloadCache
 import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.models.creditForPersistence
 import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.models.withArtistCredit
 import com.dd3boh.outertune.playback.DownloadUtil.Companion.STATE_DOWNLOADING
 import com.dd3boh.outertune.playback.DownloadUtil.Companion.STATE_INVALID
 import com.dd3boh.outertune.playback.downloadManager.DownloadDirectoryManagerOt
 import com.dd3boh.outertune.playback.downloadManager.DownloadManagerOt
+import com.dd3boh.outertune.repositories.ArtistCreditRepository
 import com.dd3boh.outertune.utils.YTPlayerUtils
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.dlCoroutine
@@ -46,6 +49,7 @@ import com.dd3boh.outertune.utils.scanners.fileFromUri
 import com.dd3boh.outertune.utils.scanners.uriListFromString
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.merge
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -77,18 +81,15 @@ import javax.inject.Singleton
 internal fun mergeResolvedMetadata(
     original: MediaMetadata,
     resolved: MediaMetadata,
-): MediaMetadata = original.copy(
-    artists = original.artists.map { artist ->
-        if (artist.id != null) {
-            artist
-        } else {
-            resolved.artists.firstOrNull { it.name == artist.name } ?: artist
-        }
-    },
-    duration = original.duration.takeIf { it > 0 } ?: resolved.duration,
-    thumbnailUrl = original.thumbnailUrl ?: resolved.thumbnailUrl,
-    album = original.album ?: resolved.album,
-)
+): MediaMetadata {
+    if (original.id != resolved.id || original.isLocal) return original
+    val credit = original.creditForPersistence().merge(resolved.creditForPersistence())
+    return original.copy(
+        duration = original.duration.takeIf { it > 0 } ?: resolved.duration,
+        thumbnailUrl = original.thumbnailUrl ?: resolved.thumbnailUrl,
+        album = original.album ?: resolved.album,
+    ).withArtistCredit(credit)
+}
 
 internal fun downloadIdsToClear(
     indexedMediaIds: Set<String>,
@@ -106,6 +107,7 @@ class DownloadUtil @Inject constructor(
     val databaseProvider: DatabaseProvider,
     @DownloadCache val downloadCache: SimpleCache,
     @PlayerCache val playerCache: SimpleCache,
+    private val artistCredits: ArtistCreditRepository,
 ) {
     val TAG = DownloadUtil::class.simpleName.toString()
 
@@ -257,7 +259,7 @@ class DownloadUtil @Inject constructor(
 
     private suspend fun prepareAndDownload(songs: List<MediaMetadata>) {
         val songsById = songs.associateBy(MediaMetadata::id)
-        val missingAlbumIds = songs.filter { !it.isLocal && it.album == null }.map(MediaMetadata::id)
+        val missingAlbumIds = songsById.values.filter { !it.isLocal && it.album == null }.map(MediaMetadata::id)
         val queueSongs = missingAlbumIds.chunked(YouTube.MAX_GET_QUEUE_SIZE).flatMap { videoIds ->
             YouTube.queue(videoIds = videoIds).onFailure {
                 reportException(it)
@@ -266,12 +268,17 @@ class DownloadUtil @Inject constructor(
         }.associateBy(SongItem::id)
 
         songsById.values.forEach { original ->
-            val metadata = queueSongs[original.id]?.let { resolved ->
+            val withAlbum = queueSongs[original.id]?.let { resolved ->
                 mergeResolvedMetadata(original, resolved.toMediaMetadata())
             } ?: original
+            // A warm cache may be thinner than the metadata read from the saved library.
+            val metadata = mergeResolvedMetadata(withAlbum, artistCredits.withCredit(withAlbum))
             database.awaitTransaction {
                 insert(metadata)
             }
+            // Request after insertion so even an immediate cache hit can update the saved row.
+            // Artist resolution runs independently; it does not delay the audio download.
+            artistCredits.request(metadata, priority = true)
             CoroutineScope(dlCoroutine).launch {
                 downloadSong(metadata.id, metadata.title)
             }

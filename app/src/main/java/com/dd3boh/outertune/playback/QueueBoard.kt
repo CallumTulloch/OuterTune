@@ -53,6 +53,19 @@ class QueueBoard(
 ) {
     private val TAG = QueueBoard::class.simpleName.toString()
 
+    /** Refresh credit data while preserving queue order, shuffle indexes and playback position. */
+    fun updateArtistMetadata(videoId: String, transform: (MediaMetadata) -> MediaMetadata) {
+        masterQueues.indices.forEach { index ->
+            val queue = masterQueues[index]
+            val updated = queue.queue.map { if (it.id == videoId && !it.isLocal) transform(it) else it }
+            if (updated != queue.queue) {
+                val replacement = queue.copy(queue = updated.toMutableList())
+                masterQueues[index] = replacement
+                saveQueueSongs(replacement)
+            }
+        }
+    }
+
     private var masterIndex: Int // current queue index
     var detachedHead = false
 
@@ -895,7 +908,9 @@ class QueueBoard(
                 PriorityJob(
                     0,
                     coroutineScope.launch(start = CoroutineStart.DEFAULT) {
-                        player.database.saveQueue(mq)
+                        player.database.awaitTransaction {
+                            saveQueue(mq.copy(queue = mq.queue.map(player.artistCredits::withCredit).toMutableList()))
+                        }
                     }
                 )
             )

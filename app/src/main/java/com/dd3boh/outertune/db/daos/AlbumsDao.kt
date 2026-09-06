@@ -25,7 +25,13 @@ import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.reversed
 import com.dd3boh.outertune.models.LocalAlbumCandidateRow
 import com.dd3boh.outertune.models.LocalSongAlbumArtistRow
+import com.dd3boh.outertune.models.ArtistIdentity
+import com.dd3boh.outertune.models.creditForPersistence
+import com.dd3boh.outertune.models.toStoredJson
+import com.dd3boh.outertune.models.artistCreditFromJson
 import com.zionhuang.innertube.models.AlbumItem
+import com.zionhuang.innertube.models.ArtistCredit
+import com.zionhuang.innertube.models.merge
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -34,7 +40,7 @@ import kotlinx.coroutines.flow.map
  */
 
 @Dao
-interface AlbumsDao : ArtistsDao {
+interface AlbumsDao : ArtistCreditDao {
 
     // region Gets
     @Transaction
@@ -230,14 +236,16 @@ interface AlbumsDao : ArtistsDao {
             JOIN song ON song.id = song_album_map.songId
             LEFT JOIN album_artist_map
                 ON album_artist_map.albumId = album.id
-                AND album_artist_map.artistId = :artistId
+                AND album_artist_map.artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
             LEFT JOIN song_artist_map
                 ON song_artist_map.songId = song.id
-                AND song_artist_map.artistId = :artistId
+                AND song_artist_map.artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
         WHERE (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1)
             AND (
                 album_artist_map.artistId IS NOT NULL
                 OR (
+                    album.artistCreditJson IS NULL
+                    AND
                     NOT EXISTS (
                         SELECT 1 FROM album_artist_map existing_artist
                         WHERE existing_artist.albumId = album.id
@@ -416,7 +424,7 @@ interface AlbumsDao : ArtistsDao {
 
     @Transaction
     fun insert(albumItem: AlbumItem) {
-        if (insert(AlbumEntity(
+        insert(AlbumEntity(
                 id = albumItem.browseId,
                 playlistId = albumItem.playlistId,
                 title = albumItem.title,
@@ -424,24 +432,41 @@ interface AlbumsDao : ArtistsDao {
                 thumbnailUrl = albumItem.thumbnail,
                 songCount = 0,
                 duration = 0
-            )) == -1L
-        ) return
-        albumItem.artists?.let { artists ->
-            val resolvedArtists = artists.map { artist ->
-                resolveAndInsertArtist(
-                    id = artist.id,
-                    name = artist.name,
-                    isLocal = false,
-                )
-            }
-            replaceAlbumArtistMaps(albumItem.browseId, resolvedArtists)
-        }
+            ))
+        applyAlbumArtistCredit(albumItem.browseId, albumItem.creditForPersistence())
+    }
+
+    @Transaction
+    fun applyAlbumArtistCredit(albumId: String, credit: ArtistCredit) {
+        val album = albumById(albumId)?.takeUnless { it.isLocal } ?: return
+        val previous = album.artistCredit
+        val accepted = ArtistIdentity.withStableRefs("album:$albumId", previous?.merge(credit) ?: credit, previous)
+        val artists = accepted.artists.map { resolveCreditArtist("album:$albumId", it) }
+            .map { artistById(it.id) ?: it }
+        val stored = accepted.copy(artists = accepted.artists.zip(artists).map { (label, artist) ->
+            label.copy(ref = artist.id, id = artist.onlineArtistId)
+        })
+        val json = stored.toStoredJson()
+        if (album.artistCreditJson == json && albumArtistIdsForAlbum(albumId) == artists.map { it.id }.distinct()) return
+        if (album.artistCreditJson != json) updateAlbumArtistCreditJson(albumId, json)
+        replaceAlbumArtistMaps(albumId, artists)
     }
     // endregion
 
     // region Updates
     @Update
-    fun update(album: AlbumEntity)
+    fun updateAlbumEntity(album: AlbumEntity)
+
+    @Transaction
+    fun update(album: AlbumEntity) {
+        if (album.isLocal) {
+            updateAlbumEntity(album)
+            return
+        }
+        val stored = albumById(album.id)
+        updateAlbumEntity(album.copy(artistCreditJson = stored?.artistCreditJson ?: album.artistCreditJson))
+        artistCreditFromJson(album.artistCreditJson)?.let { applyAlbumArtistCredit(album.id, it) }
+    }
 
     @Upsert
     fun upsert(album: AlbumEntity)

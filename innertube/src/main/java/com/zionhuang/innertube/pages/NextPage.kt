@@ -6,6 +6,9 @@ import com.zionhuang.innertube.models.BrowseEndpoint
 import com.zionhuang.innertube.models.PlaylistPanelVideoRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.WatchEndpoint
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 import com.zionhuang.innertube.utils.parseTime
@@ -24,6 +27,8 @@ object NextPage {
     fun fromPlaylistPanelVideoRenderer(renderer: PlaylistPanelVideoRenderer): SongItem? {
         val longByLineRuns = renderer.longBylineText?.runs?.splitBySeparator() ?: return null
         return SongItem(
+                    artistCredit = (longByLineRuns.firstOrNull().orEmpty()).toArtistCredit("NextPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistBrowseIds = renderer.menu.artistBrowseIds(),
             id = renderer.videoId ?: return null,
             title = renderer.title?.runs?.firstOrNull()?.text ?: return null,
             artists = longByLineRuns.firstOrNull()?.artistElements()?.map {

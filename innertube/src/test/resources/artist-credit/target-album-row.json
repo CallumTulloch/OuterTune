@@ -1,0 +1,266 @@
+{
+  "overlay": {
+    "musicItemThumbnailOverlayRenderer": {
+      "background": {
+        "verticalGradient": {
+          "gradientLayerColors": [
+            "0",
+            "0"
+          ]
+        }
+      },
+      "content": {
+        "musicPlayButtonRenderer": {
+          "playNavigationEndpoint": {
+            "watchEndpoint": {
+              "videoId": "6zUV1aBPicg",
+              "playlistId": "OLAK5uy_mGSfbpjq56BCReij0hfXSf31HPolHJ7Yc",
+              "index": 16,
+              "playerParams": "ygYQNzdCQ0FDMjMzOEQ5Qzg0RQ%3D%3D",
+              "playlistSetVideoId": "77BCAC2338D9C84E",
+              "watchEndpointMusicSupportedConfigs": {
+                "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                }
+              }
+            }
+          },
+          "playIcon": {
+            "iconType": "PLAY_ARROW"
+          },
+          "pauseIcon": {
+            "iconType": "PAUSE"
+          },
+          "iconColor": 4294967295,
+          "backgroundColor": 0,
+          "activeBackgroundColor": 0,
+          "loadingIndicatorColor": 14745645,
+          "playingIcon": {
+            "iconType": "VOLUME_UP"
+          },
+          "iconLoadingColor": 0,
+          "activeScaleFactor": 1,
+          "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+          "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+          "accessibilityPlayData": {},
+          "accessibilityPauseData": {}
+        }
+      },
+      "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+      "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+    }
+  },
+  "flexColumns": [
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+              "navigationEndpoint": {
+                "watchEndpoint": {
+                  "videoId": "6zUV1aBPicg",
+                  "playlistId": "OLAK5uy_mGSfbpjq56BCReij0hfXSf31HPolHJ7Yc",
+                  "watchEndpointMusicSupportedConfigs": {
+                    "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    },
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    },
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "再生回数 26万 回"
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    }
+  ],
+  "fixedColumns": [
+    {
+      "musicResponsiveListItemFixedColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "3:58"
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+        "size": "MUSIC_RESPONSIVE_LIST_ITEM_FIXED_COLUMN_SIZE_SMALL"
+      }
+    }
+  ],
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "アーティストに移動"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ARTIST"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "曲のクレジットを表示"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "PEOPLE_GROUP"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPTC6zUV1aBPicg",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "topLevelButtons": [
+        {
+          "likeButtonRenderer": {
+            "target": {
+              "videoId": "6zUV1aBPicg"
+            },
+            "likeStatus": "INDIFFERENT",
+            "likesAllowed": true,
+            "dislikeNavigationEndpoint": {
+              "modalEndpoint": {
+                "modal": {
+                  "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                      "runs": [
+                        {
+                          "text": "興味がない場合"
+                        }
+                      ]
+                    },
+                    "content": {
+                      "runs": [
+                        {
+                          "text": "ログインするとおすすめの精度が上がります"
+                        }
+                      ]
+                    },
+                    "button": {
+                      "buttonRenderer": {
+                        "style": "STYLE_BLUE_TEXT",
+                        "isDisabled": false,
+                        "text": {
+                          "runs": [
+                            {
+                              "text": "ログイン"
+                            }
+                          ]
+                        },
+                        "navigationEndpoint": {
+                          "signInEndpoint": {
+                            "hack": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "likeCommand": {
+              "modalEndpoint": {
+                "modal": {
+                  "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                      "runs": [
+                        {
+                          "text": "この曲に高評価を付ける"
+                        }
+                      ]
+                    },
+                    "content": {
+                      "runs": [
+                        {
+                          "text": "ログインするとおすすめの精度が上がり、音楽を保存することもできます"
+                        }
+                      ]
+                    },
+                    "button": {
+                      "buttonRenderer": {
+                        "style": "STYLE_BLUE_TEXT",
+                        "isDisabled": false,
+                        "text": {
+                          "runs": [
+                            {
+                              "text": "ログイン"
+                            }
+                          ]
+                        },
+                        "navigationEndpoint": {
+                          "signInEndpoint": {
+                            "hack": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "playlistItemData": {
+    "playlistSetVideoId": "77BCAC2338D9C84E",
+    "videoId": "6zUV1aBPicg"
+  }
+}

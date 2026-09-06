@@ -29,17 +29,21 @@ import com.dd3boh.outertune.models.MediaMetadata
 fun ArtistDialog(
     navController: NavController,
     artists: List<MediaMetadata.Artist>,
+    rawText: String? = null,
     onDismiss: () -> Unit,
 ) {
     ListDialog(
         onDismiss = onDismiss
     ) {
+        rawText?.takeIf { it.isNotBlank() }?.let { original ->
+            item { Text(original, modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) }
+        }
         items(artists) { artist ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .height(ListItemHeight)
-                    .clickable {
+                    .clickable(enabled = !artist.id.isNullOrBlank()) {
                         navController.navigate("artist/${artist.id}")
                         onDismiss()
                     }
@@ -50,7 +54,7 @@ fun ArtistDialog(
                     modifier = Modifier
                         .fillParentMaxWidth()
                         .height(ListItemHeight)
-                        .clickable {
+                        .clickable(enabled = !artist.id.isNullOrBlank()) {
                             navController.navigate("artist/${artist.id}")
                             onDismiss()
                         }
@@ -74,11 +78,15 @@ fun ArtistDialog(
 fun ArtistDialog(
     navController: NavController,
     artists: List<ArtistEntity>,
+    rawText: String? = null,
     onDismiss: () -> Unit,
 ) {
     ListDialog(
         onDismiss = onDismiss
     ) {
+        rawText?.takeIf { it.isNotBlank() }?.let { original ->
+            item { Text(original, modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) }
+        }
         items(
             items = artists,
             key = { it.id }

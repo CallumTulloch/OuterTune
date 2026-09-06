@@ -16,11 +16,13 @@ import com.dd3boh.outertune.constants.ArtistSortType
 import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.ArtistEntity
+import com.dd3boh.outertune.db.entities.ArtistAlias
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.reversed
 import com.dd3boh.outertune.models.cleanLocalMetadataText
+import com.dd3boh.outertune.models.ArtistIdentity
 import com.dd3boh.outertune.models.selectArtistByNormalizedName
 import com.dd3boh.outertune.ui.utils.resize
 import com.zionhuang.innertube.pages.ArtistPage
@@ -46,13 +48,23 @@ interface ArtistsDao {
             LEFT JOIN song ON sam.songId = song.id AND (
                 song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1
             )
-        WHERE artist.id = :id
+        WHERE artist.id = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)
         GROUP BY artist.id
     """)
     fun artist(id: String): Flow<Artist?>
 
-    @Query("SELECT * FROM artist WHERE id = :id")
+    @Query("SELECT * FROM artist WHERE id = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)")
     fun artistById(id: String): ArtistEntity?
+
+    @Query("SELECT COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)")
+    fun resolveArtistId(id: String): String
+
+    @Query("""SELECT * FROM artist WHERE isLocal = 0 AND (onlineId = :onlineId OR id = :onlineId)
+        ORDER BY CASE WHEN id LIKE 'LA%' THEN 0 ELSE 1 END, rowId LIMIT 1""")
+    fun artistByOnlineId(onlineId: String): ArtistEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(alias: ArtistAlias)
 
     @Query("SELECT * FROM artist WHERE name = :name")
     fun artistByName(name: String): ArtistEntity?
@@ -79,18 +91,23 @@ interface ArtistsDao {
         isLocal: Boolean,
         thumbnailUrl: String? = null,
         channelId: String? = null,
+        contextId: String? = null,
     ): ArtistEntity {
         val resolvedName = if (isLocal) cleanLocalMetadataText(name) else name
         val explicitId = id?.takeIf(String::isNotBlank)
 
-        if (!isLocal && explicitId != null) {
-            artistById(explicitId)?.let { return it }
+        if (!isLocal) {
+            explicitId?.let { artistById(it)?.let { existing -> return existing } }
+            val onlineId = ArtistIdentity.onlineId(explicitId)
+            onlineId?.let { artistByOnlineId(it)?.let { existing -> return existing } }
             return ArtistEntity(
-                id = explicitId,
+                id = explicitId ?: contextId?.let { ArtistIdentity.stableId(it, resolvedName) }
+                    ?: ArtistEntity.generateArtistId(),
                 name = resolvedName,
                 thumbnailUrl = thumbnailUrl,
                 channelId = channelId,
                 isLocal = false,
+                onlineId = onlineId,
             )
         }
 
@@ -117,7 +134,8 @@ interface ArtistsDao {
         isLocal: Boolean,
         thumbnailUrl: String? = null,
         channelId: String? = null,
-    ): ArtistEntity = resolveArtist(id, name, isLocal, thumbnailUrl, channelId).also(::insert)
+        contextId: String? = null,
+    ): ArtistEntity = resolveArtist(id, name, isLocal, thumbnailUrl, channelId, contextId).also(::insert)
 
     @Query("SELECT * FROM artist WHERE isLocal = 1 AND name LIKE '%' || :name || '%'")
     fun localArtistsByNameFuzzy(name: String): List<ArtistEntity>
@@ -308,7 +326,7 @@ interface ArtistsDao {
         SELECT song.*
         FROM song_artist_map
             JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = :artistId
+        WHERE artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         ORDER BY COALESCE(inLibrary, dateDownload, dateModified, date)
     """)
@@ -319,7 +337,7 @@ interface ArtistsDao {
         SELECT song.*
         FROM song_artist_map
             JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = :artistId
+        WHERE artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         ORDER BY title COLLATE NOCASE ASC
     """)
@@ -349,7 +367,6 @@ interface ArtistsDao {
     fun update(artist: ArtistEntity, artistPage: ArtistPage) {
         update(
             artist.copy(
-                name = artistPage.artist.title,
                 thumbnailUrl = artistPage.artist.thumbnail?.resize(544, 544),
                 lastUpdateTime = LocalDateTime.now()
             )
@@ -378,6 +395,8 @@ interface ArtistsDao {
             WHERE album_artist_map.artistId = :artistId
         )
         AND id = :artistId
+        AND bookmarkedAt IS NULL
+        AND NOT EXISTS (SELECT 1 FROM artist_alias WHERE artist_alias.artistId = artist.id)
     """)
     fun safeDeleteArtist(artistId: String)
 

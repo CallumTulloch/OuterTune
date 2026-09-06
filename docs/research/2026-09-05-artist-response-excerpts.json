@@ -1,0 +1,2801 @@
+{
+  "description": "Live anonymous YouTube Music response excerpts, not synthesized fixtures. Run text and IDs are copied from captured responses; surrounding response and tracking fields omitted. JSON paths point to the original raw response. Missing ID means that Run had no browseEndpoint.browseId.",
+  "scope": "Region JP, client WEB_REMIX 1.20250310.01.00, predominantly ja plus explicit en controls. No app build/emulator used. Not evidence of logged-in or all-catalog behavior.",
+  "captures": [
+    {
+      "label": "target-search-all-ja",
+      "observed_at_utc": "2026-09-05T07:12:01.886377+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "it will fit me just as well"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:12:02 GMT",
+        "bytes": 214595,
+        "raw_sha256": "6caa3a7354f1e95e57810107787547ab8b1c53edcac0e44dcbf42723bc903821",
+        "raw_local_file": "build/artist-response-research-20260905/target-search-all-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicCardShelfRenderer.title",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+              "videoId": "TSZhKssbW2g"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicCardShelfRenderer.subtitle",
+          "runs": [
+            {
+              "text": "曲"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "翟锦彦、8082Audio"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "3:58"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicCardShelfRenderer.menu.menuRenderer.items[7].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicCardShelfRenderer.menu.menuRenderer.items[8].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "MPTCTSZhKssbW2g",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "target-search-songs-ja",
+      "observed_at_utc": "2026-09-05T07:12:01.889380+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "it will fit me just as well",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:12:02 GMT",
+        "bytes": 205859,
+        "raw_sha256": "c361dec94cfef15112ef0b7c7ed45090d1d462aa3454747c39f7f1744ee289e0",
+        "raw_local_file": "build/artist-response-research-20260905/target-search-songs-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+              "videoId": "TSZhKssbW2g"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+              "browseId": "MPREb_NUdafp1DlA5",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "3:58"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[7].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[8].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "MPTCTSZhKssbW2g",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "target-queue-ja",
+      "observed_at_utc": "2026-09-05T07:12:01.891384+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoIds": [
+            "TSZhKssbW2g"
+          ]
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:12:02 GMT",
+        "bytes": 10831,
+        "raw_sha256": "645bc4bb39e2a594c8a0d2561d90190afc87a3fd55f1b4a688e241e1079d2f4e",
+        "raw_local_file": "build/artist-response-research-20260905/target-queue-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+              "browseId": "MPREb_NUdafp1DlA5",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2024年"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.menu.menuRenderer.items[8].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.menu.menuRenderer.items[9].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "MPTCTSZhKssbW2g",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "target-next-ja",
+      "observed_at_utc": "2026-09-05T07:14:15.227750+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/next?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoId": "TSZhKssbW2g"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:14:15 GMT",
+        "bytes": 21646,
+        "raw_sha256": "4144430ccb64be0e2e8f28084d5a3611ed9907760cc5d9578d26200e69b92efa",
+        "raw_local_file": "build/artist-response-research-20260905/target-next-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer.contents[0].playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer.contents[0].playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+              "browseId": "MPREb_NUdafp1DlA5",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2024年"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content.musicQueueRenderer.header.musicQueueHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "再生中"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content.musicQueueRenderer.header.musicQueueHeaderRenderer.buttons[0].chipCloudChipRenderer.navigationEndpoint.modalEndpoint.modal.modalWithTitleAndButtonRenderer.title",
+          "runs": [
+            {
+              "text": "後で見るために保存"
+            }
+          ]
+        },
+        {
+          "path": "$.playerOverlays.playerOverlayRenderer.actions[0].likeButtonRenderer.dislikeNavigationEndpoint.modalEndpoint.modal.modalWithTitleAndButtonRenderer.title",
+          "runs": [
+            {
+              "text": "興味がない場合"
+            }
+          ]
+        },
+        {
+          "path": "$.playerOverlays.playerOverlayRenderer.actions[0].likeButtonRenderer.likeCommand.modalEndpoint.modal.modalWithTitleAndButtonRenderer.title",
+          "runs": [
+            {
+              "text": "この曲に高評価を付ける"
+            }
+          ]
+        },
+        {
+          "path": "$.videoReporting.reportFormModalRenderer.title",
+          "runs": [
+            {
+              "text": "動画を報告"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer.contents[0].playlistPanelVideoRenderer.menu.menuRenderer.items[8].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        },
+        {
+          "path": "$.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer.watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content.musicQueueRenderer.content.playlistPanelRenderer.contents[0].playlistPanelVideoRenderer.menu.menuRenderer.items[9].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "MPTCTSZhKssbW2g",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "target-album-ja",
+      "observed_at_utc": "2026-09-05T07:12:02.216901+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "MPREb_NUdafp1DlA5"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:12:02 GMT",
+        "bytes": 33658,
+        "raw_sha256": "d5e701a994711129694c908a4d3051ec668fa26a7c2b33841f02a449671dc6cc",
+        "raw_local_file": "build/artist-response-research-20260905/target-album-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.straplineTextOne",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+              "videoId": "TSZhKssbW2g",
+              "playlistId": "OLAK5uy_mgidIzxZdcEIBKWY_zyNgecctoSlHxY6s"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[2].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "再生回数 26万 回"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[6].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[7].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "MPTCTSZhKssbW2g",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "target-album-playlist-ja",
+      "observed_at_utc": "2026-09-05T07:13:14.773026+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "VLOLAK5uy_mgidIzxZdcEIBKWY_zyNgecctoSlHxY6s"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:15 GMT",
+        "bytes": 26398,
+        "raw_sha256": "d8b8850db2bd2c3e6ea77fe4d38cbb6d5686ffa3f6fcc8dcdadbedd13e4c0b62",
+        "raw_local_file": "build/artist-response-research-20260905/target-album-playlist-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+              "videoId": "TSZhKssbW2g",
+              "playlistId": "OLAK5uy_mgidIzxZdcEIBKWY_zyNgecctoSlHxY6s"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[2].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+              "browseId": "MPREb_NUdafp1DlA5",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[7].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[8].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "MPTCTSZhKssbW2g",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "target-queue-en",
+      "observed_at_utc": "2026-09-05T07:13:15.106016+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "en"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoIds": [
+            "TSZhKssbW2g"
+          ]
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:15 GMT",
+        "bytes": 10504,
+        "raw_sha256": "86f66634c9c6bf4b122562a588af06a8de54d6f106cc368996d77ef065d86d6a",
+        "raw_local_file": "build/artist-response-research-20260905/target-queue-en.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "翟锦彦 & 8082Audio"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+              "browseId": "MPREb_NUdafp1DlA5",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2024"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.menu.menuRenderer.items[8].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.menu.menuRenderer.items[9].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "MPTCTSZhKssbW2g",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "target-credits-ja",
+      "observed_at_utc": "2026-09-05T07:13:14.769029+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "MPTCTSZhKssbW2g"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:15 GMT",
+        "bytes": 3328,
+        "raw_sha256": "94e5095d6ce681c4f0089e114c53c96f94f6fa3d8c1bd9e5b6c768a2a7835dc4",
+        "raw_local_file": "build/artist-response-research-20260905/target-credits-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.sections[0].dismissableDialogContentSectionRenderer.title",
+          "runs": [
+            {
+              "text": "演奏"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.sections[0].dismissableDialogContentSectionRenderer.subtitle",
+          "runs": [
+            {
+              "text": "翟锦彦"
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "8082Audio"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.sections[1].dismissableDialogContentSectionRenderer.title",
+          "runs": [
+            {
+              "text": "作詞・作曲"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.sections[1].dismissableDialogContentSectionRenderer.subtitle",
+          "runs": [
+            {
+              "text": "翟锦彦"
+            },
+            {
+              "text": "\n"
+            },
+            {
+              "text": "往生咒"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.sections[2].dismissableDialogContentSectionRenderer.title",
+          "runs": [
+            {
+              "text": "プロデューサー"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.sections[2].dismissableDialogContentSectionRenderer.subtitle",
+          "runs": [
+            {
+              "text": "李佳骐"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.sections[3].dismissableDialogContentSectionRenderer.title",
+          "runs": [
+            {
+              "text": "音楽のメタデータの提供者"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.sections[3].dismissableDialogContentSectionRenderer.subtitle",
+          "runs": [
+            {
+              "text": "8082Audio"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.metadata.musicMultiRowListItemRenderer.subtitle",
+          "runs": [
+            {
+              "text": "翟锦彦"
+            }
+          ]
+        },
+        {
+          "path": "$.onResponseReceivedActions[0].openPopupAction.popup.dismissableDialogRenderer.metadata.musicMultiRowListItemRenderer.title",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+              "videoId": "TSZhKssbW2g"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "target-artist-ja",
+      "observed_at_utc": "2026-09-05T07:13:14.771026+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:15 GMT",
+        "bytes": 280814,
+        "raw_sha256": "b40a9524a5a0a699dde35df6033a1c1ffd6b92657bd655e057c64dd61fcec8ad",
+        "raw_local_file": "build/artist-response-research-20260905/target-artist-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.header.musicImmersiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "8082Audio"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.contents.singleColumnBrowseResultsRenderer.tabs[0].tabRenderer.endpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "params": "EghmZWF0dXJlZA%3D%3D"
+        }
+      ]
+    },
+    {
+      "label": "target-person-search-ja",
+      "observed_at_utc": "2026-09-05T07:13:15.159506+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "翟锦彦",
+          "params": "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:15 GMT",
+        "bytes": 1382,
+        "raw_sha256": "22b14d7edec80a35425864a8d473908bce20cd1dc1453a6cbb6ffc956f1da6a0",
+        "raw_local_file": "build/artist-response-research-20260905/target-person-search-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].itemSectionRenderer.contents[0].messageRenderer.text",
+          "runs": [
+            {
+              "text": "「"
+            },
+            {
+              "text": "翟锦彦"
+            },
+            {
+              "text": "」に該当する検索結果はありません。"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].itemSectionRenderer.contents[0].messageRenderer.subtext.messageSubtextRenderer.text",
+          "runs": [
+            {
+              "text": "別のキーワードを試してください"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "target-person-search-en",
+      "observed_at_utc": "2026-09-05T07:13:15.308833+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "en"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "Zhai Jinyan",
+          "params": "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:15 GMT",
+        "bytes": 1318,
+        "raw_sha256": "6f5d677ddd249083c6de2b664dd61d4add9d8ce72d4801686dd210638dff696a",
+        "raw_local_file": "build/artist-response-research-20260905/target-person-search-en.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].itemSectionRenderer.contents[0].messageRenderer.text",
+          "runs": [
+            {
+              "text": "No results for "
+            },
+            {
+              "text": "Zhai Jinyan"
+            },
+            {
+              "text": "."
+            }
+          ]
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].itemSectionRenderer.contents[0].messageRenderer.subtext.messageSubtextRenderer.text",
+          "runs": [
+            {
+              "text": "Try different keywords"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "target-soundtrack-queue-ja",
+      "observed_at_utc": "2026-09-05T07:15:38.971634+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoIds": [
+            "6zUV1aBPicg",
+            "yq0Dzo3jJ10"
+          ]
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:15:39 GMT",
+        "bytes": 21008,
+        "raw_sha256": "2405fb85bccc8f185e960e9f3a9754d516cfbfc76bfb62a931063babad9a7608",
+        "raw_local_file": "build/artist-response-research-20260905/target-soundtrack-queue-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "《黑神话：悟空》游戏音乐精选集（Black Myth: Wukong Soundtrack Selection）",
+              "browseId": "MPREb_73E30HA8cfs",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2024年"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版伴奏)"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "《黑神话：悟空》游戏音乐精选集（Black Myth: Wukong Soundtrack Selection）",
+              "browseId": "MPREb_73E30HA8cfs",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2024年"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.menu.menuRenderer.items[8].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "control-duet-queue-ja",
+      "observed_at_utc": "2026-09-05T07:12:02.543311+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoIds": [
+            "RVDCeVG90Rg",
+            "DlFXDl_ROAM"
+          ]
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:12:02 GMT",
+        "bytes": 21877,
+        "raw_sha256": "11a4dd033469491ce18b98f71978b0a216d36ac0de5353faa4e15fab899b54ad",
+        "raw_local_file": "build/artist-response-research-20260905/control-duet-queue-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "ダイ・ウィズ・ア・スマイル"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "レディー・ガガ",
+              "browseId": "UCGKXb1syicud01CJOOFRykg",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": "、"
+            },
+            {
+              "text": "ブルーノ・マーズ",
+              "browseId": "UCZn4r7heNOPY-C43YIywnVA",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "Die With A Smile",
+              "browseId": "MPREb_awgUw0NYaZA",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2024年"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "Die With A Smile"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "レディー・ガガ",
+              "browseId": "UCGKXb1syicud01CJOOFRykg",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": "、"
+            },
+            {
+              "text": "ブルーノ・マーズ",
+              "browseId": "UCZn4r7heNOPY-C43YIywnVA",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "MAYHEM",
+              "browseId": "MPREb_fdn3rDTkRH3",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2025年"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "control-band-queue-ja",
+      "observed_at_utc": "2026-09-05T07:13:15.474385+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoIds": [
+            "OBM0DO8Xt1c",
+            "B2mmDEv0OEk"
+          ]
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:15 GMT",
+        "bytes": 21174,
+        "raw_sha256": "38dd2cad3354395bcd3fdc5ce5a9cfc1c9ba0a358e7bf5e9313328ac2cab6cbf",
+        "raw_local_file": "build/artist-response-research-20260905/control-band-queue-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "セプテンバー"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "EARTH,WIND & FIRE",
+              "browseId": "UCdyqvgHHq9NEEfV20lO61jQ",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "September (sped up + slowed)",
+              "browseId": "MPREb_RCaUbOIBaZ0",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "1978年"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "セプテンバー"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "EARTH,WIND & FIRE",
+              "browseId": "UCdyqvgHHq9NEEfV20lO61jQ",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "Feel Good Friday",
+              "browseId": "MPREb_yXWj02r7IL0",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2018年"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "control-band-queue-en",
+      "observed_at_utc": "2026-09-05T07:14:15.229748+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "en"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoIds": [
+            "OBM0DO8Xt1c"
+          ]
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:14:15 GMT",
+        "bytes": 10580,
+        "raw_sha256": "df95f5a9006e334d5772168b79b02e052622a7aaee2f9aed79cf773222a646d0",
+        "raw_local_file": "build/artist-response-research-20260905/control-band-queue-en.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "September"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "Earth, Wind & Fire",
+              "browseId": "UCdyqvgHHq9NEEfV20lO61jQ",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "September (sped up + slowed)",
+              "browseId": "MPREb_RCaUbOIBaZ0",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "1978"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "control-gaga-artist-ja",
+      "observed_at_utc": "2026-09-05T07:14:15.520276+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "UCGKXb1syicud01CJOOFRykg"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:14:15 GMT",
+        "bytes": 583113,
+        "raw_sha256": "496f81863cc8026ce0c4f36220e17c7cc857d39ce84b04aae1360eff17195c64",
+        "raw_local_file": "build/artist-response-research-20260905/control-gaga-artist-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.header.musicImmersiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "レディー・ガガ"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "control-bruno-artist-ja",
+      "observed_at_utc": "2026-09-05T07:14:15.601659+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "UCZn4r7heNOPY-C43YIywnVA"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:14:16 GMT",
+        "bytes": 540521,
+        "raw_sha256": "ce7c0e43715b611d7676cbc06d247d24e4740b42153dffb372c8c4d7c0528754",
+        "raw_local_file": "build/artist-response-research-20260905/control-bruno-artist-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.header.musicImmersiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "ブルーノ・マーズ"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "control-band-artist-ja",
+      "observed_at_utc": "2026-09-05T07:14:15.232748+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "UCdyqvgHHq9NEEfV20lO61jQ"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:14:15 GMT",
+        "bytes": 534587,
+        "raw_sha256": "0caefb79ea57e729a93e7d41660fe763e3fbc0690adfb3b01df9f083e5ffb058",
+        "raw_local_file": "build/artist-response-research-20260905/control-band-artist-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.header.musicImmersiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "アース・ウィンド＆ファイアー"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "cross-8082-i-see-album-ja",
+      "observed_at_utc": "2026-09-05T07:13:37.499450+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "MPREb_k2oqJL491oh"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:37 GMT",
+        "bytes": 34722,
+        "raw_sha256": "2d7c1fbc2d3849e3e653c93602ea01462487230693b6ba42b67d235f3968d540",
+        "raw_local_file": "build/artist-response-research-20260905/cross-8082-i-see-album-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "看见（《黑神话：悟空》黑风山片尾曲）（I See）"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.straplineTextOne",
+          "runs": [
+            {
+              "text": "陈鸿宇",
+              "browseId": "UCQXd5DeteRj9dDMf6sR_HVA",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": "、"
+            },
+            {
+              "text": "8082Audio",
+              "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "cross-8082-soundtrack-album-ja",
+      "observed_at_utc": "2026-09-05T07:13:36.450329+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "MPREb_73E30HA8cfs"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:37 GMT",
+        "bytes": 652603,
+        "raw_sha256": "66c04efbb2f06802392840c70bba2761fd49e0cbe27feb18d2b9c36e18aaaf07",
+        "raw_local_file": "build/artist-response-research-20260905/cross-8082-soundtrack-album-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "《黑神话：悟空》游戏音乐精选集（Black Myth: Wukong Soundtrack Selection）"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.straplineTextOne",
+          "runs": [
+            {
+              "text": "8082Audio",
+              "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[16].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+              "videoId": "6zUV1aBPicg",
+              "playlistId": "OLAK5uy_mGSfbpjq56BCReij0hfXSf31HPolHJ7Yc"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[16].musicResponsiveListItemRenderer.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[16].musicResponsiveListItemRenderer.flexColumns[2].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "再生回数 26万 回"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[17].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版伴奏)",
+              "videoId": "yq0Dzo3jJ10",
+              "playlistId": "OLAK5uy_mGSfbpjq56BCReij0hfXSf31HPolHJ7Yc"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[17].musicResponsiveListItemRenderer.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[17].musicResponsiveListItemRenderer.flexColumns[2].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "再生回数 2.9万 回"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicShelfRenderer.contents[16].musicResponsiveListItemRenderer.menu.menuRenderer.items[6].menuNavigationItemRenderer.navigationEndpoint",
+          "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+          "browseEndpointContextSupportedConfigs": {
+            "browseEndpointContextMusicConfig": {
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "label": "cross-duet-single-album-ja",
+      "observed_at_utc": "2026-09-05T07:13:36.446329+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "MPREb_awgUw0NYaZA"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:37 GMT",
+        "bytes": 119685,
+        "raw_sha256": "ff53e4d82aa9f7b7138d78d546b7e4099152802382b541f1c430422da5f3818f",
+        "raw_local_file": "build/artist-response-research-20260905/cross-duet-single-album-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[2].musicCarouselShelfRenderer.contents[5].musicTwoRowItemRenderer.title",
+          "runs": [
+            {
+              "text": "Leave The Door Open (Live)",
+              "browseId": "MPREb_WbTvm2RZhWo",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[2].musicCarouselShelfRenderer.contents[5].musicTwoRowItemRenderer.subtitle",
+          "runs": [
+            {
+              "text": "シングル"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "Bruno Mars",
+              "browseId": "UCZn4r7heNOPY-C43YIywnVA",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": "、"
+            },
+            {
+              "text": "Anderson .Paak",
+              "browseId": "UCLdqZBVvWa174TnYyLC-IAg",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": "、"
+            },
+            {
+              "text": "Silk Sonic",
+              "browseId": "UCxzUCi7mtGmHIa1XwAqqkjw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[2].musicCarouselShelfRenderer.contents[5].musicTwoRowItemRenderer.menu.menuRenderer.items[4].toggleMenuServiceItemRenderer.defaultServiceEndpoint.modalEndpoint.modal.modalWithTitleAndButtonRenderer.title",
+          "runs": [
+            {
+              "text": "後で見るために保存"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[2].musicCarouselShelfRenderer.contents[5].musicTwoRowItemRenderer.menu.menuRenderer.items[5].menuNavigationItemRenderer.navigationEndpoint.modalEndpoint.modal.modalWithTitleAndButtonRenderer.title",
+          "runs": [
+            {
+              "text": "後で見るために保存"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "Die With A Smile"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.straplineTextOne",
+          "runs": [
+            {
+              "text": "レディー・ガガ",
+              "browseId": "UCGKXb1syicud01CJOOFRykg",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": "、"
+            },
+            {
+              "text": "ブルーノ・マーズ",
+              "browseId": "UCZn4r7heNOPY-C43YIywnVA",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    },
+    {
+      "label": "cross-duet-mayhem-album-ja",
+      "observed_at_utc": "2026-09-05T07:13:36.448326+00:00",
+      "request": {
+        "method": "POST",
+        "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+        "body": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "browseId": "MPREb_fdn3rDTkRH3"
+        },
+        "authenticated": false
+      },
+      "response": {
+        "status": 200,
+        "date": "Sat, 05 Sep 2026 07:13:36 GMT",
+        "bytes": 269148,
+        "raw_sha256": "bf536484b0f4f2e06fd5632a16fd140381245bd715916172e406acac998915d9",
+        "raw_local_file": "build/artist-response-research-20260905/cross-duet-mayhem-album-ja.raw.json"
+      },
+      "selected_run_groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "MAYHEM"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.straplineTextOne",
+          "runs": [
+            {
+              "text": "レディー・ガガ",
+              "browseId": "UCGKXb1syicud01CJOOFRykg",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        }
+      ],
+      "separate_endpoint_examples": []
+    }
+  ],
+  "request_inventory": [
+    {
+      "label": "control-band-artist-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "UCdyqvgHHq9NEEfV20lO61jQ"
+      },
+      "requested_at_utc": "2026-09-05T07:14:15.232748+00:00",
+      "status": 200,
+      "bytes": 534587,
+      "sha256": "0caefb79ea57e729a93e7d41660fe763e3fbc0690adfb3b01df9f083e5ffb058",
+      "seconds": 0.88,
+      "error": null
+    },
+    {
+      "label": "control-band-queue-en",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "en"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "OBM0DO8Xt1c"
+        ]
+      },
+      "requested_at_utc": "2026-09-05T07:14:15.229748+00:00",
+      "status": 200,
+      "bytes": 10580,
+      "sha256": "df95f5a9006e334d5772168b79b02e052622a7aaee2f9aed79cf773222a646d0",
+      "seconds": 0.3,
+      "error": null
+    },
+    {
+      "label": "control-band-queue-ja",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "OBM0DO8Xt1c",
+          "B2mmDEv0OEk"
+        ]
+      },
+      "requested_at_utc": "2026-09-05T07:13:15.474385+00:00",
+      "status": 200,
+      "bytes": 21174,
+      "sha256": "38dd2cad3354395bcd3fdc5ce5a9cfc1c9ba0a358e7bf5e9313328ac2cab6cbf",
+      "seconds": 0.22,
+      "error": null
+    },
+    {
+      "label": "control-band-search-ja",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "Earth Wind Fire September",
+        "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+      },
+      "requested_at_utc": "2026-09-05T07:14:16.123747+00:00",
+      "status": 200,
+      "bytes": 204023,
+      "sha256": "5aec10adcc1c2bcf0594f6264e219adb1f7a5edf5cc5eec195633be434351e61",
+      "seconds": 0.7,
+      "error": null
+    },
+    {
+      "label": "control-bruno-artist-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "UCZn4r7heNOPY-C43YIywnVA"
+      },
+      "requested_at_utc": "2026-09-05T07:14:15.601659+00:00",
+      "status": 200,
+      "bytes": 540521,
+      "sha256": "ce7c0e43715b611d7676cbc06d247d24e4740b42153dffb372c8c4d7c0528754",
+      "seconds": 0.67,
+      "error": null
+    },
+    {
+      "label": "control-duet-queue-ja",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "RVDCeVG90Rg",
+          "DlFXDl_ROAM"
+        ]
+      },
+      "requested_at_utc": "2026-09-05T07:12:02.543311+00:00",
+      "status": 200,
+      "bytes": 21877,
+      "sha256": "11a4dd033469491ce18b98f71978b0a216d36ac0de5353faa4e15fab899b54ad",
+      "seconds": 0.22,
+      "error": null
+    },
+    {
+      "label": "control-duet-search-ja",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "Lady Gaga Bruno Mars Die With A Smile",
+        "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+      },
+      "requested_at_utc": "2026-09-05T07:13:15.576821+00:00",
+      "status": 200,
+      "bytes": 203435,
+      "sha256": "04506b33a3929702520e7396996c42417d4759744d3dc6d17b5757898e43d85f",
+      "seconds": 0.66,
+      "error": null
+    },
+    {
+      "label": "control-gaga-artist-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "UCGKXb1syicud01CJOOFRykg"
+      },
+      "requested_at_utc": "2026-09-05T07:14:15.520276+00:00",
+      "status": 200,
+      "bytes": 583113,
+      "sha256": "496f81863cc8026ce0c4f36220e17c7cc857d39ce84b04aae1360eff17195c64",
+      "seconds": 0.64,
+      "error": null
+    },
+    {
+      "label": "cross-8082-destiny-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_OqJqQugAvdZ"
+      },
+      "requested_at_utc": "2026-09-05T07:13:36.995028+00:00",
+      "status": 200,
+      "bytes": 120601,
+      "sha256": "c1ce28f82c09b2c8d65d908fb07772914b6781bca3e5ed7d030ef94fc8cd1e55",
+      "seconds": 0.44,
+      "error": null
+    },
+    {
+      "label": "cross-8082-i-see-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_k2oqJL491oh"
+      },
+      "requested_at_utc": "2026-09-05T07:13:37.499450+00:00",
+      "status": 200,
+      "bytes": 34722,
+      "sha256": "2d7c1fbc2d3849e3e653c93602ea01462487230693b6ba42b67d235f3968d540",
+      "seconds": 0.33,
+      "error": null
+    },
+    {
+      "label": "cross-8082-listen-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_skCOwZugeq0"
+      },
+      "requested_at_utc": "2026-09-05T07:13:37.498450+00:00",
+      "status": 200,
+      "bytes": 34768,
+      "sha256": "41e5d3f759fadbd67eb8b698780a36919347de0c28967b7727f7a01a88111332",
+      "seconds": 0.33,
+      "error": null
+    },
+    {
+      "label": "cross-8082-listen-not-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_x1jYNarNhLi"
+      },
+      "requested_at_utc": "2026-09-05T07:13:37.196864+00:00",
+      "status": 200,
+      "bytes": 35056,
+      "sha256": "efaa24941817f894693febdc0ca43f82e0d6d3c91b07336e75e4fc6dcc18312e",
+      "seconds": 0.31,
+      "error": null
+    },
+    {
+      "label": "cross-8082-nonsense-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_162HCop2Z3L"
+      },
+      "requested_at_utc": "2026-09-05T07:13:37.008025+00:00",
+      "status": 200,
+      "bytes": 119653,
+      "sha256": "d9dd18a7577b99a593a1b060f1ef9b1367767cc21ca0e6cf56809871b114ff49",
+      "seconds": 0.48,
+      "error": null
+    },
+    {
+      "label": "cross-8082-page-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "UChWKQRswWTLRXp98zmgHtdQ"
+      },
+      "requested_at_utc": "2026-09-05T07:12:54.125015+00:00",
+      "status": 200,
+      "bytes": 280814,
+      "sha256": "122dc5f0aa83bd7ef681999819cdebb81c824ad818223ce9c0fd82670642535a",
+      "seconds": 0.75,
+      "error": null
+    },
+    {
+      "label": "cross-8082-search-ja",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "8082Audio"
+      },
+      "requested_at_utc": "2026-09-05T07:12:54.129016+00:00",
+      "status": 200,
+      "bytes": 198606,
+      "sha256": "19274b371985106aa3d69aca603c04b2afeb00270ecf97ccdcc0a718b39a1ddc",
+      "seconds": 0.7,
+      "error": null
+    },
+    {
+      "label": "cross-8082-soundtrack-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_73E30HA8cfs"
+      },
+      "requested_at_utc": "2026-09-05T07:13:36.450329+00:00",
+      "status": 200,
+      "bytes": 652603,
+      "sha256": "66c04efbb2f06802392840c70bba2761fd49e0cbe27feb18d2b9c36e18aaaf07",
+      "seconds": 0.73,
+      "error": null
+    },
+    {
+      "label": "cross-8082-unfinished-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_WahndwWCVLo"
+      },
+      "requested_at_utc": "2026-09-05T07:13:37.747335+00:00",
+      "status": 200,
+      "bytes": 34704,
+      "sha256": "dd4180ae932abaa26ab263556d64d56e94b761dc58fdf964ad87327313141e89",
+      "seconds": 0.27,
+      "error": null
+    },
+    {
+      "label": "cross-8082-yellow-wind-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_bhcrQfbZXgM"
+      },
+      "requested_at_utc": "2026-09-05T07:13:37.428613+00:00",
+      "status": 200,
+      "bytes": 34965,
+      "sha256": "aacfba8307481684719eff8d8d1fa9ee0b317db50c44e2ef6d37f6d3461716c1",
+      "seconds": 0.33,
+      "error": null
+    },
+    {
+      "label": "cross-duet-mayhem-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_fdn3rDTkRH3"
+      },
+      "requested_at_utc": "2026-09-05T07:13:36.448326+00:00",
+      "status": 200,
+      "bytes": 269148,
+      "sha256": "bf536484b0f4f2e06fd5632a16fd140381245bd715916172e406acac998915d9",
+      "seconds": 0.55,
+      "error": null
+    },
+    {
+      "label": "cross-duet-single-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_awgUw0NYaZA"
+      },
+      "requested_at_utc": "2026-09-05T07:13:36.446329+00:00",
+      "status": 200,
+      "bytes": 119685,
+      "sha256": "ff53e4d82aa9f7b7138d78d546b7e4099152802382b541f1c430422da5f3818f",
+      "seconds": 0.56,
+      "error": null
+    },
+    {
+      "label": "cross-duet-versions-queue-ja",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "RVDCeVG90Rg",
+          "DlFXDl_ROAM"
+        ]
+      },
+      "requested_at_utc": "2026-09-05T07:12:54.127015+00:00",
+      "status": 200,
+      "bytes": 21945,
+      "sha256": "88b136e7f561df723121e5d42871680b30ab522867a41304344c9103bd4533ee",
+      "seconds": 0.28,
+      "error": null
+    },
+    {
+      "label": "target-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_NUdafp1DlA5"
+      },
+      "requested_at_utc": "2026-09-05T07:12:02.216901+00:00",
+      "status": 200,
+      "bytes": 33658,
+      "sha256": "d5e701a994711129694c908a4d3051ec668fa26a7c2b33841f02a449671dc6cc",
+      "seconds": 0.33,
+      "error": null
+    },
+    {
+      "label": "target-album-playlist-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "VLOLAK5uy_mgidIzxZdcEIBKWY_zyNgecctoSlHxY6s"
+      },
+      "requested_at_utc": "2026-09-05T07:13:14.773026+00:00",
+      "status": 200,
+      "bytes": 26398,
+      "sha256": "d8b8850db2bd2c3e6ea77fe4d38cbb6d5686ffa3f6fcc8dcdadbedd13e4c0b62",
+      "seconds": 0.39,
+      "error": null
+    },
+    {
+      "label": "target-artist-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "UChWKQRswWTLRXp98zmgHtdQ"
+      },
+      "requested_at_utc": "2026-09-05T07:13:14.771026+00:00",
+      "status": 200,
+      "bytes": 280814,
+      "sha256": "b40a9524a5a0a699dde35df6033a1c1ffd6b92657bd655e057c64dd61fcec8ad",
+      "seconds": 0.7,
+      "error": null
+    },
+    {
+      "label": "target-credits-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPTCTSZhKssbW2g"
+      },
+      "requested_at_utc": "2026-09-05T07:13:14.769029+00:00",
+      "status": 200,
+      "bytes": 3328,
+      "sha256": "94e5095d6ce681c4f0089e114c53c96f94f6fa3d8c1bd9e5b6c768a2a7835dc4",
+      "seconds": 0.33,
+      "error": null
+    },
+    {
+      "label": "target-next-ja",
+      "url": "https://music.youtube.com/youtubei/v1/next?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoId": "TSZhKssbW2g"
+      },
+      "requested_at_utc": "2026-09-05T07:14:15.227750+00:00",
+      "status": 200,
+      "bytes": 21646,
+      "sha256": "4144430ccb64be0e2e8f28084d5a3611ed9907760cc5d9578d26200e69b92efa",
+      "seconds": 0.38,
+      "error": null
+    },
+    {
+      "label": "target-person-search-en",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "en"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "Zhai Jinyan",
+        "params": "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
+      },
+      "requested_at_utc": "2026-09-05T07:13:15.308833+00:00",
+      "status": 200,
+      "bytes": 1318,
+      "sha256": "6f5d677ddd249083c6de2b664dd61d4add9d8ce72d4801686dd210638dff696a",
+      "seconds": 0.39,
+      "error": null
+    },
+    {
+      "label": "target-person-search-ja",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "翟锦彦",
+        "params": "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
+      },
+      "requested_at_utc": "2026-09-05T07:13:15.159506+00:00",
+      "status": 200,
+      "bytes": 1382,
+      "sha256": "22b14d7edec80a35425864a8d473908bce20cd1dc1453a6cbb6ffc956f1da6a0",
+      "seconds": 0.42,
+      "error": null
+    },
+    {
+      "label": "target-queue-en",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "en"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "TSZhKssbW2g"
+        ]
+      },
+      "requested_at_utc": "2026-09-05T07:13:15.106016+00:00",
+      "status": 200,
+      "bytes": 10504,
+      "sha256": "86f66634c9c6bf4b122562a588af06a8de54d6f106cc368996d77ef065d86d6a",
+      "seconds": 0.19,
+      "error": null
+    },
+    {
+      "label": "target-queue-ja",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "TSZhKssbW2g"
+        ]
+      },
+      "requested_at_utc": "2026-09-05T07:12:01.891384+00:00",
+      "status": 200,
+      "bytes": 10831,
+      "sha256": "645bc4bb39e2a594c8a0d2561d90190afc87a3fd55f1b4a688e241e1079d2f4e",
+      "seconds": 0.33,
+      "error": null
+    },
+    {
+      "label": "target-search-all-ja",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "it will fit me just as well"
+      },
+      "requested_at_utc": "2026-09-05T07:12:01.886377+00:00",
+      "status": 200,
+      "bytes": 214595,
+      "sha256": "6caa3a7354f1e95e57810107787547ab8b1c53edcac0e44dcbf42723bc903821",
+      "seconds": 0.95,
+      "error": null
+    },
+    {
+      "label": "target-search-songs-ja",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "it will fit me just as well",
+        "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+      },
+      "requested_at_utc": "2026-09-05T07:12:01.889380+00:00",
+      "status": 200,
+      "bytes": 205859,
+      "sha256": "c361dec94cfef15112ef0b7c7ed45090d1d462aa3454747c39f7f1744ee289e0",
+      "seconds": 0.81,
+      "error": null
+    },
+    {
+      "label": "target-soundtrack-queue-ja",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "6zUV1aBPicg",
+          "yq0Dzo3jJ10"
+        ]
+      },
+      "requested_at_utc": "2026-09-05T07:15:38.971634+00:00",
+      "status": 200,
+      "bytes": 21008,
+      "sha256": "2405fb85bccc8f185e960e9f3a9754d516cfbfc76bfb62a931063babad9a7608",
+      "seconds": 0.28,
+      "error": null
+    }
+  ]
+}

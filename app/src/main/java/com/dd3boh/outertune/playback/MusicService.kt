@@ -102,6 +102,7 @@ import com.dd3boh.outertune.extensions.collectLatest
 import com.dd3boh.outertune.extensions.currentMetadata
 import com.dd3boh.outertune.extensions.findNextMediaItemById
 import com.dd3boh.outertune.extensions.metadata
+import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.extensions.setOffloadEnabled
 import com.dd3boh.outertune.lyrics.LyricsHelper
 import com.dd3boh.outertune.models.HybridCacheDataSinkFactory
@@ -150,6 +151,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.time.LocalDateTime
 import javax.inject.Inject
+import com.dd3boh.outertune.repositories.ArtistCreditRepository
 import kotlin.math.min
 import kotlin.math.pow
 
@@ -162,6 +164,8 @@ class MusicService : MediaLibraryService(),
 
     @Inject
     lateinit var database: MusicDatabase
+    @Inject
+    lateinit var artistCredits: ArtistCreditRepository
     private val scope = CoroutineScope(Dispatchers.Main)
     private val offloadScope = CoroutineScope(playerCoroutine)
 
@@ -274,6 +278,27 @@ class MusicService : MediaLibraryService(),
             .build()
 
         player.repeatMode = dataStore.get(RepeatModeKey, REPEAT_MODE_OFF)
+
+        scope.launch {
+            artistCredits.updates.collect { (videoId, _) ->
+                queueBoard.value.updateArtistMetadata(videoId, artistCredits::withCredit)
+                for (index in 0 until player.mediaItemCount) {
+                    val item = player.getMediaItemAt(index)
+                    val metadata = item.metadata ?: continue
+                    if (metadata.id != videoId || metadata.isLocal) continue
+                    val updated = artistCredits.withCredit(metadata)
+                    if (updated != metadata) {
+                        // Keep the URI and cache key: Media3 updates metadata without restarting audio.
+                        player.replaceMediaItem(index, item.buildUpon()
+                            .setTag(updated)
+                            .setMediaMetadata(updated.toMediaItem().mediaMetadata)
+                            .build())
+                    }
+                }
+                currentMediaMetadata.value = player.currentMetadata?.let(artistCredits::withCredit)
+                updateNotification()
+            }
+        }
 
         // Keep a connected controller so that notification works
         val sessionToken = SessionToken(this, ComponentName(this, MusicService::class.java))
@@ -460,7 +485,7 @@ class MusicService : MediaLibraryService(),
         var queueTitle = title
         queuePlaylistId = queue.playlistId
         var q: MultiQueueObject? = null
-        val preloadItem = queue.preloadItem
+        val preloadItem = queue.preloadItem?.let(artistCredits::adopt)
         // do not use scope.launch ... it breaks randomly... why is this bug back???
         CoroutineScope(Dispatchers.Main).launch {
             Log.d(TAG, "playQueue: Resolving additional queue data...")
@@ -476,7 +501,12 @@ class MusicService : MediaLibraryService(),
                     queueBoard.value.setCurrQueue(q, true)
                 }
 
-                val initialStatus = withContext(Dispatchers.IO) { queue.getInitialStatus() }
+                val initialStatus = withContext(Dispatchers.IO) { queue.getInitialStatus() }.let { status ->
+                    status.items.getOrNull(status.mediaItemIndex.coerceAtLeast(0))?.let {
+                        artistCredits.request(it, priority = true)
+                    }
+                    status.copy(items = status.items.map(artistCredits::withCredit))
+                }
                 // do not find a title if an override is provided
                 if ((title == null) && initialStatus.title != null) {
                     queueTitle = initialStatus.title
@@ -944,6 +974,7 @@ class MusicService : MediaLibraryService(),
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         super.onMediaItemTransition(mediaItem, reason)
+        mediaItem?.metadata?.let { artistCredits.request(it, priority = true) }
         // +2 when and error happens, and -1 when transition. Thus when error, number increments by 1, else doesn't change
         if (consecutivePlaybackErr > 0) {
             consecutivePlaybackErr--
@@ -1016,7 +1047,7 @@ class MusicService : MediaLibraryService(),
             }
         }
         if (events.containsAny(EVENT_TIMELINE_CHANGED, EVENT_POSITION_DISCONTINUITY)) {
-            currentMediaMetadata.value = player.currentMetadata
+            currentMediaMetadata.value = player.currentMetadata?.let(artistCredits::withCredit)
         }
     }
 

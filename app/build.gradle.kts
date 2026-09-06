@@ -87,8 +87,8 @@ android {
             isEnable = true
             reset()
 
-            include("x86_64", "x86", "armeabi-v7a", "arm64-v8a")
-            isUniversalApk = true
+            include("arm64-v8a")
+            isUniversalApk = false
         }
     }
 
@@ -262,6 +262,8 @@ dependencies {
     implementation(libs.aboutlibraries.compose.m3)
 
     testImplementation(libs.junit)
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
 
     // sdk24 support
     // Support for N is officially unsupported even it the app should still work. Leave this outside of the version catalog.

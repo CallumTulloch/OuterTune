@@ -97,7 +97,10 @@ import com.dd3boh.outertune.ui.component.BottomSheetState
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.dialog.AddToPlaylistDialog
 import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
-import com.dd3boh.outertune.ui.dialog.ArtistDialog
+import com.dd3boh.outertune.ui.dialog.ArtistInformationDialog
+import com.dd3boh.outertune.ui.utils.rememberResolvedArtistMetadata
+import com.dd3boh.outertune.ui.utils.rememberArtistCreditRepository
+import com.dd3boh.outertune.utils.singleArtistTarget
 import com.dd3boh.outertune.ui.dialog.DetailsDialog
 import com.dd3boh.outertune.utils.rememberPreference
 import com.zionhuang.innertube.YouTube
@@ -126,6 +129,8 @@ fun PlayerMenu(
     onDismiss: () -> Unit,
 ) {
     mediaMetadata ?: return
+    val mediaMetadata = rememberResolvedArtistMetadata(mediaMetadata, request = true, priority = true)
+    val artistCreditRepository = rememberArtistCreditRepository()
     val context = LocalContext.current
     val database = LocalDatabase.current
     val downloadUtil = LocalDownloadUtil.current
@@ -434,7 +439,7 @@ fun PlayerMenu(
                 title = R.string.add_to_library,
             ) {
                 database.transaction {
-                    insert(mediaMetadata)
+                    insert(artistCreditRepository.withCredit(mediaMetadata))
                     toggleInLibrary(mediaMetadata.id, LocalDateTime.now())
                 }
             }
@@ -444,7 +449,7 @@ fun PlayerMenu(
                 localDateTime = download,
                 onDownload = {
                     database.transaction {
-                        insert(mediaMetadata)
+                        insert(artistCreditRepository.withCredit(mediaMetadata))
                     }
                     downloadUtil.download(mediaMetadata)
                 },
@@ -459,10 +464,11 @@ fun PlayerMenu(
             )
         GridMenuItem(
             icon = R.drawable.artist,
-            title = R.string.view_artist
+            title = R.string.artist_information
         ) {
-            if (mediaMetadata.artists.size == 1) {
-                navController.navigate("artist/${mediaMetadata.artists[0].id}")
+            val target = mediaMetadata.singleArtistTarget()
+            if (target != null) {
+                navController.navigate("artist/$target")
                 playerBottomSheetState.collapseSoft()
                 onDismiss()
             } else {
@@ -595,7 +601,7 @@ fun PlayerMenu(
             songIds = listOf(mediaMetadata.id),
             onPreAdd = { playlist ->
                 database.transaction {
-                    insert(mediaMetadata)
+                    insert(artistCreditRepository.withCredit(mediaMetadata))
                 }
 
                 playlist.playlist.browseId?.let { YouTube.addToPlaylist(it, mediaMetadata.id) }
@@ -609,12 +615,14 @@ fun PlayerMenu(
     }
 
     if (showSelectArtistDialog) {
-        ArtistDialog(
+        ArtistInformationDialog(
             navController = navController,
-            artists = mediaMetadata.artists,
-            onDismiss = {
+            metadata = mediaMetadata,
+            onDismiss = { showSelectArtistDialog = false },
+            onNavigate = {
                 playerBottomSheetState.collapseSoft()
                 showSelectArtistDialog = false
+                onDismiss()
             }
         )
     }

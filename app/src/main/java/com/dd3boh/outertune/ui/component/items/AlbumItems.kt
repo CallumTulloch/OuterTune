@@ -25,6 +25,7 @@ import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.utils.getNSongsString
 import com.dd3boh.outertune.utils.getDownloadState
+import com.dd3boh.outertune.utils.artistDisplayText
 import com.dd3boh.outertune.utils.joinByBullet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -72,7 +73,7 @@ fun AlbumListItem(
 ) = ListItem(
     title = album.album.title,
     subtitle = joinByBullet(
-        album.artists.joinToString { it.name },
+        album.artistDisplayText(),
         album.takeIf { it.album.songCount != 0 }?.let { album ->
             getNSongsString(album.album.songCount, album.downloadCount)
         },
@@ -134,7 +135,7 @@ fun AlbumGridItem(
     fillMaxWidth: Boolean = false,
 ) = GridItem(
     title = album.album.title,
-    subtitle = album.artists.joinToString { it.name },
+    subtitle = album.artistDisplayText(),
     badges = badges,
     thumbnailContent = {
         val database = LocalDatabase.current

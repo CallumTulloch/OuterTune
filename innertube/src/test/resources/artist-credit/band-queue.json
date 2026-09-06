@@ -1,0 +1,156 @@
+{
+  "title": {
+    "runs": [
+      {
+        "text": "September"
+      }
+    ]
+  },
+  "longBylineText": {
+    "runs": [
+      {
+        "text": "Earth, Wind & Fire",
+        "navigationEndpoint": {
+          "browseEndpoint": {
+            "browseId": "UCdyqvgHHq9NEEfV20lO61jQ",
+            "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+              }
+            }
+          }
+        }
+      },
+      {
+        "text": " • "
+      },
+      {
+        "text": "September (sped up + slowed)",
+        "navigationEndpoint": {
+          "browseEndpoint": {
+            "browseId": "MPREb_RCaUbOIBaZ0",
+            "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+              }
+            }
+          }
+        }
+      },
+      {
+        "text": " • "
+      },
+      {
+        "text": "1978"
+      }
+    ]
+  },
+  "thumbnail": {
+    "thumbnails": [
+      {
+        "url": "https://yt3.googleusercontent.com/GkV0O58LmxhfcEfgWU35XbHlMiB33jRz9q7WXKxszDJxgg_MuFSNBr-1x0jNWcOU6rzU48rS96O2JFA=w544-h544-l90-rj",
+        "width": 544,
+        "height": 544
+      }
+    ]
+  },
+  "lengthText": {
+    "runs": [
+      {
+        "text": "3:37"
+      }
+    ]
+  },
+  "selected": false,
+  "navigationEndpoint": {
+    "watchEndpoint": {
+      "videoId": "OBM0DO8Xt1c",
+      "params": "OAHyAQIIAQ%3D%3D",
+      "watchEndpointMusicSupportedConfigs": {
+        "watchEndpointMusicConfig": {
+          "hasPersistentPlaylistPanel": true,
+          "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      }
+    }
+  },
+  "videoId": "OBM0DO8Xt1c",
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "Go to album"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ALBUM"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPREb_RCaUbOIBaZ0",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "Go to artist"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ARTIST"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UCdyqvgHHq9NEEfV20lO61jQ",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "View song credits"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "PEOPLE_GROUP"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPTCOBM0DO8Xt1c",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

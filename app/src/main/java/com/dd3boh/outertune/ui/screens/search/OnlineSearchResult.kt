@@ -51,6 +51,7 @@ import com.dd3boh.outertune.ui.component.ChipsRow
 import com.dd3boh.outertune.ui.component.EmptyPlaceholder
 import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
 import com.dd3boh.outertune.ui.component.NavigationTitle
+import com.dd3boh.outertune.ui.component.ProvidePlayingIndicatorAnimation
 import com.dd3boh.outertune.ui.component.SwipeToQueueBox
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.YouTubeListItem
@@ -119,6 +120,7 @@ fun OnlineSearchResult(
             val content: @Composable () -> Unit = {
                 YouTubeListItem(
                     item = item,
+                    showSearchMetadata = searchFilter == null,
                     isActive = when (item) {
                         is SongItem -> mediaMetadata?.id == item.id
                         is AlbumItem -> mediaMetadata?.album?.id == item.id
@@ -181,7 +183,7 @@ fun OnlineSearchResult(
                                                             "UTF-8"
                                                         )
                                                     }",
-                                                    items = songSuggestions.map { (it as SongItem).toMediaMetadata() },
+                                                    items = songSuggestions.map { viewModel.artistCredits.withCredit(it as SongItem).toMediaMetadata() },
                                                     startIndex = songSuggestions.indexOf(item)
                                                 ),
                                                 replace = true,
@@ -221,71 +223,73 @@ fun OnlineSearchResult(
             )
         }
 
-    LazyColumn(
-        state = lazyListState,
-        contentPadding = LocalPlayerAwareWindowInsets.current
-            .add(WindowInsets(top = SearchFilterHeight))
-            .asPaddingValues()
-    ) {
-        if (searchFilter == null) {
-            searchSummary?.summaries?.forEach { summary ->
-                if (summary.title.isNotBlank()) {
-                    item {
-                        NavigationTitle(summary.title)
+    ProvidePlayingIndicatorAnimation(isPlaying = isPlaying) {
+        LazyColumn(
+            state = lazyListState,
+            contentPadding = LocalPlayerAwareWindowInsets.current
+                .add(WindowInsets(top = SearchFilterHeight))
+                .asPaddingValues()
+        ) {
+            if (searchFilter == null) {
+                searchSummary?.summaries?.forEach { summary ->
+                    if (summary.title.isNotBlank()) {
+                        item {
+                            NavigationTitle(summary.title)
+                        }
+                    }
+
+                    items(
+                        items = summary.items,
+                        key = { "${summary.title}/${it.id}" }
+                    ) { item ->
+                        ytItemContent(item, summary.items)
                     }
                 }
 
+                if (searchSummary?.summaries?.isEmpty() == true) {
+                    item {
+                        EmptyPlaceholder(
+                            icon = Icons.Rounded.Search,
+                            text = stringResource(R.string.no_results_found),
+                            modifier = Modifier.animateItem()
+                        )
+                    }
+                }
+            } else {
                 items(
-                    items = summary.items,
-                    key = { "${summary.title}/${it.id}" }
+                    items = itemsPage?.items.orEmpty(),
+                    key = { it.id }
                 ) { item ->
-                    ytItemContent(item, summary.items)
+                    ytItemContent(item, itemsPage?.items.orEmpty())
                 }
-            }
 
-            if (searchSummary?.summaries?.isEmpty() == true) {
-                item {
-                    EmptyPlaceholder(
-                        icon = Icons.Rounded.Search,
-                        text = stringResource(R.string.no_results_found),
-                        modifier = Modifier.animateItem()
-                    )
-                }
-            }
-        } else {
-            items(
-                items = itemsPage?.items.orEmpty(),
-                key = { it.id }
-            ) { item ->
-                ytItemContent(item, itemsPage?.items.orEmpty())
-            }
-
-            if (itemsPage?.continuation != null) {
-                item(key = "loading") {
-                    ShimmerHost {
-                        repeat(3) {
-                            ListItemPlaceHolder()
+                if (itemsPage?.continuation != null) {
+                    item(key = "loading") {
+                        ShimmerHost {
+                            repeat(3) {
+                                ListItemPlaceHolder()
+                            }
                         }
                     }
                 }
-            }
 
-            if (itemsPage?.items?.isEmpty() == true) {
-                item {
-                    EmptyPlaceholder(
-                        icon = Icons.Rounded.Search,
-                        text = stringResource(R.string.no_results_found),
-                        modifier = Modifier.animateItem()
-                    )
+                if (itemsPage?.items?.isEmpty() == true) {
+                    item {
+                        EmptyPlaceholder(
+                            icon = Icons.Rounded.Search,
+                            text = stringResource(R.string.no_results_found),
+                            modifier = Modifier.animateItem()
+                        )
+                    }
                 }
             }
-        }
 
-        if (searchFilter == null && searchSummary == null || searchFilter != null && itemsPage == null) {
-            item {
-                ShimmerHost {
-                    repeat(8) {
-                        ListItemPlaceHolder()
+            if (searchFilter == null && searchSummary == null || searchFilter != null && itemsPage == null) {
+                item {
+                    ShimmerHost {
+                        repeat(8) {
+                            ListItemPlaceHolder()
+                        }
                     }
                 }
             }

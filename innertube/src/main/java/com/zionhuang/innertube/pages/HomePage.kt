@@ -10,6 +10,10 @@ import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
+import com.zionhuang.innertube.models.toAlbumArtistCredit
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
@@ -62,6 +66,8 @@ data class HomePage(
                 return when {
                     renderer.isSong -> {
                         SongItem(
+                            artistCredit = (renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull().orEmpty()).toArtistCredit("HomePage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                            artistBrowseIds = renderer.menu.artistBrowseIds(),
                             id = renderer.navigationEndpoint.watchEndpoint?.videoId ?: return null,
                             title = renderer.title.runs?.firstOrNull()?.text ?: return null,
                             artists = renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull()
@@ -82,6 +88,7 @@ data class HomePage(
 
                     renderer.isAlbum -> {
                         AlbumItem(
+                            artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("HomePage", com.zionhuang.innertube.YouTube.locale.hl),
                             browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                             playlistId = renderer.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content
                                 ?.musicPlayButtonRenderer?.playNavigationEndpoint

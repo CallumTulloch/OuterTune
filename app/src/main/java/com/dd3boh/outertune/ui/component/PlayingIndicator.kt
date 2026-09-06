@@ -40,7 +40,30 @@ fun PlayingIndicator(
     cornerRadius: Dp = ThumbnailCornerRadius,
     isPlaying: Boolean = true
 ) {
-    val animatables = remember {
+    val sharedAnimation = LocalPlayingIndicatorAnimation.current
+    if (sharedAnimation != null) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(barWidth * 1.5f),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = modifier,
+        ) {
+            repeat(bars) { index ->
+                Canvas(Modifier.fillMaxHeight().width(barWidth)) {
+                    // Read the shared frame in drawing, without recomposing the search results.
+                    val height = size.height * if (isPlaying) sharedAnimation.barHeight(index) else 0.15f
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(0f, (size.height - height) / 2),
+                        size = size.copy(height = height),
+                        cornerRadius = CornerRadius(cornerRadius.toPx()),
+                    )
+                }
+            }
+        }
+        return
+    }
+
+    val animatables = remember(bars) {
         List(bars) {
             Animatable(0.1f)
         }
@@ -88,6 +111,7 @@ fun PlayingIndicatorBox(
     isActive: Boolean,
     playWhenReady: Boolean,
     color: Color = Color.White,
+    showPauseIcon: Boolean = false,
 ) {
     AnimatedVisibility(
         visible = isActive,
@@ -105,7 +129,9 @@ fun PlayingIndicatorBox(
                 )
             } else {
                 Icon(
-                    painter = painterResource(R.drawable.play),
+                    painter = painterResource(
+                        if (showPauseIcon) R.drawable.pause else R.drawable.play
+                    ),
                     contentDescription = null,
                     tint = color
                 )

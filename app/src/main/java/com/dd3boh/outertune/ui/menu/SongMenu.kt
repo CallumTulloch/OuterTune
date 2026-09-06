@@ -69,7 +69,11 @@ import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.ListItem
 import com.dd3boh.outertune.ui.dialog.AddToPlaylistDialog
 import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
-import com.dd3boh.outertune.ui.dialog.ArtistDialog
+import com.dd3boh.outertune.ui.dialog.ArtistInformationDialog
+import com.dd3boh.outertune.ui.utils.rememberResolvedArtistMetadata
+import com.dd3boh.outertune.ui.utils.rememberArtistCreditRepository
+import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.singleArtistTarget
 import com.dd3boh.outertune.ui.dialog.DetailsDialog
 import com.dd3boh.outertune.ui.dialog.TextFieldDialog
 import com.dd3boh.outertune.ui.screens.library.localSongFolderRoute
@@ -108,6 +112,8 @@ fun SongMenu(
     // YouTubeSongMenu.
     val librarySong by database.song(originalSong.id).collectAsState(initial = originalSong)
     val song = librarySong ?: originalSong
+    val metadata = rememberResolvedArtistMetadata(song.toMediaMetadata(), request = true, priority = true)
+    val artistCreditRepository = rememberArtistCreditRepository()
     val containingFolderRoute = localSongFolderRoute(song.song.isLocal, song.song.localPath)
     val download by LocalDownloadUtil.current.getDownload(originalSong.id).collectAsState(initial = null)
     val coroutineScope =
@@ -135,7 +141,7 @@ fun SongMenu(
     ListItem(
         title = song.song.title,
         subtitle = joinByBullet(
-            song.artists.joinToString { it.name },
+            metadata.artistDisplayText(),
             makeTimeString(song.song.duration * 1000L)
         ),
         thumbnailContent = {
@@ -151,13 +157,11 @@ fun SongMenu(
         trailingContent = {
             IconButton(
                 onClick = {
-                    val s = song.song.toggleLike()
-                    database.query {
-                        update(s)
-                    }
-
-                    if (!s.isLocal) {
-                        syncUtils.likeSong(s)
+                    database.transaction {
+                        if (!metadata.isLocal) insert(artistCreditRepository.withCredit(metadata))
+                        val updated = songForArtistCredit(song.id)?.toggleLike() ?: return@transaction
+                        update(updated)
+                        if (!updated.isLocal) syncUtils.likeSong(updated)
                     }
                 }
             ) {
@@ -186,8 +190,9 @@ fun SongMenu(
                     icon = Icons.Rounded.LibraryAdd,
                     title = R.string.add_to_library
                 ) {
-                    database.query {
-                        update(song.song.toggleLibrary())
+                    database.transaction {
+                        if (!metadata.isLocal) insert(artistCreditRepository.withCredit(metadata))
+                        songForArtistCredit(song.id)?.let { update(it.toggleLibrary()) }
                     }
                 }
             } else {
@@ -195,8 +200,9 @@ fun SongMenu(
                     icon = Icons.Rounded.LibraryAddCheck,
                     title = R.string.remove_from_library
                 ) {
-                    database.query {
-                        update(song.song.toggleLibrary())
+                    database.transaction {
+                        if (!metadata.isLocal) insert(artistCreditRepository.withCredit(metadata))
+                        songForArtistCredit(song.id)?.let { update(it.toggleLibrary()) }
                     }
                 }
             }
@@ -224,10 +230,11 @@ fun SongMenu(
 
         GridMenuItem(
             icon = R.drawable.artist,
-            title = R.string.view_artist
+            title = R.string.artist_information
         ) {
-            if (song.artists.size == 1) {
-                navController.navigate("artist/${song.artists[0].id}")
+            val target = metadata.singleArtistTarget()
+            if (target != null) {
+                navController.navigate("artist/$target")
                 onDismiss()
             } else {
                 showSelectArtistDialog = true
@@ -408,10 +415,14 @@ fun SongMenu(
     }
 
     if (showSelectArtistDialog) {
-        ArtistDialog(
+        ArtistInformationDialog(
             navController = navController,
-            artists = song.artists,
-            onDismiss = { showSelectArtistDialog = false }
+            metadata = metadata,
+            onDismiss = { showSelectArtistDialog = false },
+            onNavigate = {
+                showSelectArtistDialog = false
+                onDismiss()
+            }
         )
     }
 

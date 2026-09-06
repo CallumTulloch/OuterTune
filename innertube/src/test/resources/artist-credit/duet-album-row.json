@@ -1,0 +1,293 @@
+{
+  "overlay": {
+    "musicItemThumbnailOverlayRenderer": {
+      "background": {
+        "verticalGradient": {
+          "gradientLayerColors": [
+            "0",
+            "0"
+          ]
+        }
+      },
+      "content": {
+        "musicPlayButtonRenderer": {
+          "playNavigationEndpoint": {
+            "watchEndpoint": {
+              "videoId": "3bIQtCZdLhI",
+              "playlistId": "OLAK5uy_mGSfbpjq56BCReij0hfXSf31HPolHJ7Yc",
+              "index": 0,
+              "playerParams": "ygYQOUNGODNFMEMyMUU3MzQ5QQ%3D%3D",
+              "playlistSetVideoId": "9CF83E0C21E7349A",
+              "watchEndpointMusicSupportedConfigs": {
+                "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                }
+              }
+            }
+          },
+          "playIcon": {
+            "iconType": "PLAY_ARROW"
+          },
+          "pauseIcon": {
+            "iconType": "PAUSE"
+          },
+          "iconColor": 4294967295,
+          "backgroundColor": 0,
+          "activeBackgroundColor": 0,
+          "loadingIndicatorColor": 14745645,
+          "playingIcon": {
+            "iconType": "VOLUME_UP"
+          },
+          "iconLoadingColor": 0,
+          "activeScaleFactor": 1,
+          "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+          "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+          "accessibilityPlayData": {},
+          "accessibilityPauseData": {}
+        }
+      },
+      "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+      "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+    }
+  },
+  "flexColumns": [
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "看见（《黑神话：悟空》黑风山片尾曲）（I See）",
+              "navigationEndpoint": {
+                "watchEndpoint": {
+                  "videoId": "3bIQtCZdLhI",
+                  "playlistId": "OLAK5uy_mGSfbpjq56BCReij0hfXSf31HPolHJ7Yc",
+                  "playerParams": "0gcJCRsC0OBS9m0t",
+                  "watchEndpointMusicSupportedConfigs": {
+                    "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    },
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "陈鸿宇",
+              "navigationEndpoint": {
+                "browseEndpoint": {
+                  "browseId": "UCQXd5DeteRj9dDMf6sR_HVA",
+                  "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "text": "、"
+            },
+            {
+              "text": "8082Audio",
+              "navigationEndpoint": {
+                "browseEndpoint": {
+                  "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                  "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    },
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "再生回数 78万 回"
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    }
+  ],
+  "fixedColumns": [
+    {
+      "musicResponsiveListItemFixedColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "3:48"
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+        "size": "MUSIC_RESPONSIVE_LIST_ITEM_FIXED_COLUMN_SIZE_SMALL"
+      }
+    }
+  ],
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "アーティストに移動"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ARTIST"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UCQXd5DeteRj9dDMf6sR_HVA",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "曲のクレジットを表示"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "PEOPLE_GROUP"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPTCza_zvBPp9R8",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "topLevelButtons": [
+        {
+          "likeButtonRenderer": {
+            "target": {
+              "videoId": "3bIQtCZdLhI"
+            },
+            "likeStatus": "INDIFFERENT",
+            "likesAllowed": true,
+            "dislikeNavigationEndpoint": {
+              "modalEndpoint": {
+                "modal": {
+                  "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                      "runs": [
+                        {
+                          "text": "興味がない場合"
+                        }
+                      ]
+                    },
+                    "content": {
+                      "runs": [
+                        {
+                          "text": "ログインするとおすすめの精度が上がります"
+                        }
+                      ]
+                    },
+                    "button": {
+                      "buttonRenderer": {
+                        "style": "STYLE_BLUE_TEXT",
+                        "isDisabled": false,
+                        "text": {
+                          "runs": [
+                            {
+                              "text": "ログイン"
+                            }
+                          ]
+                        },
+                        "navigationEndpoint": {
+                          "signInEndpoint": {
+                            "hack": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "likeCommand": {
+              "modalEndpoint": {
+                "modal": {
+                  "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                      "runs": [
+                        {
+                          "text": "この曲に高評価を付ける"
+                        }
+                      ]
+                    },
+                    "content": {
+                      "runs": [
+                        {
+                          "text": "ログインするとおすすめの精度が上がり、音楽を保存することもできます"
+                        }
+                      ]
+                    },
+                    "button": {
+                      "buttonRenderer": {
+                        "style": "STYLE_BLUE_TEXT",
+                        "isDisabled": false,
+                        "text": {
+                          "runs": [
+                            {
+                              "text": "ログイン"
+                            }
+                          ]
+                        },
+                        "navigationEndpoint": {
+                          "signInEndpoint": {
+                            "hack": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "playlistItemData": {
+    "playlistSetVideoId": "9CF83E0C21E7349A",
+    "videoId": "3bIQtCZdLhI"
+  }
+}

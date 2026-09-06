@@ -4,6 +4,8 @@ import androidx.compose.runtime.Immutable
 import androidx.room.Embedded
 import androidx.room.Junction
 import androidx.room.Relation
+import androidx.room.Ignore
+import com.zionhuang.innertube.models.ArtistCredit
 
 @Immutable
 data class Album(
@@ -22,6 +24,9 @@ data class Album(
     )
     val artists: List<ArtistEntity>,
 ) : LocalItem() {
+    @get:Ignore
+    val artistCredit: ArtistCredit?
+        get() = album.artistCredit
     override val id: String
         get() = album.id
     override val title: String

@@ -14,6 +14,10 @@ import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
 import com.zionhuang.innertube.models.getItems
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
+import com.zionhuang.innertube.models.toAlbumArtistCredit
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
@@ -60,24 +64,15 @@ data class ArtistPage(
         }
 
         private fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
-            val linkedArtistRuns = PageHelper.extractRuns(
-                renderer.flexColumns,
-                "MUSIC_PAGE_TYPE_ARTIST",
-            )
-            val artistRuns = if (linkedArtistRuns.isNotEmpty()) {
-                linkedArtistRuns
-            } else {
-                renderer.flexColumns.getOrNull(1)
-                    ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
-                    ?.artistElements()
-                    ?: return null
-            }
+            val artistRuns = PageHelper.artistRuns(renderer.flexColumns)
             return SongItem(
+                artistCredit = (artistRuns).toArtistCredit("ArtistPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()
                     ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
                     ?.text ?: return null,
-                artists = artistRuns.map {
+                artists = artistRuns.artistElements().map {
                     Artist(
                         name = it.text,
                         id = it.navigationEndpoint?.browseEndpoint?.browseId
@@ -103,6 +98,8 @@ data class ArtistPage(
             return when {
                 renderer.isSong -> {
                     SongItem(
+                        artistCredit = (renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull().orEmpty()).toArtistCredit("ArtistPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                        artistBrowseIds = renderer.menu.artistBrowseIds(),
                         id = renderer.navigationEndpoint.watchEndpoint?.videoId ?: return null,
                         title = renderer.title.runs?.firstOrNull()?.text ?: return null,
                         artists = renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull()
@@ -123,6 +120,7 @@ data class ArtistPage(
 
                 renderer.isAlbum -> {
                     AlbumItem(
+                        artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("ArtistPage", com.zionhuang.innertube.YouTube.locale.hl),
                         browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                         playlistId = renderer.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content
                             ?.musicPlayButtonRenderer?.playNavigationEndpoint

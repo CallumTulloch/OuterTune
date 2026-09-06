@@ -28,9 +28,12 @@ fun List<Run>.splitBySeparator(): List<List<Run>> {
     return res
 }
 
-fun List<List<Run>>.clean(): List<List<Run>> =
-    if (getOrNull(0)?.getOrNull(0)?.navigationEndpoint != null) this
-    else this.drop(1)
+fun List<List<Run>>.clean(): List<List<Run>> {
+    val first = firstOrNull()?.singleOrNull()
+    // Missing links are not evidence of a category label: unlinked names must survive.
+    val labels = setOf("曲", "動画", "Song", "Video", "歌曲", "影片", "歌曲视频")
+    return if (first?.navigationEndpoint == null && first?.text in labels) drop(1) else this
+}
 
 fun List<Run>.oddElements() = filterIndexed { index, _ ->
     index % 2 == 0

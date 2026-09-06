@@ -10,7 +10,6 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.dd3boh.outertune.db.daos.AlbumsDao
-import com.dd3boh.outertune.db.daos.ArtistsDao
 import com.dd3boh.outertune.db.daos.PlaylistsDao
 import com.dd3boh.outertune.db.daos.QueueDao
 import com.dd3boh.outertune.db.daos.SongsDao
@@ -35,6 +34,8 @@ import com.dd3boh.outertune.extensions.toSQLiteQuery
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.MultiQueueObject
 import com.dd3boh.outertune.models.cleanLocalMetadataText
+import com.dd3boh.outertune.models.creditForPersistence
+import com.dd3boh.outertune.models.artistCreditFromJson
 import com.dd3boh.outertune.models.normalizeLocalMetadataText
 import com.dd3boh.outertune.models.selectMatchingLocalAlbum
 import com.dd3boh.outertune.models.toLocalAlbumCandidates
@@ -58,7 +59,19 @@ internal fun resolveAlbumId(
 }
 
 @Dao
-interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao {
+interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao {
+
+    /** A UI snapshot changing a favourite/library flag must not roll back newer track credits. */
+    @Transaction
+    fun update(song: SongEntity) {
+        if (song.isLocal) {
+            updateSongEntity(song)
+            return
+        }
+        val stored = songForArtistCredit(song.id)
+        updateSongEntity(song.copy(artistCreditJson = stored?.artistCreditJson ?: song.artistCreditJson))
+        artistCreditFromJson(song.artistCreditJson)?.let { applyArtistCredit(song.id, it) }
+    }
 
     @Transaction
     @Query("""
@@ -278,7 +291,9 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
     @Transaction
     fun insert(mediaMetadata: MediaMetadata, block: (SongEntity) -> SongEntity = { it }) {
         insert(mediaMetadata.toSongEntity().let(block))
-        mediaMetadata.artists.forEachIndexed { index, artist ->
+        if (!mediaMetadata.isLocal) {
+            applyArtistCredit(mediaMetadata.id, mediaMetadata.creditForPersistence())
+        } else mediaMetadata.artists.forEachIndexed { index, artist ->
             val resolvedArtist = resolveAndInsertArtist(
                 id = artist.id,
                 name = artist.name,
@@ -355,6 +370,7 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
                 songCount = albumPage.songs.size,
                 duration = albumPage.songs.sumOf { it.duration ?: 0 },
                 bookmarkedAt = preservedAlbum?.bookmarkedAt,
+                artistCreditJson = preservedAlbum?.artistCreditJson,
             )
         )
         albumPage.songs.map(SongItem::toMediaMetadata)
@@ -367,16 +383,7 @@ interface DatabaseDao : SongsDao, AlbumsDao, ArtistsDao, PlaylistsDao, QueueDao 
                 )
             }
             .forEach(::upsert)
-        albumPage.album.artists?.let { artists ->
-            val resolvedArtists = artists.map { artist ->
-                resolveAndInsertArtist(
-                    id = artist.id,
-                    name = artist.name,
-                    isLocal = false,
-                )
-            }
-            replaceAlbumArtistMaps(albumPage.album.browseId, resolvedArtists)
-        }
+        applyAlbumArtistCredit(albumPage.album.browseId, albumPage.album.creditForPersistence())
 
         previousAlbum
             ?.takeIf { it.id != albumPage.album.browseId }

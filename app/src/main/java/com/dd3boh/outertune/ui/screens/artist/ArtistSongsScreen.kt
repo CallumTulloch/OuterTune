@@ -203,8 +203,9 @@ fun ArtistSongsScreen(
                     thumbnailSize = thumbnailSize,
                     onPlay = {
                         viewModel.viewModelScope.launch(Dispatchers.IO) {
-                            val playlistId = YouTube.artist(artist?.id!!).getOrNull()
-                                ?.artist?.shuffleEndpoint?.playlistId
+                            val playlistId = artist?.artist?.onlineArtistId?.let {
+                                YouTube.artist(it).getOrNull()?.artist?.shuffleEndpoint?.playlistId
+                            }
 
                             withContext(Dispatchers.Main) {
                                 playerConnection.playQueue(

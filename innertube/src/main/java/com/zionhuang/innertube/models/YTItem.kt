@@ -8,15 +8,18 @@ sealed class YTItem {
     abstract val shareLink: String
 }
 
+@kotlinx.serialization.Serializable
 data class Artist(
     val name: String,
     val id: String?,
-)
+    val ref: String? = null,
+) : java.io.Serializable
 
+@kotlinx.serialization.Serializable
 data class Album(
     val name: String,
     val id: String,
-)
+) : java.io.Serializable
 
 data class SongItem(
     override val id: String,
@@ -28,6 +31,8 @@ data class SongItem(
     override val explicit: Boolean = false,
     val endpoint: WatchEndpoint? = null,
     val setVideoId: String? = null,
+    val artistCredit: ArtistCredit? = null,
+    val artistBrowseIds: List<String> = emptyList(),
 ) : YTItem() {
     override val shareLink: String
         get() = "https://music.youtube.com/watch?v=$id"
@@ -42,6 +47,7 @@ data class AlbumItem(
     val year: Int? = null,
     override val thumbnail: String,
     override val explicit: Boolean = false,
+    val artistCredit: ArtistCredit? = null,
 ) : YTItem() {
     override val shareLink: String
         get() = "https://music.youtube.com/playlist?list=$playlistId"

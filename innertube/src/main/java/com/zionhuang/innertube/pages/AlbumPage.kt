@@ -7,6 +7,9 @@ import com.zionhuang.innertube.models.MusicResponsiveHeaderRenderer
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.getItems
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.response.BrowseResponse
 import com.zionhuang.innertube.models.splitBySeparator
@@ -18,6 +21,11 @@ data class AlbumPage(
     val otherVersions: List<AlbumItem>,
 ) {
     companion object {
+        fun getArtistCredit(response: BrowseResponse) = (
+            getHeader(response)?.straplineTextOne?.runs
+                ?: response.header?.musicDetailHeaderRenderer?.subtitle?.runs?.splitBySeparator()?.getOrNull(1)
+            ).orEmpty().toArtistCredit("album-header", com.zionhuang.innertube.YouTube.locale.hl)
+
         fun getPlaylistId(response: BrowseResponse): String? {
             var playlistId = response.microformat?.microformatDataRenderer?.urlCanonical?.substringAfterLast('=')
             if (playlistId == null)
@@ -81,9 +89,11 @@ data class AlbumPage(
 
         fun getSong(renderer: MusicResponsiveListItemRenderer, album: AlbumItem? = null): SongItem? {
             return SongItem(
+                    artistCredit = (PageHelper.artistRuns(renderer.flexColumns)).toArtistCredit("AlbumPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = PageHelper.extractRuns(renderer.flexColumns, "MUSIC_VIDEO").firstOrNull()?.text ?: return null,
-                artists = PageHelper.extractRuns(renderer.flexColumns, "MUSIC_PAGE_TYPE_ARTIST").map{
+                artists = PageHelper.artistRuns(renderer.flexColumns).artistElements().map {
                     Artist(
                         name = it.text,
                         id = it.navigationEndpoint?.browseEndpoint?.browseId

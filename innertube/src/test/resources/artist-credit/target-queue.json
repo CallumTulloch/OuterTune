@@ -1,0 +1,146 @@
+{
+  "title": {
+    "runs": [
+      {
+        "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)"
+      }
+    ]
+  },
+  "longBylineText": {
+    "runs": [
+      {
+        "text": "翟锦彦、8082Audio"
+      },
+      {
+        "text": " • "
+      },
+      {
+        "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+        "navigationEndpoint": {
+          "browseEndpoint": {
+            "browseId": "MPREb_NUdafp1DlA5",
+            "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+              }
+            }
+          }
+        }
+      },
+      {
+        "text": " • "
+      },
+      {
+        "text": "2024年"
+      }
+    ]
+  },
+  "thumbnail": {
+    "thumbnails": [
+      {
+        "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w544-h544-l90-rj",
+        "width": 544,
+        "height": 544
+      }
+    ]
+  },
+  "lengthText": {
+    "runs": [
+      {
+        "text": "3:58"
+      }
+    ]
+  },
+  "selected": false,
+  "navigationEndpoint": {
+    "watchEndpoint": {
+      "videoId": "TSZhKssbW2g",
+      "params": "OAHyAQIIAQ%3D%3D",
+      "watchEndpointMusicSupportedConfigs": {
+        "watchEndpointMusicConfig": {
+          "hasPersistentPlaylistPanel": true,
+          "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      }
+    }
+  },
+  "videoId": "TSZhKssbW2g",
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "アルバムに移動"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ALBUM"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPREb_NUdafp1DlA5",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "アーティストに移動"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ARTIST"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "曲のクレジットを表示"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "PEOPLE_GROUP"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPTCTSZhKssbW2g",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

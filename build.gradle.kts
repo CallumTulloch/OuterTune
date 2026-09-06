@@ -21,6 +21,15 @@ tasks.register<Delete>("Clean") {
 }
 
 subprojects {
+    // Keep native compilation aligned with the arm64-only APK without editing the TagLib submodule.
+    if (name == "taglib") {
+        afterEvaluate {
+            extensions.configure<com.android.build.gradle.LibraryExtension> {
+                defaultConfig.ndk.abiFilters.clear()
+                defaultConfig.ndk.abiFilters.add("arm64-v8a")
+            }
+        }
+    }
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         compilerOptions {
             if (project.findProperty("enableComposeCompilerReports") == "true") {

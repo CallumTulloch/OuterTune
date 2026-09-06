@@ -1,0 +1,18 @@
+{
+  "header": {
+    "musicImmersiveHeaderRenderer": {
+      "title": {
+        "runs": [
+          {
+            "text": "8082Audio"
+          }
+        ]
+      }
+    }
+  },
+  "microformat": {
+    "microformatDataRenderer": {
+      "urlCanonical": "https://music.youtube.com/channel/UChWKQRswWTLRXp98zmgHtdQ"
+    }
+  }
+}

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.db.MusicDatabase
+import com.dd3boh.outertune.repositories.ArtistCreditRepository
 import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.AlbumItem
@@ -19,6 +20,7 @@ import javax.inject.Inject
 class AlbumViewModel @Inject constructor(
     database: MusicDatabase,
     savedStateHandle: SavedStateHandle,
+    artistCredits: ArtistCreditRepository,
 ) : ViewModel() {
     val albumId = savedStateHandle.get<String>("albumId")!!
     val albumWithSongs = database.albumWithSongs(albumId)
@@ -34,8 +36,9 @@ class AlbumViewModel @Inject constructor(
             if (album?.album?.isLocal == true) return@launch
             YouTube.album(albumId).onSuccess {
                 database.transaction {
-                    if (album == null) insert(it)
-                    else update(album.album, it)
+                    val page = it.copy(songs = it.songs.map(artistCredits::withCredit))
+                    if (album == null) insert(page)
+                    else update(album.album, page)
                 }
                 otherVersions.value = it.otherVersions
                 isLoading.value = false

@@ -818,36 +818,12 @@ fun ControlsContent(
                                 }
                         )
 
-                        Row {
-                            mediaMetadata?.artists?.fastForEachIndexed { index, artist ->
-                                Text(
-                                    text = artist.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = onBackgroundColor,
-                                    maxLines = 1,
-                                    modifier = Modifier
-                                        .basicMarquee(
-                                            iterations = 1,
-                                            initialDelayMillis = 5000
-                                        )
-                                        .clickable(enabled = artist.id != null) {
-                                            navController.navigate("artist/${artist.id}")
-                                            playerSheetState.collapseSoft()
-                                        }
-                                )
-
-                                if (index != mediaMetadata?.artists?.lastIndex) {
-                                    Text(
-                                        text = ", ",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = onBackgroundColor
-                                    )
-                                }
-                            } ?: Text(
-                                text = "",
-                                style = MaterialTheme.typography.titleMedium,
+                        mediaMetadata?.let { metadata ->
+                            PlayerArtistText(
+                                metadata = metadata,
                                 color = onBackgroundColor,
-                                maxLines = 1,
+                                navController = navController,
+                                onNavigate = { playerSheetState.collapseSoft() },
                             )
                         }
                     }

@@ -195,7 +195,7 @@ interface SongsDao {
         SELECT song.*
         FROM song_artist_map
             JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = :artistId
+        WHERE artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         LIMIT :previewSize
     """)
@@ -497,7 +497,7 @@ interface SongsDao {
 
     // region Updates
     @Update
-    fun update(song: SongEntity)
+    fun updateSongEntity(song: SongEntity)
 
     @Query("UPDATE song SET lyricsOffsetMs = :offsetMs WHERE id = :songId")
     fun updateLyricsOffset(songId: String, offsetMs: Long)

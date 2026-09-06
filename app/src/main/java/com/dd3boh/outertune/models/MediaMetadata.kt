@@ -6,6 +6,9 @@ import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.ui.utils.resize
 import com.dd3boh.outertune.utils.LocalArtworkPath
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.ArtistCredit
+import com.zionhuang.innertube.models.ArtistCreditStatus
+import com.zionhuang.innertube.models.Artist as OnlineArtist
 import java.io.Serializable
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -31,12 +34,14 @@ data class MediaMetadata(
     val liked: Boolean = false,
     val composeUidWorkaround: Double = Math.random(), // compose will crash without this hax
 
-    var shuffleIndex: Int = -1
+    var shuffleIndex: Int = -1,
+    val artistCredit: ArtistCredit? = null,
 ) : Serializable {
     data class Artist(
         val id: String?,
         val name: String,
         val isLocal: Boolean = false,
+        val onlineId: String? = null,
     ) : Serializable
 
     data class Album(
@@ -68,7 +73,8 @@ data class MediaMetadata(
         liked = liked,
         isLocal = isLocal,
         inLibrary = if (isLocal) LocalDateTime.now() else null,
-        localPath = localPath
+        localPath = localPath,
+        artistCreditJson = artistCredit?.toStoredJson(),
     )
 
     /**
@@ -113,14 +119,29 @@ data class MediaMetadata(
     }
 }
 
-fun Song.toMediaMetadata() = MediaMetadata(
+fun Song.toMediaMetadata(): MediaMetadata {
+    val credit = artistCredit?.let { stored ->
+        stored.copy(artists = stored.artists.map { artist ->
+            val entity = artists.firstOrNull { it.id == artist.ref }
+                ?: artists.firstOrNull { artist.id != null && it.onlineArtistId == artist.id }
+            artist.copy(ref = entity?.id ?: artist.ref, id = artist.id ?: entity?.onlineArtistId)
+        })
+    }
+    return MediaMetadata(
     id = song.id,
     title = song.title,
-    artists = artists.map {
+    artists = credit?.artists?.map {
+        MediaMetadata.Artist(
+            id = it.ref ?: ArtistIdentity.stableId(song.id, it.name),
+            name = it.name,
+            onlineId = ArtistIdentity.onlineId(it.id),
+        )
+    } ?: artists.map {
         MediaMetadata.Artist(
             id = it.id,
             name = it.name,
-            isLocal = it.isLocal
+            isLocal = it.isLocal,
+            onlineId = it.onlineArtistId,
         )
     },
     duration = song.duration,
@@ -154,16 +175,21 @@ fun Song.toMediaMetadata() = MediaMetadata(
     inLibrary = song.inLibrary,
     liked = song.liked,
     isLocal = song.isLocal,
-    localPath = song.localPath
+    localPath = song.localPath,
+    artistCredit = credit,
 )
+}
 
-fun SongItem.toMediaMetadata() = MediaMetadata(
+fun SongItem.toMediaMetadata(): MediaMetadata {
+    val credit = artistCredit?.let { ArtistIdentity.withStableRefs(id, it) }
+    return MediaMetadata(
     id = id,
     title = title,
-    artists = artists.map {
+    artists = (credit?.artists ?: artists).map {
         MediaMetadata.Artist(
-            id = it.id,
-            name = it.name
+            id = it.ref ?: ArtistIdentity.onlineId(it.id) ?: ArtistIdentity.stableId(id, it.name),
+            name = it.name,
+            onlineId = ArtistIdentity.onlineId(it.id),
         )
     },
     duration = duration ?: -1,
@@ -175,5 +201,39 @@ fun SongItem.toMediaMetadata() = MediaMetadata(
         )
     },
     genre = null,
-    setVideoId = setVideoId
+    setVideoId = setVideoId,
+    artistCredit = credit,
 )
+}
+
+/** Applies an accepted credit without changing playback state or any album metadata. */
+fun MediaMetadata.withArtistCredit(credit: ArtistCredit): MediaMetadata {
+    val stable = ArtistIdentity.withStableRefs(id, credit, artistCredit)
+    return copy(
+        artistCredit = stable,
+        artists = stable.artists.map {
+            MediaMetadata.Artist(id = it.ref, name = it.name, onlineId = it.id)
+        },
+    )
+}
+
+/** Older callers can supply labels without proof that each label identifies one person. */
+internal fun MediaMetadata.creditForPersistence(): ArtistCredit {
+    artistCredit?.let { return it }
+    val confirmed = artists.mapNotNull { artist ->
+        val onlineId = ArtistIdentity.onlineId(artist.onlineId) ?: ArtistIdentity.onlineId(artist.id)
+        onlineId?.let { OnlineArtist(name = artist.name, id = it, ref = artist.id) }
+    }
+    return ArtistCredit(
+        rawText = artists.joinToString { it.name },
+        artists = confirmed,
+        status = when {
+            confirmed.isEmpty() -> ArtistCreditStatus.RAW
+            confirmed.size == artists.size -> ArtistCreditStatus.COMPLETE
+            else -> ArtistCreditStatus.PARTIAL
+        },
+        source = "legacy-metadata",
+        language = "",
+        evidence = emptyList(),
+    )
+}

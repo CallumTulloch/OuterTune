@@ -5,6 +5,9 @@ import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.utils.parseTime
 
@@ -17,6 +20,8 @@ data class PlaylistPage(
     companion object {
         fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
             return SongItem(
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("PlaylistPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()
                     ?.musicResponsiveListItemFlexColumnRenderer?.text

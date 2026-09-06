@@ -5,6 +5,9 @@ import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Junction
 import androidx.room.Relation
+import androidx.room.Ignore
+import com.dd3boh.outertune.models.artistCreditFromJson
+import com.zionhuang.innertube.models.ArtistCredit
 
 @Immutable
 data class Song @JvmOverloads constructor(
@@ -50,6 +53,10 @@ data class Song @JvmOverloads constructor(
     )
     val playCount: List<PlayCountEntity>? = null,
 ) : LocalItem() {
+    @get:Ignore
+    val artistCredit: ArtistCredit?
+        get() = artistCreditFromJson(song.artistCreditJson)
+
     override val id: String
         get() = song.id
     override val title: String

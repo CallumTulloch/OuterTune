@@ -91,6 +91,10 @@ import com.dd3boh.outertune.constants.ThumbnailCornerRadius
 import com.dd3boh.outertune.constants.TopBarInsets
 import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.models.MediaMetadata
+import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.artistNameSeparator
+import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.dd3boh.outertune.playback.ExoDownloadService
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.AsyncImageLocal
@@ -234,14 +238,22 @@ fun AlbumScreen(
                                         color = MaterialTheme.colorScheme.onBackground
                                     ).toSpanStyle()
                                 ) {
-                                    albumWithSongsLocal.artists.fastForEachIndexed { index, artist ->
-                                        withLink(
-                                            LinkAnnotation.Clickable(artist.id) {
-                                                navController.navigate("artist/${artist.id}")
+                                    val credit = albumWithSongsLocal.album.artistCredit
+                                    if (credit != null && credit.status != ArtistCreditStatus.COMPLETE) {
+                                        append(albumWithSongsLocal.artistDisplayText())
+                                    } else {
+                                        val artists = credit?.artists?.map { item ->
+                                            MediaMetadata.Artist(item.ref ?: item.id, item.name)
+                                        } ?: albumWithSongsLocal.artists.map { MediaMetadata.Artist(it.id, it.name) }
+                                        artists.forEachIndexed { index, artist ->
+                                            if (!artist.id.isNullOrBlank()) {
+                                                withLink(LinkAnnotation.Clickable(artist.id) {
+                                                    navController.navigate("artist/${artist.id}")
+                                                }) { append(artist.name) }
+                                            } else append(artist.name)
+                                            if (index != artists.lastIndex) {
+                                                append(if (credit == null || albumWithSongsLocal.album.isLocal) ", " else artistNameSeparator())
                                             }
-                                        ) { append(artist.name) }
-                                        if (index != albumWithSongsLocal.artists.lastIndex) {
-                                            append(", ")
                                         }
                                     }
                                 }

@@ -6,6 +6,9 @@ import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.MusicShelfRenderer
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.getItems
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.utils.parseTime
 
@@ -29,6 +32,8 @@ data class HistoryPage(
 
         private fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
             return SongItem(
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("HistoryPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()
                     ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()

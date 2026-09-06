@@ -1,0 +1,215 @@
+{
+  "thumbnail": {
+    "musicThumbnailRenderer": {
+      "thumbnail": {
+        "thumbnails": [
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w120-h120-l90-rj",
+            "width": 120,
+            "height": 120
+          }
+        ]
+      },
+      "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+      "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+    }
+  },
+  "overlay": {
+    "musicItemThumbnailOverlayRenderer": {
+      "background": {
+        "verticalGradient": {
+          "gradientLayerColors": [
+            "3422552064",
+            "3422552064"
+          ]
+        }
+      },
+      "content": {
+        "musicPlayButtonRenderer": {
+          "playNavigationEndpoint": {
+            "watchEndpoint": {
+              "videoId": "TSZhKssbW2g",
+              "watchEndpointMusicSupportedConfigs": {
+                "watchEndpointMusicConfig": {
+                  "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                }
+              }
+            }
+          },
+          "playIcon": {
+            "iconType": "PLAY_ARROW"
+          },
+          "pauseIcon": {
+            "iconType": "PAUSE"
+          },
+          "iconColor": 4294967295,
+          "backgroundColor": 0,
+          "activeBackgroundColor": 0,
+          "loadingIndicatorColor": 14745645,
+          "playingIcon": {
+            "iconType": "VOLUME_UP"
+          },
+          "iconLoadingColor": 0,
+          "activeScaleFactor": 1,
+          "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_SMALL",
+          "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF"
+        }
+      },
+      "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+      "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+    }
+  },
+  "flexColumns": [
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)",
+              "navigationEndpoint": {
+                "watchEndpoint": {
+                  "videoId": "TSZhKssbW2g",
+                  "watchEndpointMusicSupportedConfigs": {
+                    "watchEndpointMusicConfig": {
+                      "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    },
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "翟锦彦、8082Audio"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+              "navigationEndpoint": {
+                "browseEndpoint": {
+                  "browseId": "MPREb_NUdafp1DlA5",
+                  "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                      "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "3:58"
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    },
+    {
+      "musicResponsiveListItemFlexColumnRenderer": {
+        "text": {
+          "runs": [
+            {
+              "text": "再生回数 26万 回"
+            }
+          ]
+        },
+        "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH"
+      }
+    }
+  ],
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "アルバムに移動"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ALBUM"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPREb_NUdafp1DlA5",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "アーティストに移動"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ARTIST"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "曲のクレジットを表示"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "PEOPLE_GROUP"
+            },
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPTCTSZhKssbW2g",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_TRACK_CREDITS"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "playlistItemData": {
+    "videoId": "TSZhKssbW2g"
+  },
+  "flexColumnDisplayStyle": "MUSIC_RESPONSIVE_LIST_ITEM_FLEX_COLUMN_DISPLAY_STYLE_TWO_LINE_STACK",
+  "itemHeight": "MUSIC_RESPONSIVE_LIST_ITEM_HEIGHT_TALL"
+}

@@ -161,18 +161,23 @@ class PlayerConnection(
     }
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-        mediaMetadata.value = mediaItem?.metadata
+        mediaMetadata.value = mediaItem?.metadata?.let(service.artistCredits::withCredit)
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
         updateCanSkipPreviousAndNext()
     }
 
     override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+        mediaMetadata.value = player.currentMetadata?.let(service.artistCredits::withCredit)
         queueWindows.value = player.getQueueWindows()
         queuePlaylistId.value = service.queuePlaylistId
         currentMediaItemIndex.value = player.currentMediaItemIndex
         currentWindowIndex.value = player.getCurrentQueueIndex()
         updateCanSkipPreviousAndNext()
+    }
+
+    override fun onMediaMetadataChanged(metadata: androidx.media3.common.MediaMetadata) {
+        mediaMetadata.value = player.currentMetadata?.let(service.artistCredits::withCredit)
     }
 
     /**

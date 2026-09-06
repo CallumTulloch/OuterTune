@@ -8,6 +8,10 @@ import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
+import com.zionhuang.innertube.models.withVideoSource
+import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.artistBrowseIds
+import com.zionhuang.innertube.models.toAlbumArtistCredit
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 import com.zionhuang.innertube.utils.parseTime
@@ -25,6 +29,9 @@ object SearchPage {
         return when {
             renderer.isSong -> {
                 SongItem(
+                    endpoint = PageHelper.searchWatchEndpoint(renderer),
+                    artistCredit = (secondaryLine.firstOrNull().orEmpty()).toArtistCredit("SearchPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistBrowseIds = renderer.menu.artistBrowseIds(),
                     id = renderer.playlistItemData?.videoId ?: return null,
                     title = renderer.flexColumns.firstOrNull()
                         ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
@@ -63,6 +70,7 @@ object SearchPage {
             }
             renderer.isAlbum -> {
                 AlbumItem(
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchPage", com.zionhuang.innertube.YouTube.locale.hl),
                     browseId = renderer.navigationEndpoint?.browseEndpoint?.browseId ?: return null,
                     playlistId = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.anyWatchEndpoint?.playlistId ?: return null,
                     title = renderer.flexColumns.firstOrNull()

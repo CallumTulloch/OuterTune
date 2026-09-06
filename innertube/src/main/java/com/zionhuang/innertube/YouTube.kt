@@ -3,6 +3,12 @@ package com.zionhuang.innertube
 import com.zionhuang.innertube.models.AccountInfo
 import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.Artist
+import com.zionhuang.innertube.models.ArtistCredit
+import com.zionhuang.innertube.models.ArtistCreditResolution
+import com.zionhuang.innertube.models.ArtistCreditStatus
+import com.zionhuang.innertube.models.merge
+import com.zionhuang.innertube.models.Run
+import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.BrowseEndpoint
 import com.zionhuang.innertube.models.GridRenderer
@@ -56,7 +62,9 @@ import com.zionhuang.innertube.pages.SearchSummaryPage
 import io.ktor.client.call.body
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -197,13 +205,7 @@ object YouTube {
         val response = innerTube.search(WEB_REMIX, query).body<SearchResponse>()
         val contents = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
             ?.tabRenderer?.content?.sectionListRenderer?.contents.orEmpty()
-        val page = parseSearchSummary(contents)
-        val resolvedSongs = fetchMissingArtists(page.summaries.flatMap(SearchSummary::items))
-        page.copy(
-            summaries = page.summaries.map { summary ->
-                summary.copy(items = summary.items.withResolvedArtists(resolvedSongs))
-            }
-        )
+        parseSearchSummary(contents)
     }
 
     suspend fun search(query: String, filter: SearchFilter): Result<SearchResult> = runCatching {
@@ -214,7 +216,7 @@ object YouTube {
                 SearchPage.toYTItem(it)
             }.orEmpty()
         SearchResult(
-            items = items.withResolvedArtists(fetchMissingArtists(items)),
+            items = items,
             continuation = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
                 ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
                 ?.musicShelfRenderer?.continuations?.getContinuation()
@@ -230,7 +232,7 @@ object YouTube {
                 SearchPage.toYTItem(it.musicResponsiveListItemRenderer)
             }
         SearchResult(
-            items = items.withResolvedArtists(fetchMissingArtists(items)),
+            items = items,
             continuation = continuationPage.continuations?.getContinuation()
         )
     }
@@ -240,6 +242,7 @@ object YouTube {
         val playlistId = response.microformat?.microformatDataRenderer?.urlCanonical?.substringAfterLast('=')!!
         AlbumPage(
             album = AlbumItem(
+                artistCredit = AlbumPage.getArtistCredit(response),
                 browseId = browseId,
                 playlistId = playlistId,
                 title = response.contents?.twoColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicResponsiveHeaderRenderer?.title?.runs?.firstOrNull()?.text!!,
@@ -841,6 +844,73 @@ object YouTube {
                     NextPage.fromPlaylistPanelVideoRenderer(renderer)
                 }
             }
+    }
+
+    /** Called only for relevant visible/selected songs. The app owns scheduling and cache policy. */
+    suspend fun resolveArtistCredit(song: SongItem): Result<ArtistCredit> =
+        resolveTrackArtistCredit(song).map { it.credit }
+
+    /** Preserve album metadata already obtained by the same queue request used for artist credits. */
+    suspend fun resolveTrackArtistCredit(song: SongItem): Result<ArtistCreditResolution> =
+        resolveTrackArtistCredit(
+            song = song,
+            getQueue = { queue(videoIds = listOf(song.id)).getOrThrow() },
+            browse = { innerTube.browse(WEB_REMIX, it).body<JsonElement>() },
+        )
+
+    internal suspend fun resolveTrackArtistCredit(
+        song: SongItem,
+        getQueue: suspend () -> List<SongItem>,
+        browse: suspend (String) -> JsonElement,
+    ): Result<ArtistCreditResolution> {
+        return try {
+            var credit = ArtistCreditResolver.beginAttempt(song.artistCredit ?: ArtistCredit(
+                song.artists.joinToString("、") { it.name },
+                if (song.artists.size > 1 || song.artists.singleOrNull()?.id != null) song.artists else emptyList(),
+                if (song.artists.size > 1 || song.artists.singleOrNull()?.id != null)
+                    ArtistCreditStatus.COMPLETE else ArtistCreditStatus.RAW,
+                "song", locale.hl))
+            var album = song.album
+            fun result() = Result.success(ArtistCreditResolution(credit, album))
+            if (credit.evidence.any { it.startsWith("video-source:") } ||
+                (album != null && (credit.status == ArtistCreditStatus.CONFLICT ||
+                    (credit.status == ArtistCreditStatus.COMPLETE && credit.artists.all { it.id != null }))))
+                return result()
+            val knownType = song.endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType
+            if (knownType != null && knownType != MUSIC_VIDEO_TYPE_ATV) return result()
+
+            val queued = getQueue().singleOrNull { it.id == song.id }
+            queued?.artistCredit?.let { credit = credit.merge(it) }
+            album = album ?: queued?.album
+            if (credit.evidence.any { it.startsWith("video-source:") } || credit.status == ArtistCreditStatus.CONFLICT)
+                return result()
+            val candidateIds = (song.artistBrowseIds + queued?.artistBrowseIds.orEmpty()).distinct()
+                .filter { Regex("^UC[A-Za-z0-9_-]{22}$").matches(it) }.take(5)
+            val pages = mutableListOf<Artist>()
+            if (credit.status != ArtistCreditStatus.CONFLICT &&
+                (credit.status != ArtistCreditStatus.COMPLETE || credit.artists.any { it.id == null })) {
+                for (id in candidateIds.filterNot { id -> credit.artists.any { it.id == id } }) {
+                    try {
+                        val response = browse(id)
+                        ArtistCreditResolver.pageArtist(response, id)?.let(pages::add)
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { credit = credit.copy(evidence = credit.evidence + "retry:artist-page:$id") }
+                }
+                // A verified page for the complete literal name protects a group name before
+                // performer credits are used to infer any individual name boundaries.
+                credit = ArtistCreditResolver.withPageNames(credit, pages)
+            }
+            if (credit.status != ArtistCreditStatus.COMPLETE && credit.status != ArtistCreditStatus.CONFLICT) {
+                try {
+                    val response = browse("MPTC${song.id}")
+                    credit = ArtistCreditResolver.fromPerformers(credit, ArtistCreditResolver.performers(response, song.id))
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { credit = credit.copy(evidence = credit.evidence + "retry:credits:${song.id}") }
+                credit = ArtistCreditResolver.withPageNames(credit, pages)
+            }
+            result()
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { Result.failure(error) }
     }
 
     suspend fun transcript(videoId: String): Result<String> = runCatching {

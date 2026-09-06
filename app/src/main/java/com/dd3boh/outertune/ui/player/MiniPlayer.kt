@@ -69,6 +69,7 @@ import com.dd3boh.outertune.constants.ThumbnailCornerRadius
 import com.dd3boh.outertune.extensions.togglePlayPause
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.ui.component.button.IconButton
+import com.dd3boh.outertune.utils.artistDisplayText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
@@ -256,7 +257,7 @@ fun MiniMediaInfo(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = mediaMetadata.artists.joinToString { it.name },
+                text = mediaMetadata.artistDisplayText(),
                 color = MaterialTheme.colorScheme.secondary,
                 fontSize = 12.sp,
                 maxLines = 1,

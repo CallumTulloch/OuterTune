@@ -261,4 +261,21 @@
     <string name="lyrics_timing">歌詞のタイミング調整</string>
     <string name="lyrics_timing_earlier">早める</string>
     <string name="lyrics_timing_later">遅らせる</string>
+    <string name="artist_information">アーティスト情報</string>
+    <string name="artist_credit_unresolved">個別のアーティストはまだ確認できていません。上には取得した表記を表示しています。</string>
+    <string name="artist_credit_partial">一部のアーティストを確認できました。上の表記には、まだ確認できていない部分も含まれています。</string>
+    <string name="artist_credit_conflict">取得した情報の間に相違があります。下には、それまでに確認できたアーティストを表示しています。</string>
+    <string name="artist_credit_from_credits">この曲のクレジットをもとに確認したアーティスト</string>
+    <string name="artist_credit_from_song">この曲のアーティスト情報をもとに確認したアーティスト</string>
+    <string name="artist_source_songs">このアーティストを選択した曲</string>
+    <string name="artist_library_songs">ライブラリ内の曲</string>
+    <string name="artist_page_unavailable">アーティスト情報はまだありません。</string>
+    <string name="search_result_song">曲</string>
+    <string name="search_result_album">アルバム</string>
+    <string name="search_result_video">動画</string>
+    <string name="search_result_song_or_video">曲・動画</string>
+    <string name="search_result_playing">再生中</string>
+    <string name="search_result_paused">一時停止中</string>
+    <string name="search_result_album_track_playing">収録曲を再生中</string>
+    <string name="search_result_album_track_paused">収録曲を一時停止中</string>
 </resources>
