@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.FolderCopy
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.SdCard
 import androidx.compose.material.icons.rounded.Storage
@@ -36,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.FlatSubfoldersKey
+import com.dd3boh.outertune.constants.LibraryTileSize
+import com.dd3boh.outertune.constants.LibraryTileSizeKey
 import com.dd3boh.outertune.constants.ProxyEnabledKey
 import com.dd3boh.outertune.constants.ProxyTypeKey
 import com.dd3boh.outertune.constants.ProxyUrlKey
@@ -43,6 +46,7 @@ import com.dd3boh.outertune.constants.ShowLikedAndDownloadedPlaylist
 import com.dd3boh.outertune.constants.TopBarInsets
 import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
 import com.dd3boh.outertune.ui.component.EditTextPreference
+import com.dd3boh.outertune.ui.component.EnumListPreference
 import com.dd3boh.outertune.ui.component.ListPreference
 import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.PreferenceGroupTitle
@@ -68,6 +72,9 @@ fun LibrarySettings(
         defaultValue = true
     )
     val (flatSubfolders, onFlatSubfoldersChange) = rememberPreference(FlatSubfoldersKey, defaultValue = true)
+    val (libraryTileSize, onLibraryTileSizeChange) = rememberEnumPreference(
+        LibraryTileSizeKey, LibraryTileSize.LARGE
+    )
 
     val (proxyEnabled, onProxyEnabledChange) = rememberPreference(key = ProxyEnabledKey, defaultValue = false)
     val (proxyType, onProxyTypeChange) = rememberEnumPreference(key = ProxyTypeKey, defaultValue = Proxy.Type.HTTP)
@@ -80,6 +87,25 @@ fun LibrarySettings(
             .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
+        PreferenceGroupTitle(title = stringResource(R.string.library))
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            EnumListPreference(
+                title = { Text(stringResource(R.string.library_tile_size)) },
+                icon = { Icon(Icons.Rounded.GridView, null) },
+                selectedValue = libraryTileSize,
+                valueText = {
+                    stringResource(
+                        when (it) {
+                            LibraryTileSize.LARGE -> R.string.big
+                            LibraryTileSize.SMALL -> R.string.small
+                        }
+                    )
+                },
+                onValueSelected = onLibraryTileSizeChange
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
         PreferenceGroupTitle(
             title = stringResource(R.string.content)
         )

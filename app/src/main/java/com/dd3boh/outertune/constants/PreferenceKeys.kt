@@ -177,6 +177,7 @@ val AlbumViewTypeKey = stringPreferencesKey("albumViewType")
 val PlaylistViewTypeKey = stringPreferencesKey("playlistViewType")
 val LibraryFilterKey = stringPreferencesKey("libraryFilter")
 val LibraryViewTypeKey = stringPreferencesKey("libraryViewType")
+val LibraryTileSizeKey = stringPreferencesKey("libraryTileSize")
 
 val PlaylistEditLockKey = booleanPreferencesKey("playlistEditLock")
 

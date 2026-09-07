@@ -212,6 +212,10 @@ enum class SongFilter {
     LIBRARY, LIKED, DOWNLOADED, FOLDER, ALL
 }
 
+enum class LibraryTileSize {
+    LARGE, SMALL
+}
+
 enum class SongContentFilter(val mask: Int) {
     LIBRARY(1 shl 0),
     DOWNLOADED(1 shl 1),

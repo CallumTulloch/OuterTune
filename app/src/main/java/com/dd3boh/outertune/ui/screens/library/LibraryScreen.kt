@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -63,7 +62,6 @@ import com.dd3boh.outertune.constants.CONTENT_TYPE_LIST
 import com.dd3boh.outertune.constants.CONTENT_TYPE_PLAYLIST
 import com.dd3boh.outertune.constants.DEFAULT_ENABLED_FILTERS
 import com.dd3boh.outertune.constants.EnabledFiltersKey
-import com.dd3boh.outertune.constants.GridThumbnailHeight
 import com.dd3boh.outertune.constants.LibraryAlbumContentFilterMaskKey
 import com.dd3boh.outertune.constants.LibraryAlbumLikedOnlyKey
 import com.dd3boh.outertune.constants.LibraryArtistLikedOnlyKey
@@ -84,6 +82,7 @@ import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.Playlist
 import com.dd3boh.outertune.db.entities.PlaylistEntity
 import com.dd3boh.outertune.ui.component.ChipsLazyRow
+import com.dd3boh.outertune.ui.component.rememberLibraryGridCells
 import com.dd3boh.outertune.ui.component.EmptyPlaceholder
 import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
 import com.dd3boh.outertune.ui.component.LazyVerticalGridScrollbar
@@ -673,7 +672,7 @@ fun LibraryScreen(
                     LibraryViewType.GRID -> {
                         LazyVerticalGrid(
                             state = lazyGridState,
-                            columns = GridCells.Adaptive(minSize = GridThumbnailHeight + 24.dp),
+                            columns = rememberLibraryGridCells(),
                             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues()
                         ) {
                             item(

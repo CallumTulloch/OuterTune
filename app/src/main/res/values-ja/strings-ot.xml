@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="library_tile_size">ライブラリのタイルサイズ</string>
     <string name="filter_liked_only">いいね済みのみ</string>
     <string name="folder_search_close">フォルダ検索を閉じる</string>
     <string name="folder_search_clear">検索語を消去</string>
