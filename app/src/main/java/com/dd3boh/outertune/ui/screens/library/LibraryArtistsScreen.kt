@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
-import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -75,8 +74,6 @@ import com.dd3boh.outertune.ui.component.LibraryArtistListItem
 import com.dd3boh.outertune.ui.component.ScrollToTopManager
 import com.dd3boh.outertune.ui.component.SortHeader
 import com.dd3boh.outertune.ui.component.button.IconButton
-import com.dd3boh.outertune.ui.menu.ActionDropdown
-import com.dd3boh.outertune.ui.menu.DropdownItem
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
@@ -97,6 +94,8 @@ fun LibraryArtistsScreen(
     viewModel: LibraryArtistsViewModel = hiltViewModel(),
     libraryFilterContent: @Composable() (() -> Unit)? = null,
     libraryContentFilters: Set<LibraryContentFilter>? = null,
+    libraryLikedOnly: Boolean = false,
+    onLibraryLikedOnlyChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val menuState = LocalMenuState.current
@@ -115,8 +114,8 @@ fun LibraryArtistsScreen(
     val artistsState = if (libraryContentFilters == null) {
         viewModel.allArtists.collectAsState()
     } else {
-        remember(libraryContentFilters, sortType, sortDescending) {
-            viewModel.artists(libraryContentFilters, sortType, sortDescending)
+        remember(libraryContentFilters, libraryLikedOnly, sortType, sortDescending) {
+            viewModel.artists(libraryContentFilters, sortType, sortDescending, libraryLikedOnly)
         }.collectAsState(initial = null)
     }
     val unfilteredArtists by artistsState
@@ -134,9 +133,9 @@ fun LibraryArtistsScreen(
     val lazyGridState = rememberLazyGridState()
 
     val shouldSyncRemoteLibrary =
-        libraryContentFilters == null || LibraryContentFilter.LIBRARY in libraryContentFilters
-    LaunchedEffect(shouldSyncRemoteLibrary) {
-        if (shouldSyncRemoteLibrary) {
+        libraryContentFilters.isNullOrEmpty() || LibraryContentFilter.LIBRARY in libraryContentFilters
+    LaunchedEffect(shouldSyncRemoteLibrary, libraryLikedOnly) {
+        if (shouldSyncRemoteLibrary || libraryLikedOnly) {
             viewModel.syncArtists()
         }
     }
@@ -236,37 +235,9 @@ fun LibraryArtistsScreen(
                     color = MaterialTheme.colorScheme.secondary
                 )
                 Spacer(Modifier.width(4.dp))
-                ActionDropdown(
-                    actions = listOf(
-                        DropdownItem(
-                            title = stringResource(R.string.library_filter),
-                            leadingIcon = { Icon(Icons.Rounded.FilterAlt, null) },
-                            action = {},
-                            secondaryDropdown =
-                                listOf(
-                                    DropdownItem(
-                                        title = stringResource(R.string.filter_liked),
-                                        leadingIcon = null,
-                                        action = { filter = ArtistFilter.LIKED }
-                                    ),
-                                    DropdownItem(
-                                        title = stringResource(R.string.filter_library),
-                                        leadingIcon = null,
-                                        action = { filter = ArtistFilter.LIBRARY }
-                                    ),
-                                    DropdownItem(
-                                        title = stringResource(R.string.filter_downloaded),
-                                        leadingIcon = null,
-                                        action = { filter = ArtistFilter.DOWNLOADED }
-                                    ),
-                                    DropdownItem(
-                                        title = stringResource(R.string.folders),
-                                        leadingIcon = null,
-                                        action = { filter = ArtistFilter.FOLDER }
-                                    ),
-                                )
-                        ),
-                    ),
+                if (libraryContentFilters != null) LibraryLikedFilterMenu(
+                    likedOnly = libraryLikedOnly,
+                    onLikedOnlyChange = onLibraryLikedOnlyChange,
                 )
             }
         }
@@ -282,7 +253,8 @@ fun LibraryArtistsScreen(
                     if (!isRefreshingLibrary) {
                         isPullRefreshFeedbackVisible = true
                         when {
-                            libraryContentFilters?.contains(LibraryContentFilter.LIBRARY) == true ->
+                            libraryContentFilters?.isEmpty() == true || libraryLikedOnly ||
+                                libraryContentFilters?.contains(LibraryContentFilter.LIBRARY) == true ->
                                 viewModel.syncArtists(true)
                             libraryContentFilters?.contains(LibraryContentFilter.DOWNLOADED) == true ->
                                 viewModel.refreshDownloads()

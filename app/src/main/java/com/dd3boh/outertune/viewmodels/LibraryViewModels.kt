@@ -13,7 +13,6 @@ package com.dd3boh.outertune.viewmodels
 
 import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -153,7 +152,10 @@ class LibraryFoldersViewModel @Inject constructor(
 
     val localSongDirectoryTree: MutableStateFlow<DirectoryTree> = MutableStateFlow(getDirectoryTree(path))
     val localSongDtSongCount = MutableStateFlow(0)
-    val filteredSongs = mutableStateListOf<Song>()
+    private val searchRequest = MutableStateFlow(FolderSearchRequest(""))
+    val searchResult = folderSearchResults(searchRequest) { query ->
+        database.searchSongsAllLocalInDir(path, query)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FolderSearchResult())
 
     var uiInit = false
     var lastLocalScan = 0L
@@ -178,16 +180,11 @@ class LibraryFoldersViewModel @Inject constructor(
     }
 
     /**
-     * Update filteredSongs with search query
+     * Submit immediately or debounce edits while observing the latest matching songs.
      */
-    fun searchInDir(query: String, dir: String = path) {
-        if (query.isNotBlank()) {
-            viewModelScope.launch(Dispatchers.IO) {
-                val dbSongs = database.searchSongsAllLocalInDir(dir, query).first()
-                filteredSongs.clear()
-                filteredSongs.addAll(dbSongs)
-            }
-        }
+    fun searchInDir(query: String, immediate: Boolean = false) {
+        if (!immediate && query == searchRequest.value.query) return
+        searchRequest.value = FolderSearchRequest(query, immediate)
     }
 }
 
@@ -218,7 +215,8 @@ class LibraryArtistsViewModel @Inject constructor(
         filters: Set<LibraryContentFilter>,
         sortType: ArtistSortType,
         descending: Boolean,
-    ) = database.artists(filters, sortType, descending)
+        likedOnly: Boolean = false,
+    ) = database.artists(filters, sortType, descending, likedOnly)
 
     fun syncArtists(bypassCd: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -264,7 +262,8 @@ class LibraryAlbumsViewModel @Inject constructor(
         filters: Set<LibraryContentFilter>,
         sortType: AlbumSortType,
         descending: Boolean,
-    ) = database.albums(filters, sortType, descending)
+        likedOnly: Boolean = false,
+    ) = database.albums(filters, sortType, descending, likedOnly)
 
     fun syncAlbums(bypassCd: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {

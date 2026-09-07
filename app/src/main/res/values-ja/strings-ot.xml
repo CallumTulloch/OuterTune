@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="filter_liked_only">いいね済みのみ</string>
+    <string name="folder_search_close">フォルダ検索を閉じる</string>
+    <string name="folder_search_clear">検索語を消去</string>
     <string name="grp_interface">インターフェイス</string>
     <string name="playlist_add_local_to_synced_note">注: 同期/リモートの再生リストに端末内の曲の追加はできません。その他の組み合わせは有効です</string>
     <string name="local_history">端末内</string>

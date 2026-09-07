@@ -65,6 +65,8 @@ import com.dd3boh.outertune.constants.DEFAULT_ENABLED_FILTERS
 import com.dd3boh.outertune.constants.EnabledFiltersKey
 import com.dd3boh.outertune.constants.GridThumbnailHeight
 import com.dd3boh.outertune.constants.LibraryAlbumContentFilterMaskKey
+import com.dd3boh.outertune.constants.LibraryAlbumLikedOnlyKey
+import com.dd3boh.outertune.constants.LibraryArtistLikedOnlyKey
 import com.dd3boh.outertune.constants.LibraryArtistContentFilterMaskKey
 import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.constants.LibraryContentFilterUnselectedDefaultMigratedKey
@@ -187,6 +189,8 @@ fun LibraryScreen(
     var viewType by rememberEnumPreference(LibraryViewTypeKey, LibraryViewType.GRID)
     val enabledFilters by rememberPreference(EnabledFiltersKey, defaultValue = DEFAULT_ENABLED_FILTERS)
     var filter by rememberEnumPreference(LibraryFilterKey, LibraryFilter.ALL)
+    var albumLikedOnly by rememberPreference(LibraryAlbumLikedOnlyKey, false)
+    var artistLikedOnly by rememberPreference(LibraryArtistLikedOnlyKey, false)
     var albumContentFilterMask by rememberPreference(
         LibraryAlbumContentFilterMaskKey,
         0,
@@ -227,8 +231,8 @@ fun LibraryScreen(
         migrateLibraryContentFilterMask(playlistContentFilterMask) ?: 0
     }
 
-    val albumContentFilters = LibraryContentFilter.effectiveFromMask(albumSelectedFilterMask)
-    val artistContentFilters = LibraryContentFilter.effectiveFromMask(artistSelectedFilterMask)
+    val albumContentFilters = LibraryContentFilter.fromMask(albumSelectedFilterMask)
+    val artistContentFilters = LibraryContentFilter.fromMask(artistSelectedFilterMask)
     val playlistContentFilters = LibraryContentFilter.effectiveFromMask(playlistSelectedFilterMask)
 
     LaunchedEffect(libraryContentFilterDefaultsMigrated) {
@@ -519,6 +523,8 @@ fun LibraryScreen(
                     navController,
                     libraryFilterContent = filterContent,
                     libraryContentFilters = albumContentFilters,
+                    libraryLikedOnly = albumLikedOnly,
+                    onLibraryLikedOnlyChange = { albumLikedOnly = it },
                 )
 
             LibraryFilter.ARTISTS ->
@@ -526,6 +532,8 @@ fun LibraryScreen(
                     navController,
                     libraryFilterContent = filterContent,
                     libraryContentFilters = artistContentFilters,
+                    libraryLikedOnly = artistLikedOnly,
+                    onLibraryLikedOnlyChange = { artistLikedOnly = it },
                 )
 
             LibraryFilter.PLAYLISTS ->

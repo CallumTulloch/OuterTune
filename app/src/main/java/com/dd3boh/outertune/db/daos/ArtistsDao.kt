@@ -265,13 +265,14 @@ interface ArtistsDao {
         filters: Set<LibraryContentFilter>,
         sortType: ArtistSortType,
         descending: Boolean,
+        likedOnly: Boolean = false,
     ): Flow<List<Artist>> {
         val effectiveFilters = LibraryContentFilter.effective(filters)
         return artists(
-            contentCondition = libraryArtistContentCondition(effectiveFilters),
+            contentCondition = libraryArtistContentCondition(filters, likedOnly),
             sortType = sortType,
             descending = descending,
-            filterUnsupportedArtists = LibraryContentFilter.LIBRARY !in effectiveFilters,
+            filterUnsupportedArtists = likedOnly || LibraryContentFilter.LIBRARY !in effectiveFilters,
         )
     }
 
@@ -463,5 +464,5 @@ internal fun artistContentCondition(filter: ArtistFilter): String = when (filter
     ArtistFilter.ALL -> librarySongContentCondition(emptySet())
 }
 
-internal fun libraryArtistContentCondition(filters: Set<LibraryContentFilter>): String =
-    librarySongContentCondition(filters)
+internal fun libraryArtistContentCondition(filters: Set<LibraryContentFilter>, likedOnly: Boolean = false): String =
+    libraryBookmarkedContentCondition(filters, likedOnly, "artist")

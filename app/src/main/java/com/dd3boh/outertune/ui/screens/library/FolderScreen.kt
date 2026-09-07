@@ -6,7 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,14 +19,12 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.AccountTree
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.SdCard
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -36,8 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
@@ -51,24 +46,22 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.fastSumBy
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.dd3boh.outertune.LocalMenuState
@@ -84,17 +77,13 @@ import com.dd3boh.outertune.constants.FlatSubfoldersKey
 import com.dd3boh.outertune.constants.FolderSongSortDescendingKey
 import com.dd3boh.outertune.constants.FolderSongSortType
 import com.dd3boh.outertune.constants.FolderSongSortTypeKey
-import com.dd3boh.outertune.constants.FolderSortType
-import com.dd3boh.outertune.constants.FolderSortTypeKey
 import com.dd3boh.outertune.constants.LastLocalScanKey
 import com.dd3boh.outertune.constants.ListThumbnailSize
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
 import com.dd3boh.outertune.constants.SwipeToQueueKey
 import com.dd3boh.outertune.constants.TopBarInsets
-import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.models.DirectoryTree
 import com.dd3boh.outertune.models.toMediaMetadata
-import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.FloatingFooter
 import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
 import com.dd3boh.outertune.ui.component.ScrollToTopManager
@@ -113,19 +102,14 @@ import com.dd3boh.outertune.ui.utils.STORAGE_ROOT
 import com.dd3boh.outertune.ui.utils.backToMain
 import com.dd3boh.outertune.ui.utils.canNavigateUp
 import com.dd3boh.outertune.utils.fixFilePath
-import com.dd3boh.outertune.utils.numberToAlpha
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.LibraryFoldersViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
-import java.time.ZoneOffset
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FolderScreen(
     navController: NavController,
@@ -142,6 +126,8 @@ fun FolderScreen(
     val menuState = LocalMenuState.current
     val playerConnection = LocalPlayerConnection.current ?: return
     val snackbarHostState = LocalSnackbarHostState.current
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     val (flatSubfolders, onFlatSubfoldersChange) = rememberPreference(FlatSubfoldersKey, defaultValue = true)
     val lastLocalScan by rememberPreference(LastLocalScanKey, 0L)
@@ -149,7 +135,6 @@ fun FolderScreen(
 
     val (sortType, onSortTypeChange) = rememberEnumPreference(FolderSongSortTypeKey, FolderSongSortType.NAME)
     val (sortDescending, onSortDescendingChange) = rememberPreference(FolderSongSortDescendingKey, true)
-    val (folderSortType, onFolderSortTypeChange) = rememberEnumPreference(FolderSortTypeKey, FolderSortType.NAME)
     val swipeEnabled by rememberPreference(SwipeToQueueKey, true)
 
     val lazyListState = rememberLazyListState()
@@ -191,28 +176,23 @@ fun FolderScreen(
         }
     }
 
-    val mutableSongs = remember {
-        mutableStateListOf<Song>()
-    }
-
     // search
     var isSearching by rememberSaveable { mutableStateOf(false) }
+    var searchFocusRequested by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue())
     }
-    val filteredSongs = remember { viewModel.filteredSongs }
-    val focusRequester = remember { FocusRequester() }
+    val searchResult by viewModel.searchResult.collectAsState()
     LaunchedEffect(isSearching) {
-        if (isSearching) {
-            focusRequester.requestFocus()
-        }
+        viewModel.searchInDir(if (isSearching) query.text else "")
     }
-
-    LaunchedEffect(query) {
-        snapshotFlow { query }.debounce { 300L }.collectLatest {
-            viewModel.searchInDir(query.text)
-        }
+    val candidates = if (isSearching) {
+        searchResult.songs.takeIf { searchResult.query == query.text } ?: emptyList()
+    } else currDir.files
+    val visibleSongs = remember(candidates, sortType, sortDescending) {
+        sortedFolderSongs(candidates, sortType, sortDescending)
     }
+    val songCount = if (isSearching) visibleSongs.size else subDirSongCount
 
     // multiselect
     var inSelectMode by rememberSaveable { mutableStateOf(false) }
@@ -226,44 +206,29 @@ fun FolderScreen(
         inSelectMode = false
         selection.clear()
     }
+    val closeSearch = {
+        isSearching = false
+        searchFocusRequested = false
+        query = TextFieldValue()
+        viewModel.searchInDir("")
+        onExitSelectionMode()
+        focusManager.clearFocus(true)
+        keyboard?.hide()
+        Unit
+    }
+    LaunchedEffect(visibleSongs) {
+        selection.retainAll(visibleSongs.map { it.id }.toSet())
+    }
 
     if (inSelectMode) {
         BackHandler(onBack = onExitSelectionMode)
     } else if (isSearching) {
-        BackHandler(onBack = { isSearching = false })
+        BackHandler(onBack = closeSearch)
     }
 
-    LaunchedEffect(sortType, sortDescending, currDir) {
-        val tempList = currDir.files.map { it }.toMutableList()
-        // sort songs
-        tempList.sortBy {
-            when (sortType) {
-                FolderSongSortType.CREATE_DATE -> numberToAlpha(it.song.inLibrary?.toEpochSecond(ZoneOffset.UTC) ?: -1L)
-                FolderSongSortType.MODIFIED_DATE -> numberToAlpha(it.song.getDateModifiedLong() ?: -1L)
-                FolderSongSortType.RELEASE_DATE -> numberToAlpha(it.song.getDateLong() ?: -1L)
-                FolderSongSortType.NAME -> it.song.title.lowercase()
-                FolderSongSortType.ARTIST -> it.artists.joinToString { artist -> artist.name }.lowercase()
-                FolderSongSortType.PLAY_COUNT -> numberToAlpha((it.playCount?.fastSumBy { it.count })?.toLong() ?: 0L)
-                FolderSongSortType.TRACK_NUMBER -> numberToAlpha(it.song.trackNumber?.toLong() ?: Long.MAX_VALUE)
-            }
-        }
-        // sort folders
-        val newSubdirs: ArrayList<DirectoryTree> = ArrayList()
-        newSubdirs.addAll(currDir.subdirs.sortedBy { it.currentDir.lowercase() }) // only sort by name
-
-        if (sortDescending) {
-            newSubdirs.reverse()
-            currDir.subdirs.apply {
-                clear()
-                addAll(newSubdirs)
-            }
-            tempList.reverse()
-        }
-
-        mutableSongs.apply {
-            clear()
-            mutableSongs.addAll(tempList.distinctBy { it.id })
-        }
+    val visibleFolders = remember(currDir, flatSubfolders, sortDescending) {
+        val folders = if (flatSubfolders) currDir.getFlattenedSubdirs() else currDir.subdirs
+        folders.sortedBy { it.currentDir.lowercase() }.let { if (sortDescending) it.asReversed() else it }
     }
 
     Box(
@@ -309,70 +274,31 @@ fun FolderScreen(
                             libraryFilterContent()
                         }
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
+                        FolderSearchBar(
+                            isSearching = isSearching,
+                            query = query,
+                            onOpen = {
+                                onExitSelectionMode()
+                                isSearching = true
+                                searchFocusRequested = true
+                            },
+                            focusRequested = searchFocusRequested,
+                            onFocusHandled = { searchFocusRequested = false },
+                            onClose = closeSearch,
+                            onQueryChange = {
+                                query = it
+                                viewModel.searchInDir(it.text)
+                            },
+                            onSearch = { viewModel.searchInDir(it, immediate = true) },
                         ) {
-                            // search
-                            IconButton(
-                                onClick = {
-                                    isSearching = true
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Search,
-                                    contentDescription = null
-                                )
+                            IconTextButton(R.string.scanner_local_title, Icons.Rounded.SdCard) {
+                                navController.navigate("settings/local")
                             }
-                            if (isSearching) {
-                                TextField(
-                                    value = query,
-                                    onValueChange = { query = it },
-                                    placeholder = {
-                                        Text(
-                                            text = stringResource(R.string.search),
-                                            style = MaterialTheme.typography.titleLarge
-                                        )
-                                    },
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.titleLarge,
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    colors = TextFieldDefaults.colors(
-                                        focusedContainerColor = Color.Transparent,
-                                        unfocusedContainerColor = Color.Transparent,
-                                        focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent,
-                                        disabledIndicatorColor = Color.Transparent,
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .focusRequester(focusRequester)
-                                )
-                            } else {
-                                // scanner icon
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                ) {
-                                    IconTextButton(R.string.scanner_local_title, Icons.Rounded.SdCard) {
-                                        navController.navigate("settings/local")
-                                    }
-                                }
-                            }
-
-                            if (!isSearching) {
-                                // tree/list view
-                                ResizableIconButton(
-                                    icon = if (flatSubfolders) Icons.AutoMirrored.Rounded.List else Icons.Rounded.AccountTree,
-                                    onClick = {
-                                        onFlatSubfoldersChange(!flatSubfolders)
-                                    },
-                                    modifier = Modifier.padding(end = 4.dp)
-                                )
-                            }
+                            ResizableIconButton(
+                                icon = if (flatSubfolders) Icons.AutoMirrored.Rounded.List else Icons.Rounded.AccountTree,
+                                onClick = { onFlatSubfoldersChange(!flatSubfolders) },
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
                         }
                     }
 
@@ -404,7 +330,7 @@ fun FolderScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = pluralStringResource(R.plurals.n_song, subDirSongCount, subDirSongCount),
+                                text = pluralStringResource(R.plurals.n_song, songCount, songCount),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.secondary,
                                 modifier = Modifier.padding(end = 8.dp)
@@ -453,7 +379,7 @@ fun FolderScreen(
 
                 // all subdirectories listed here
                 itemsIndexed(
-                    items = if (flatSubfolders) currDir.getFlattenedSubdirs() else currDir.subdirs,
+                    items = visibleFolders,
                     key = { _, item -> item.uid },
                     contentType = { _, _ -> CONTENT_TYPE_FOLDER }
                 ) { index, folder ->
@@ -473,7 +399,7 @@ fun FolderScreen(
                 }
 
                 // separator
-                if (currDir.subdirs.isNotEmpty() && mutableSongs.isNotEmpty()) {
+                if (currDir.subdirs.isNotEmpty() && visibleSongs.isNotEmpty()) {
                     item(
                         key = "folder_songs_divider",
                     ) {
@@ -499,7 +425,7 @@ fun FolderScreen(
             // all songs get listed here
             val thumbnailSize = (ListThumbnailSize.value * density.density).roundToInt()
             itemsIndexed(
-                items = if (isSearching) filteredSongs else mutableSongs,
+                items = visibleSongs,
                 key = { _, item -> item.id },
                 contentType = { _, _ -> CONTENT_TYPE_SONG }
             ) { index, song ->
@@ -524,16 +450,15 @@ fun FolderScreen(
 
                     thumbnailSize = thumbnailSize,
                     onPlay = {
-                        playerConnection.playQueue(
-                            ListQueue(
-                                title = currDir.currentDir.substringAfterLast('/'),
-                                items = mutableSongs.map { it.toMediaMetadata() },
-                                startIndex = mutableSongs.indexOf(song)
-                            )
-                        )
+                        folderSongQueue(
+                            visibleSongs, song.id,
+                            if (isSearching) "${context.getString(R.string.queue_searched_songs_ot)} ${query.text}"
+                            else currDir.currentDir.substringAfterLast('/'),
+                        )?.let { playerConnection.playQueue(it) }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag("folder-song-${song.id}")
                         .animateItem()
                 )
             }
@@ -571,8 +496,7 @@ fun FolderScreen(
                 IconButton(
                     onClick = {
                         if (isSearching) {
-                            isSearching = false
-                            query = TextFieldValue()
+                            closeSearch()
                         } else {
                             navController.navigateUp()
                         }
@@ -595,12 +519,12 @@ fun FolderScreen(
             SelectHeader(
                 navController = navController,
                 selectedItems = selection.mapNotNull { songId ->
-                    mutableSongs.find { it.id == songId }
+                    visibleSongs.find { it.id == songId }
                 }.map { it.toMediaMetadata() },
-                totalItemCount = mutableSongs.size,
+                totalItemCount = visibleSongs.size,
                 onSelectAll = {
                     selection.clear()
-                    selection.addAll(mutableSongs.map { it.id }.distinctBy { it })
+                    selection.addAll(visibleSongs.map { it.id })
                 },
                 onDeselectAll = { selection.clear() },
                 menuState = menuState,

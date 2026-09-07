@@ -168,6 +168,8 @@ val AlbumFilterKey = stringPreferencesKey("albumFilter")
 val PlaylistFilterKey = stringPreferencesKey("playlistFilter")
 val LibraryAlbumContentFilterMaskKey = intPreferencesKey("libraryAlbumContentFilterMask")
 val LibraryArtistContentFilterMaskKey = intPreferencesKey("libraryArtistContentFilterMask")
+val LibraryAlbumLikedOnlyKey = booleanPreferencesKey("libraryAlbumLikedOnly")
+val LibraryArtistLikedOnlyKey = booleanPreferencesKey("libraryArtistLikedOnly")
 val LibraryPlaylistContentFilterMaskKey = intPreferencesKey("libraryPlaylistContentFilterMask")
 val LibraryContentFilterUnselectedDefaultMigratedKey =
     booleanPreferencesKey("libraryContentFilterUnselectedDefaultMigrated")

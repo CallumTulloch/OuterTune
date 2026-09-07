@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
@@ -395,38 +394,6 @@ fun LibrarySongsScreen(
                     Spacer(Modifier.width(4.dp))
                     ActionDropdown(
                         actions = listOfNotNull(
-                            if (libraryFilterContent == null) DropdownItem(
-                                title = stringResource(R.string.library_filter),
-                                leadingIcon = { Icon(Icons.Rounded.FilterAlt, null) },
-                                action = {},
-                                secondaryDropdown =
-                                    listOfNotNull(
-                                        if (libraryFilterContent == null) {
-                                            DropdownItem(
-                                                title = stringResource(R.string.filter_liked),
-                                                leadingIcon = null,
-                                                action = { onFilterSelected(SongFilter.LIKED) }
-                                            )
-                                        } else {
-                                            null
-                                        },
-                                        DropdownItem(
-                                            title = stringResource(R.string.library),
-                                            leadingIcon = null,
-                                            action = { onFilterSelected(SongFilter.LIBRARY) }
-                                        ),
-                                        DropdownItem(
-                                            title = stringResource(R.string.filter_downloaded),
-                                            leadingIcon = null,
-                                            action = { onFilterSelected(SongFilter.DOWNLOADED) }
-                                        ),
-                                        DropdownItem(
-                                            title = stringResource(R.string.folders),
-                                            leadingIcon = null,
-                                            action = { onFilterSelected(SongFilter.FOLDER) }
-                                        ),
-                                    )
-                            ) else null,
                             DropdownItem(
                                 title = stringResource(R.string.queue_all_songs),
                                 leadingIcon = { Icon(Icons.Rounded.PlayArrow, null) },

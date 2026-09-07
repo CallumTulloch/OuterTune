@@ -16,3 +16,14 @@ internal fun librarySongContentCondition(filters: Set<LibraryContentFilter>): St
     LibraryContentFilter.effective(filters).joinToString(separator = " OR ") { filter ->
         "(${songContentSourceCondition(filter)})"
     }
+
+/** With no explicit source selection, include bookmarks whose songs have not been fetched yet. */
+internal fun libraryBookmarkedContentCondition(
+    filters: Set<LibraryContentFilter>,
+    likedOnly: Boolean,
+    table: String,
+): String {
+    if (!likedOnly) return librarySongContentCondition(filters)
+    val bookmarked = "$table.bookmarkedAt IS NOT NULL"
+    return if (filters.isEmpty()) bookmarked else "($bookmarked) AND (${librarySongContentCondition(filters)})"
+}

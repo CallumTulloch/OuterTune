@@ -4,6 +4,9 @@
 while also allowing users to translate our app as well. New, specific strings to OuterTune go here. -->
 
 <resources>
+    <string name="filter_liked_only">Liked only</string>
+    <string name="folder_search_close">Close folder search</string>
+    <string name="folder_search_clear">Clear search text</string>
 <!-- General -->
     <string name="android_auto">Android Auto</string>
 

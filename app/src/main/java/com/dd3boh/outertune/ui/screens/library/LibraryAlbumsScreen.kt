@@ -21,7 +21,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -75,8 +74,6 @@ import com.dd3boh.outertune.ui.component.LibraryAlbumListItem
 import com.dd3boh.outertune.ui.component.ScrollToTopManager
 import com.dd3boh.outertune.ui.component.SortHeader
 import com.dd3boh.outertune.ui.component.button.IconButton
-import com.dd3boh.outertune.ui.menu.ActionDropdown
-import com.dd3boh.outertune.ui.menu.DropdownItem
 import com.dd3boh.outertune.ui.utils.MEDIA_PERMISSION_LEVEL
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
@@ -97,6 +94,8 @@ fun LibraryAlbumsScreen(
     viewModel: LibraryAlbumsViewModel = hiltViewModel(),
     libraryFilterContent: @Composable() (() -> Unit)? = null,
     libraryContentFilters: Set<LibraryContentFilter>? = null,
+    libraryLikedOnly: Boolean = false,
+    onLibraryLikedOnlyChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val menuState = LocalMenuState.current
@@ -118,8 +117,8 @@ fun LibraryAlbumsScreen(
     val albumsState = if (libraryContentFilters == null) {
         viewModel.allAlbums.collectAsState()
     } else {
-        remember(libraryContentFilters, sortType, sortDescending) {
-            viewModel.albums(libraryContentFilters, sortType, sortDescending)
+        remember(libraryContentFilters, libraryLikedOnly, sortType, sortDescending) {
+            viewModel.albums(libraryContentFilters, sortType, sortDescending, libraryLikedOnly)
         }.collectAsState(initial = null)
     }
     val unfilteredAlbums by albumsState
@@ -137,9 +136,9 @@ fun LibraryAlbumsScreen(
     val lazyGridState = rememberLazyGridState()
 
     val shouldSyncRemoteLibrary =
-        libraryContentFilters == null || LibraryContentFilter.LIBRARY in libraryContentFilters
-    LaunchedEffect(shouldSyncRemoteLibrary) {
-        if (shouldSyncRemoteLibrary) {
+        libraryContentFilters.isNullOrEmpty() || LibraryContentFilter.LIBRARY in libraryContentFilters
+    LaunchedEffect(shouldSyncRemoteLibrary, libraryLikedOnly) {
+        if (shouldSyncRemoteLibrary || libraryLikedOnly) {
             viewModel.syncAlbums()
         }
     }
@@ -244,37 +243,9 @@ fun LibraryAlbumsScreen(
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
-                ActionDropdown(
-                    actions = listOf(
-                        DropdownItem(
-                            title = stringResource(R.string.library_filter),
-                            leadingIcon = { Icon(Icons.Rounded.FilterAlt, null) },
-                            action = {},
-                            secondaryDropdown =
-                                listOf(
-                                    DropdownItem(
-                                        title = stringResource(R.string.filter_liked),
-                                        leadingIcon = null,
-                                        action = { filter = AlbumFilter.LIKED }
-                                    ),
-                                    DropdownItem(
-                                        title = stringResource(R.string.filter_library),
-                                        leadingIcon = null,
-                                        action = { filter = AlbumFilter.LIBRARY }
-                                    ),
-                                    DropdownItem(
-                                        title = stringResource(R.string.filter_downloaded),
-                                        leadingIcon = null,
-                                        action = { filter = AlbumFilter.DOWNLOADED }
-                                    ),
-                                    DropdownItem(
-                                        title = stringResource(R.string.folders),
-                                        leadingIcon = null,
-                                        action = { filter = AlbumFilter.FOLDER }
-                                    ),
-                                ),
-                        ),
-                    )
+                if (libraryContentFilters != null) LibraryLikedFilterMenu(
+                    likedOnly = libraryLikedOnly,
+                    onLikedOnlyChange = onLibraryLikedOnlyChange,
                 )
             }
         }
@@ -290,7 +261,8 @@ fun LibraryAlbumsScreen(
                     if (!isRefreshingLibrary) {
                         isPullRefreshFeedbackVisible = true
                         when {
-                            libraryContentFilters?.contains(LibraryContentFilter.LIBRARY) == true ->
+                            libraryContentFilters?.isEmpty() == true || libraryLikedOnly ||
+                                libraryContentFilters?.contains(LibraryContentFilter.LIBRARY) == true ->
                                 viewModel.syncAlbums(true)
                             libraryContentFilters?.contains(LibraryContentFilter.DOWNLOADED) == true ->
                                 viewModel.refreshDownloads()

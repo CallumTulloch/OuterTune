@@ -53,6 +53,50 @@ class ContentSourceFilterDatabaseTest {
     private fun artistId(source: String) = "UCsource-artist-$source"
     private fun playlistId(source: String) = "source-playlist-$source"
 
+    @Test
+    fun bookmarksCombineWithSourcesAndCanBeClearedWithoutChangingSources() = withDatabase { database ->
+        database.seedAlbumsAndArtists()
+        for (source in listOf(online, folder, mixed)) {
+            database.update(database.album(albumId(source)).first()!!.album.copy(bookmarkedAt = addedAt))
+            database.update(database.artist(artistId(source)).first()!!.artist.copy(bookmarkedAt = addedAt))
+        }
+        database.insert(AlbumEntity(albumId(emptyRemote), title = "Unfetched bookmark", songCount = 0,
+            duration = 0, bookmarkedAt = addedAt))
+        database.insert(ArtistEntity(artistId(emptyRemote), "Unfetched bookmark", bookmarkedAt = addedAt))
+        // Liking a member song does not bookmark its album or artist.
+        database.update(database.song(trackId(downloaded)).first()!!.song.copy(liked = true))
+        val cases = listOf(
+            emptySet<LibraryContentFilter>() to setOf(online, folder, mixed, emptyRemote),
+            setOf(LibraryContentFilter.LIBRARY) to setOf(online, mixed),
+            setOf(LibraryContentFilter.FOLDER) to setOf(folder, mixed),
+            setOf(LibraryContentFilter.DOWNLOADED) to emptySet(),
+            setOf(LibraryContentFilter.LIBRARY, LibraryContentFilter.FOLDER) to setOf(online, folder, mixed),
+            allContent to setOf(online, folder, mixed),
+        )
+        for ((filters, expected) in cases) {
+            assertEquals(expected.map(::albumId).toSet(),
+                database.albums(filters, AlbumSortType.NAME, false, likedOnly = true).first().map { it.id }.toSet())
+            assertEquals(expected.map(::artistId).toSet(),
+                database.artists(filters, ArtistSortType.NAME, false, likedOnly = true).first().map { it.id }.toSet())
+        }
+        assertAlbumArtistSources(database, setOf(LibraryContentFilter.DOWNLOADED), setOf(downloaded))
+        assertAlbumArtistSources(database, emptySet(), setOf(online, folder, downloaded, mixed))
+    }
+
+    @Test
+    fun folderSearchIncludesDescendantsButExcludesSiblingFoldersAndUnavailableFiles() = withDatabase { database ->
+        val paths = mapOf(
+            "nested" to "/storage/emulated/0/Music/sub/Match.wav",
+            "sibling" to "/storage/emulated/0/Music-other/Match.wav",
+            "missing" to "/storage/emulated/0/Music/sub/Missing.wav",
+        )
+        paths.forEach { (id, path) -> database.insert(SongEntity(id, "Match", isLocal = true,
+            inLibrary = if (id == "missing") null else addedAt, localPath = path)) }
+        val songs = database.searchSongsAllLocalInDir("/storage/emulated/0/Music", "Match").first()
+        assertEquals(listOf("nested"), songs.map { it.id })
+        assertTrue(database.searchSongsAllLocalInDir("/storage/emulated/0/Music", "absent").first().isEmpty())
+    }
+
     private fun MusicDatabase.seedSongs() {
         listOf(
             SongEntity(trackId(online), "Saved online song", isLocal = false,

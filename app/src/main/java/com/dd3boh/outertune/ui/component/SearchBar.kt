@@ -246,7 +246,7 @@ fun SearchBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchBarInputField(
+internal fun SearchBarInputField(
     query: TextFieldValue,
     onQueryChange: (TextFieldValue) -> Unit,
     onSearch: (String) -> Unit,

@@ -300,7 +300,8 @@ interface AlbumsDao : ArtistCreditDao {
         filters: Set<LibraryContentFilter>,
         sortType: AlbumSortType,
         descending: Boolean,
-    ): Flow<List<Album>> = albums(libraryAlbumContentCondition(filters), sortType, descending)
+        likedOnly: Boolean = false,
+    ): Flow<List<Album>> = albums(libraryAlbumContentCondition(filters, likedOnly), sortType, descending)
 
     private fun albums(where: String, sortType: AlbumSortType, descending: Boolean): Flow<List<Album>> {
         val orderBy = when (sortType) {
@@ -596,5 +597,5 @@ internal fun albumContentCondition(filter: AlbumFilter): String = when (filter) 
     AlbumFilter.ALL -> librarySongContentCondition(emptySet())
 }
 
-internal fun libraryAlbumContentCondition(filters: Set<LibraryContentFilter>): String =
-    librarySongContentCondition(filters)
+internal fun libraryAlbumContentCondition(filters: Set<LibraryContentFilter>, likedOnly: Boolean = false): String =
+    libraryBookmarkedContentCondition(filters, likedOnly, "album")
