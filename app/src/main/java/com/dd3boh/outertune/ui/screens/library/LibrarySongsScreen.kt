@@ -394,8 +394,8 @@ fun LibrarySongsScreen(
                     )
                     Spacer(Modifier.width(4.dp))
                     ActionDropdown(
-                        actions = listOf(
-                            DropdownItem(
+                        actions = listOfNotNull(
+                            if (libraryFilterContent == null) DropdownItem(
                                 title = stringResource(R.string.library_filter),
                                 leadingIcon = { Icon(Icons.Rounded.FilterAlt, null) },
                                 action = {},
@@ -426,7 +426,7 @@ fun LibrarySongsScreen(
                                             action = { onFilterSelected(SongFilter.FOLDER) }
                                         ),
                                     )
-                            ),
+                            ) else null,
                             DropdownItem(
                                 title = stringResource(R.string.queue_all_songs),
                                 leadingIcon = { Icon(Icons.Rounded.PlayArrow, null) },

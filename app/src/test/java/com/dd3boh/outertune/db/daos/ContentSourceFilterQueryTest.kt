@@ -32,13 +32,23 @@ class ContentSourceFilterQueryTest {
     }
 
     @Test
-    fun `library selection keeps inclusive playlist behavior`() {
-        assertEquals(
-            "",
-            libraryPlaylistContentHaving(
-                setOf(LibraryContentFilter.LIBRARY, LibraryContentFilter.FOLDER),
-            ),
+    fun `library excludes folder-only albums artists and playlists`() {
+        assertTrue(albumContentCondition(AlbumFilter.LIBRARY).contains("song.isLocal = 0"))
+        assertTrue(artistContentCondition(ArtistFilter.LIBRARY).contains("song.isLocal = 0"))
+        assertTrue(playlistContentHaving(PlaylistFilter.LIBRARY).contains("s.isLocal = 0"))
+        assertTrue(libraryAlbumContentCondition(setOf(LibraryContentFilter.LIBRARY)).contains("song.isLocal = 0"))
+        assertTrue(libraryArtistContentCondition(setOf(LibraryContentFilter.LIBRARY)).contains("song.isLocal = 0"))
+        assertTrue(libraryPlaylistContentHaving(setOf(LibraryContentFilter.LIBRARY)).contains("s.isLocal = 0"))
+    }
+
+    @Test
+    fun `library and folder playlist filters combine both member sources`() {
+        val having = libraryPlaylistContentHaving(
+            setOf(LibraryContentFilter.LIBRARY, LibraryContentFilter.FOLDER),
         )
+        assertTrue(having.contains("s.isLocal = 0"))
+        assertTrue(having.contains("s.isLocal = 1"))
+        assertTrue(having.contains(" OR "))
     }
 
     @Test

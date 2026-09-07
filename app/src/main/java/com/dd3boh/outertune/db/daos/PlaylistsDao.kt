@@ -166,7 +166,8 @@ interface PlaylistsDao {
         return _getPlaylists(query).map{ it.reversed(descending) }
     }
 
-    fun playlistInLibraryAsc() = playlists(PlaylistFilter.LIBRARY, PlaylistSortType.CREATE_DATE, false)
+    // Shared by the unfiltered library shelf, sync, and media browser; keep every saved playlist.
+    fun playlistInLibraryAsc() = playlists(PlaylistFilter.ALL, PlaylistSortType.CREATE_DATE, false)
     // endregion
 
     // region Inserts
@@ -246,26 +247,32 @@ interface PlaylistsDao {
     // endregion
 }
 
-private const val DOWNLOADED_PLAYLIST_MEMBER_CONDITION =
-    "SUM(CASE WHEN s.isLocal = 0 AND s.dateDownload IS NOT NULL THEN 1 ELSE 0 END) > 0"
-private const val FOLDER_PLAYLIST_MEMBER_CONDITION =
-    "SUM(CASE WHEN s.isLocal = 1 AND s.inLibrary IS NOT NULL THEN 1 ELSE 0 END) > 0"
+private val DOWNLOADED_PLAYLIST_MEMBER_CONDITION =
+    "SUM(CASE WHEN ${songContentSourceCondition(LibraryContentFilter.DOWNLOADED, "s")} THEN 1 ELSE 0 END) > 0"
+private val FOLDER_PLAYLIST_MEMBER_CONDITION =
+    "SUM(CASE WHEN ${songContentSourceCondition(LibraryContentFilter.FOLDER, "s")} THEN 1 ELSE 0 END) > 0"
+// A playlist can contain online songs that were not individually added to the song library.
+// No members also covers empty playlists and saved online playlists awaiting their first fetch.
+private const val LIBRARY_PLAYLIST_MEMBER_CONDITION =
+    "(COUNT(psm.songId) = 0 OR SUM(CASE WHEN s.isLocal = 0 THEN 1 ELSE 0 END) > 0)"
 
 internal fun playlistContentHaving(filter: PlaylistFilter): String = when (filter) {
     PlaylistFilter.DOWNLOADED -> "HAVING $DOWNLOADED_PLAYLIST_MEMBER_CONDITION"
     PlaylistFilter.FOLDER -> "HAVING $FOLDER_PLAYLIST_MEMBER_CONDITION"
-    PlaylistFilter.LIBRARY, PlaylistFilter.ALL -> ""
+    PlaylistFilter.LIBRARY -> "HAVING $LIBRARY_PLAYLIST_MEMBER_CONDITION"
+    PlaylistFilter.ALL -> ""
 }
 
 internal fun libraryPlaylistContentHaving(filters: Set<LibraryContentFilter>): String {
     val effectiveFilters = LibraryContentFilter.effective(filters)
-    if (LibraryContentFilter.LIBRARY in effectiveFilters) return ""
+    // No selection and all sources selected both retain the unfiltered playlist collection.
+    if (effectiveFilters.size == LibraryContentFilter.entries.size) return ""
 
-    val conditions = effectiveFilters.mapNotNull { filter ->
+    val conditions = effectiveFilters.map { filter ->
         when (filter) {
             LibraryContentFilter.DOWNLOADED -> DOWNLOADED_PLAYLIST_MEMBER_CONDITION
             LibraryContentFilter.FOLDER -> FOLDER_PLAYLIST_MEMBER_CONDITION
-            LibraryContentFilter.LIBRARY -> null
+            LibraryContentFilter.LIBRARY -> LIBRARY_PLAYLIST_MEMBER_CONDITION
         }
     }
     return "HAVING ${conditions.joinToString(separator = " OR ")}"

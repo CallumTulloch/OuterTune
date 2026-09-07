@@ -285,7 +285,13 @@ interface ArtistsDao {
         }
     }
 
-    fun artistsInLibraryAsc() = artists(ArtistFilter.LIBRARY, ArtistSortType.CREATE_DATE, false)
+    // The media browser lists saved artists from both sources, without a UI source filter.
+    fun artistsInLibraryAsc() = artists(
+        contentCondition = "song.inLibrary IS NOT NULL",
+        sortType = ArtistSortType.CREATE_DATE,
+        descending = false,
+        filterUnsupportedArtists = false,
+    )
     fun artistsBookmarkedAsc() = artists(ArtistFilter.LIKED, ArtistSortType.CREATE_DATE, false)
     fun artistsLocalBookmarkedAsc() = artists(ArtistFilter.LIKED, ArtistSortType.CREATE_DATE, false, true)
 
@@ -407,21 +413,12 @@ interface ArtistsDao {
 }
 
 internal fun artistContentCondition(filter: ArtistFilter): String = when (filter) {
-    ArtistFilter.DOWNLOADED -> "song.isLocal = 0 AND song.dateDownload IS NOT NULL"
-    ArtistFilter.LIBRARY -> "song.inLibrary IS NOT NULL"
+    ArtistFilter.DOWNLOADED -> songContentSourceCondition(LibraryContentFilter.DOWNLOADED)
+    ArtistFilter.LIBRARY -> songContentSourceCondition(LibraryContentFilter.LIBRARY)
     ArtistFilter.LIKED -> "artist.bookmarkedAt IS NOT NULL"
-    ArtistFilter.FOLDER -> "song.isLocal = 1 AND song.inLibrary IS NOT NULL"
-    ArtistFilter.ALL ->
-        "song.inLibrary IS NOT NULL OR (song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
+    ArtistFilter.FOLDER -> songContentSourceCondition(LibraryContentFilter.FOLDER)
+    ArtistFilter.ALL -> librarySongContentCondition(emptySet())
 }
 
 internal fun libraryArtistContentCondition(filters: Set<LibraryContentFilter>): String =
-    LibraryContentFilter.effective(filters).map { filter ->
-        when (filter) {
-            LibraryContentFilter.DOWNLOADED ->
-                "(song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
-            LibraryContentFilter.LIBRARY -> "(song.inLibrary IS NOT NULL)"
-            LibraryContentFilter.FOLDER ->
-                "(song.isLocal = 1 AND song.inLibrary IS NOT NULL)"
-        }
-    }.joinToString(separator = " OR ")
+    librarySongContentCondition(filters)

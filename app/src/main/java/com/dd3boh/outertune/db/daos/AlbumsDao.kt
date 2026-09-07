@@ -307,7 +307,8 @@ interface AlbumsDao : ArtistCreditDao {
         return _getAlbum(query).map { it.reversed(descending) }
     }
 
-    fun albumsInLibraryAsc() = albums(AlbumFilter.LIBRARY, AlbumSortType.CREATE_DATE, false)
+    // The media browser lists saved albums from both sources, without a UI source filter.
+    fun albumsInLibraryAsc() = albums("song.inLibrary IS NOT NULL", AlbumSortType.CREATE_DATE, false)
     fun albumsLikedAsc() = albums(AlbumFilter.LIKED, AlbumSortType.CREATE_DATE, false)
 
     @Transaction
@@ -537,21 +538,12 @@ interface AlbumsDao : ArtistCreditDao {
 }
 
 internal fun albumContentCondition(filter: AlbumFilter): String = when (filter) {
-    AlbumFilter.DOWNLOADED -> "song.isLocal = 0 AND song.dateDownload IS NOT NULL"
-    AlbumFilter.LIBRARY -> "song.inLibrary IS NOT NULL"
+    AlbumFilter.DOWNLOADED -> songContentSourceCondition(LibraryContentFilter.DOWNLOADED)
+    AlbumFilter.LIBRARY -> songContentSourceCondition(LibraryContentFilter.LIBRARY)
     AlbumFilter.LIKED -> "album.bookmarkedAt IS NOT NULL"
-    AlbumFilter.FOLDER -> "song.isLocal = 1 AND song.inLibrary IS NOT NULL"
-    AlbumFilter.ALL ->
-        "song.inLibrary IS NOT NULL OR (song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
+    AlbumFilter.FOLDER -> songContentSourceCondition(LibraryContentFilter.FOLDER)
+    AlbumFilter.ALL -> librarySongContentCondition(emptySet())
 }
 
 internal fun libraryAlbumContentCondition(filters: Set<LibraryContentFilter>): String =
-    LibraryContentFilter.effective(filters).map { filter ->
-        when (filter) {
-            LibraryContentFilter.DOWNLOADED ->
-                "(song.isLocal = 0 AND song.dateDownload IS NOT NULL)"
-            LibraryContentFilter.LIBRARY -> "(song.inLibrary IS NOT NULL)"
-            LibraryContentFilter.FOLDER ->
-                "(song.isLocal = 1 AND song.inLibrary IS NOT NULL)"
-        }
-    }.joinToString(separator = " OR ")
+    librarySongContentCondition(filters)
