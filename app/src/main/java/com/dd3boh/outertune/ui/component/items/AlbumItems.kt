@@ -135,6 +135,7 @@ fun AlbumGridItem(
     isActive: Boolean = false,
     isPlaying: Boolean = false,
     fillMaxWidth: Boolean = false,
+    showPlayButton: Boolean = true,
 ) = GridItem(
     title = album.album.displayTitle,
     subtitle = album.artistDisplayText(),
@@ -152,7 +153,7 @@ fun AlbumGridItem(
         )
 
         AlbumPlayButton(
-            visible = !isActive,
+            visible = showPlayButton && !isActive,
             onClick = {
                 coroutineScope.launch {
                     database.albumWithSongs(album.id).first()?.songs
