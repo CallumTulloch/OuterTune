@@ -70,8 +70,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -118,6 +120,7 @@ fun SearchBar(
     windowInsets: WindowInsets = WindowInsets.safeDrawing,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     focusRequester: FocusRequester = remember { FocusRequester() },
+    handleBack: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val heightOffsetLimit = with(LocalDensity.current) {
@@ -236,7 +239,7 @@ fun SearchBar(
         }
     }
 
-    BackHandler(enabled = active) {
+    BackHandler(enabled = active && handleBack) {
         onActiveChange(false)
     }
 }
@@ -281,7 +284,7 @@ private fun SearchBarInputField(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
-                .pointerInput(Unit) {
+                .pointerInput(onActiveChange) {
                     awaitEachGesture {
                         // Must be PointerEventPass.Initial to observe events before the text field
                         // consumes them in the Main pass
@@ -298,10 +301,10 @@ private fun SearchBarInputField(
                         stateDescription = suggestionsAvailableSemantics
                     }
                 }
-                .onKeyEvent {
+                .onPreviewKeyEvent {
                     if (it.key == Key.Enter) {
-                        onSearch(query.text)
-                        return@onKeyEvent true
+                        if (it.type == KeyEventType.KeyUp) onSearch(query.text)
+                        return@onPreviewKeyEvent true
                     }
                     false
                 },

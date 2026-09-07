@@ -22,9 +22,14 @@ fun Context.isUserLoggedIn(): Boolean {
 
 fun Context.isInternetConnected(): Boolean {
     val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-    return networkCapabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ?: false
+    val network = connectivityManager.activeNetwork ?: return false
+    val connected = connectivityManager.getNetworkCapabilities(network).hasValidatedInternet()
+    return connected && network == connectivityManager.activeNetwork
 }
+
+internal fun NetworkCapabilities?.hasValidatedInternet(): Boolean =
+    this != null && hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
 
 fun Context.supportsWideScreen() : Boolean {
     val config = resources.configuration

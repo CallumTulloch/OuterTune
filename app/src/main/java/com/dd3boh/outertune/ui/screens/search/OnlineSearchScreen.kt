@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -64,6 +65,7 @@ import com.dd3boh.outertune.ui.menu.YouTubePlaylistMenu
 import com.dd3boh.outertune.ui.menu.YouTubeSongMenu
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.OnlineSearchSuggestionViewModel
+import com.dd3boh.outertune.viewmodels.SearchSuggestionViewState
 import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.PlaylistItem
@@ -88,6 +90,11 @@ fun OnlineSearchScreen(
     val database = LocalDatabase.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val playerConnection = LocalPlayerConnection.current ?: return
+
+    DisposableEffect(viewModel) {
+        viewModel.setSearchActive(true, query)
+        onDispose { viewModel.setSearchActive(false) }
+    }
     val scope = rememberCoroutineScope()
 
     val swipeEnabled by rememberPreference(SwipeToQueueKey, true)
@@ -95,7 +102,9 @@ fun OnlineSearchScreen(
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
 
-    val viewState by viewModel.viewState.collectAsState()
+    val storedViewState by viewModel.viewState.collectAsState()
+    val viewState = storedViewState.takeIf { it.query == query }
+        ?: SearchSuggestionViewState(query = query)
 
     val lazyListState = rememberLazyListState()
     val snackbarHostState = LocalSnackbarHostState.current

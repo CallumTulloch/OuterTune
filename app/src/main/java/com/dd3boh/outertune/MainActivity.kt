@@ -129,7 +129,6 @@ import com.dd3boh.outertune.constants.PureBlackKey
 import com.dd3boh.outertune.constants.SlimNavBarKey
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.extensions.tabMode
-import com.dd3boh.outertune.extensions.isInternetConnected
 import com.dd3boh.outertune.playback.DownloadUtil
 import com.dd3boh.outertune.playback.MediaControllerViewModel
 import com.dd3boh.outertune.playback.MusicService
@@ -165,8 +164,12 @@ import com.dd3boh.outertune.ui.screens.library.LibrarySongsScreen
 import com.dd3boh.outertune.ui.screens.playlist.AutoPlaylistScreen
 import com.dd3boh.outertune.ui.screens.playlist.LocalPlaylistScreen
 import com.dd3boh.outertune.ui.screens.playlist.OnlinePlaylistScreen
-import com.dd3boh.outertune.ui.screens.search.OnlineSearchResult
 import com.dd3boh.outertune.ui.screens.search.SearchBarContainer
+import com.dd3boh.outertune.ui.screens.search.LocalSharedSearchScope
+import com.dd3boh.outertune.ui.screens.search.SharedSearchScreen
+import com.dd3boh.outertune.ui.screens.search.isSearchDestination
+import com.dd3boh.outertune.ui.screens.search.SEARCH_ENTRY_REQUEST
+import com.dd3boh.outertune.viewmodels.SharedSearchViewModel
 import com.dd3boh.outertune.ui.screens.settings.AboutScreen
 import com.dd3boh.outertune.ui.screens.settings.AccountSyncSettings
 import com.dd3boh.outertune.ui.screens.settings.AppearanceSettings
@@ -213,6 +216,7 @@ class MainActivity : ComponentActivity() {
     private var playerConnection by mutableStateOf<PlayerConnection?>(null)
 
     val controllerViewModel: MediaControllerViewModel by viewModels()
+    private val sharedSearchViewModel: SharedSearchViewModel by viewModels()
 
     // storage permission helpers
     val permissionLauncher =
@@ -227,6 +231,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         Log.i(MAIN_TAG, "onDestroy() called. isFinishing = $isFinishing")
         try {
+            sharedSearchViewModel.unbindConnectivity(connectivityObserver.networkStatus)
             connectivityObserver.unregister()
         } catch (e: UninitializedPropertyAccessException) {
             // lol
@@ -246,6 +251,8 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        connectivityObserver = NetworkConnectivityObserver(this)
+        sharedSearchViewModel.bindConnectivity(connectivityObserver.networkStatus)
         lifecycle.addObserver(controllerViewModel)
         controllerViewModel.addControllerCallback(lifecycle) { controller, _ ->
             playerConnection = PlayerConnection(controllerViewModel, database)
@@ -309,15 +316,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(useDarkTheme) {
                 setSystemBarAppearance(useDarkTheme)
             }
-            try {
-                connectivityObserver.unregister()
-            } catch (e: UninitializedPropertyAccessException) {
-                // lol
-            }
-            connectivityObserver = NetworkConnectivityObserver(this@MainActivity)
-            val isNetworkConnected by connectivityObserver.networkStatus.collectAsState(
-                this@MainActivity.isInternetConnected()
-            )
+            val isNetworkConnected by connectivityObserver.networkStatus.collectAsState()
 
 
             OuterTuneTheme(
@@ -381,10 +380,6 @@ class MainActivity : ComponentActivity() {
                         ACTION_SONGS -> Screens.LibraryFilter.SONGS
                         ACTION_ALBUMS -> Screens.LibraryFilter.ALBUMS
                         ACTION_PLAYLISTS -> Screens.LibraryFilter.PLAYLISTS
-                        ACTION_SEARCH -> {
-                            navController.navigate("search")
-                            filter
-                        } // do change filter for search
                         else -> Screens.LibraryFilter.ALL
                     }
                 }
@@ -468,14 +463,30 @@ class MainActivity : ComponentActivity() {
 
                     val scrollBehavior = appBarScrollBehavior(
                         canScroll = {
-                            navBackStackEntry?.destination?.route?.startsWith("search/") == false &&
+                            !isSearchDestination(navBackStackEntry?.destination?.route) &&
                                     (playerBottomSheetState.isCollapsed || playerBottomSheetState.isDismissed)
                         }
                     )
 
 
-                    DisposableEffect(Unit) {
+                    fun openSearchShortcut() {
+                        sharedSearchViewModel.searchScope.close()
+                        navController.navigate("search") { launchSingleTop = true }
+                        navController.currentBackStackEntry?.savedStateHandle?.let { handle ->
+                            handle[SEARCH_ENTRY_REQUEST] = (handle.get<Long>(SEARCH_ENTRY_REQUEST) ?: 0L) + 1L
+                        }
+                    }
+
+                    LaunchedEffect(Unit) {
+                        if (savedInstanceState == null && intent?.action == ACTION_SEARCH) openSearchShortcut()
+                    }
+
+                    DisposableEffect(navController) {
                         val listener = Consumer<Intent> { intent ->
+                            if (intent.action == ACTION_SEARCH) {
+                                openSearchShortcut()
+                                return@Consumer
+                            }
                             val uri =
                                 intent.data ?: intent.extras?.getString(Intent.EXTRA_TEXT)?.toUri()
                                 ?: return@Consumer
@@ -510,6 +521,7 @@ class MainActivity : ComponentActivity() {
                         LocalShimmerTheme provides ShimmerTheme,
                         LocalSyncUtils provides syncUtils,
                         LocalNetworkConnected provides isNetworkConnected,
+                        LocalSharedSearchScope provides sharedSearchViewModel.searchScope,
                         LocalSnackbarHostState provides snackbarHostState,
                         LocalShowLyrics provides showLyricsState,
                     ) {
@@ -642,8 +654,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                     composable(
                                         route = "search",
-                                    ) {
-                                        SearchBarContainer(navController, scrollBehavior)
+                                    ) { entry ->
+                                        SharedSearchScreen(navController, entry)
                                     }
                                     composable(
                                         route = "search/{query}",
@@ -652,8 +664,8 @@ class MainActivity : ComponentActivity() {
                                                 type = NavType.StringType
                                             }
                                         )
-                                    ) {
-                                        OnlineSearchResult(navController)
+                                    ) { entry ->
+                                        SharedSearchScreen(navController, entry)
                                     }
                                     composable(
                                         route = "album/{albumId}",

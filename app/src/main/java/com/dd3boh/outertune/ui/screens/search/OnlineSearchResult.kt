@@ -22,10 +22,12 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
@@ -82,10 +84,18 @@ import java.net.URLDecoder
 fun OnlineSearchResult(
     navController: NavController,
     viewModel: OnlineSearchViewModel = hiltViewModel(),
+    embedded: Boolean = false,
+    query: String = viewModel.query,
 ) {
     val context = LocalContext.current
     val menuState = LocalMenuState.current
     val playerConnection = LocalPlayerConnection.current ?: return
+
+    DisposableEffect(viewModel, query) {
+        viewModel.submitQuery(query)
+        viewModel.setSearchActive(true)
+        onDispose { viewModel.setSearchActive(false) }
+    }
 
     val swipeEnabled by rememberPreference(SwipeToQueueKey, true)
 
@@ -93,7 +103,7 @@ fun OnlineSearchResult(
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
-    val lazyListState = rememberLazyListState()
+    val lazyListState = key(query) { rememberLazyListState() }
     val snackbarHostState = LocalSnackbarHostState.current
 
     val searchFilter by viewModel.filter.collectAsState()
@@ -183,7 +193,7 @@ fun OnlineSearchResult(
                                                             "UTF-8"
                                                         )
                                                     }",
-                                                    items = songSuggestions.map { viewModel.artistCredits.withCredit(it as SongItem).toMediaMetadata() },
+                                                    items = songSuggestions.map { viewModel.withArtistCredit(it as SongItem).toMediaMetadata() },
                                                     startIndex = songSuggestions.indexOf(item)
                                                 ),
                                                 replace = true,
@@ -226,7 +236,11 @@ fun OnlineSearchResult(
     ProvidePlayingIndicatorAnimation(isPlaying = isPlaying) {
         LazyColumn(
             state = lazyListState,
-            contentPadding = LocalPlayerAwareWindowInsets.current
+            contentPadding = (if (embedded) {
+                LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+            } else {
+                LocalPlayerAwareWindowInsets.current
+            })
                 .add(WindowInsets(top = SearchFilterHeight))
                 .asPaddingValues()
         ) {
@@ -329,8 +343,12 @@ fun OnlineSearchResult(
                 lazyListState.animateScrollToItem(0)
             }
         },
-        modifier = Modifier
-            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top).add(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Horizontal)))
-            .padding(top = AppBarHeight)
+        modifier = if (embedded) {
+            Modifier.windowInsetsPadding(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Horizontal))
+        } else {
+            Modifier
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top).add(LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Horizontal)))
+                .padding(top = AppBarHeight)
+        }
     )
 }

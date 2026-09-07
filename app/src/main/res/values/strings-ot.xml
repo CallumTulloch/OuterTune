@@ -383,4 +383,8 @@ while also allowing users to translate our app as well. New, specific strings to
     <string name="search_result_paused">Paused</string>
     <string name="search_result_album_track_playing">Track from this album is playing</string>
     <string name="search_result_album_track_paused">Track from this album is paused</string>
+    <string name="search_scope_online">Online</string>
+    <string name="search_scope_local">Local</string>
+    <string name="search_scope_offline">Online search is unavailable without a network connection. Searching locally.</string>
+    <string name="search_scope_connection_restored">Connection restored. This search stays local; your saved choice applies next time you open search.</string>
 </resources>

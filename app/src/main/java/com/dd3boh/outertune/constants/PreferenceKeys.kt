@@ -178,6 +178,8 @@ val LibraryViewTypeKey = stringPreferencesKey("libraryViewType")
 val PlaylistEditLockKey = booleanPreferencesKey("playlistEditLock")
 
 val SearchSourceKey = stringPreferencesKey("searchSource")
+// The previous key also stored automatic per-tab overrides, so it is not a user preference.
+val PreferredSearchSourceKey = stringPreferencesKey("preferredSearchSource")
 
 val VisitorDataKey = stringPreferencesKey("visitorData")
 val DataSyncIdKey = stringPreferencesKey("dataSyncId")

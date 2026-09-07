@@ -278,4 +278,8 @@
     <string name="search_result_paused">一時停止中</string>
     <string name="search_result_album_track_playing">収録曲を再生中</string>
     <string name="search_result_album_track_paused">収録曲を一時停止中</string>
+    <string name="search_scope_online">オンライン</string>
+    <string name="search_scope_local">ローカル</string>
+    <string name="search_scope_offline">ネットワークに接続できないため、ローカル検索を使用しています。オンライン検索は選択できません。</string>
+    <string name="search_scope_connection_restored">接続が復旧しました。この検索ではローカル検索を続けます。検索を閉じて次に開くと、保存した選択を使用します。</string>
 </resources>
