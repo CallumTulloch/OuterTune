@@ -2,7 +2,6 @@ package com.dd3boh.outertune.ui.screens.artist
 
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -97,7 +96,6 @@ import com.dd3boh.outertune.ui.component.SwipeToQueueBox
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.AlbumGridItem
 import com.dd3boh.outertune.ui.component.items.SongListItem
-import com.dd3boh.outertune.ui.component.items.MediaMetadataListItem
 import com.dd3boh.outertune.ui.component.items.ArtistThumbnail
 import com.dd3boh.outertune.ui.component.items.YouTubeGridItem
 import com.dd3boh.outertune.ui.component.items.YouTubeListItem
@@ -151,9 +149,7 @@ fun ArtistScreen(
     val lazyListState = rememberLazyListState()
     val snackbarHostState = LocalSnackbarHostState.current
     var showLocal by rememberSaveable(viewModel.artistId) { mutableStateOf(viewModel.initiallyInternal) }
-    val sourceSongs = artistContext?.sourceSongs.orEmpty()
-        .filterNot { source -> librarySongs.any { it.id == source.id } }
-    val internalSongs = (librarySongs.map { it.toMediaMetadata() } + sourceSongs).distinctBy { it.id }
+    val librarySongItems = librarySongs.map { it.toMediaMetadata() }
     val artistName = if (showLocal) {
         libraryArtist?.artist?.name ?: artistContext?.name ?: artistPage?.artist?.title
     } else artistPage?.artist?.title ?: libraryArtist?.artist?.name ?: artistContext?.name
@@ -244,14 +240,14 @@ fun ArtistScreen(
                                 if (!showLocal && watchEndpoint != null) YouTubeQueue(watchEndpoint)
                                 else ListQueue(
                                     title = artistName,
-                                    items = internalSongs,
+                                    items = librarySongItems,
                                     startShuffled = true,
                                 ),
                                 isRadio = true,
                                 title = artistName
                             )
                         },
-                        enabled = internalSongs.isNotEmpty() || (!showLocal && artistPage != null),
+                        enabled = librarySongItems.isNotEmpty() || (!showLocal && artistPage != null),
                         contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -318,27 +314,6 @@ fun ArtistScreen(
                 }
 
                 if (showLocal) {
-                    if (sourceSongs.isNotEmpty()) {
-                        item {
-                            NavigationTitle(title = stringResource(R.string.artist_source_songs))
-                        }
-                        itemsIndexed(sourceSongs, key = { _, song -> "source:${song.id}" }) { index, song ->
-                            MediaMetadataListItem(
-                                mediaMetadata = song,
-                                preferredSize = (ListThumbnailSize.value * density.density).roundToInt(),
-                                isActive = song.id == mediaMetadata?.id,
-                                isPlaying = isPlaying,
-                                showInLibraryIcon = false,
-                                modifier = Modifier.clickable {
-                                    playerConnection.playQueue(ListQueue(
-                                        title = artistName,
-                                        items = sourceSongs,
-                                        startIndex = index,
-                                    ))
-                                },
-                            )
-                        }
-                    }
                     if (librarySongs.isNotEmpty()) {
                         item {
                             NavigationTitle(
@@ -593,7 +568,7 @@ fun ArtistScreen(
         HideOnScrollFAB(
             visible = isNetworkConnected && onlineArtistId != null && libraryArtist?.artist?.isLocal != true,
             lazyListState = lazyListState,
-            icon = if (showLocal) Icons.Rounded.Language else Icons.Rounded.LibraryMusic,
+            icon = if (showLocal) Icons.Rounded.LibraryMusic else Icons.Rounded.Language,
             onClick = {
                 showLocal = showLocal.not()
                 if (!showLocal && artistPage == null) viewModel.fetchArtistsFromYTM()
