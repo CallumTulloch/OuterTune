@@ -1,4 +1,5 @@
 /*
+
  * Copyright (C) 2025 OuterTune Project
  *
  * SPDX-License-Identifier: GPL-3.0
@@ -6,6 +7,8 @@
  * For any other attributions, refer to the git commit history
  */
 package com.dd3boh.outertune.ui.component.items
+
+import com.dd3boh.outertune.utils.displayTitle
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -109,7 +112,7 @@ fun SongListItem(
 
     val listItem: @Composable () -> Unit = {
         ListItem(
-            title = song.song.title,
+            title = song.song.displayTitle,
             subtitle = joinByBullet(
                 (if (BuildConfig.DEBUG) song.song.id else ""),
                 rememberResolvedArtistMetadata(song.toMediaMetadata(), request = true).artistDisplayText(),
@@ -348,7 +351,7 @@ fun SongGridItem(
     isPlaying: Boolean = false,
     fillMaxWidth: Boolean = false,
 ) = GridItem(
-    title = song.song.title,
+    title = song.song.displayTitle,
     subtitle = joinByBullet(
         rememberResolvedArtistMetadata(song.toMediaMetadata(), request = true).artistDisplayText(),
         makeTimeString(song.song.duration * 1000L)

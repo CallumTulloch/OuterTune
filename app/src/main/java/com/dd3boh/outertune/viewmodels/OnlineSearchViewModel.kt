@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.models.ItemsPage
 import com.dd3boh.outertune.repositories.ArtistCreditRepository
+import com.dd3boh.outertune.repositories.BilingualSearch
+import com.dd3boh.outertune.repositories.searchIdentity
 import com.zionhuang.innertube.models.SongItem
 import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
@@ -34,9 +36,15 @@ class OnlineSearchViewModel internal constructor(
     private val runtime: Runtime,
 ) : ViewModel() {
     @Inject
-    constructor(savedStateHandle: SavedStateHandle, artistCredits: ArtistCreditRepository) : this(
+    constructor(savedStateHandle: SavedStateHandle, artistCredits: ArtistCreditRepository, bilingualSearch: BilingualSearch) : this(
         initialQuery = savedStateHandle.get<String>("query").orEmpty(),
         runtime = Runtime(
+            searchSummary = bilingualSearch::searchSummary,
+            search = bilingualSearch::search,
+            searchContinuation = bilingualSearch::searchContinuation,
+            summaryNeedsRetry = bilingualSearch::summaryNeedsRetry,
+            clearSummary = bilingualSearch::clearSummary,
+            configurationChanges = bilingualSearch.configurationChanges,
             creditUpdates = artistCredits.updates.map { it.first },
             withCredit = artistCredits::withCredit,
         ),
@@ -48,6 +56,9 @@ class OnlineSearchViewModel internal constructor(
         val searchSummary: suspend (String) -> Result<SearchSummaryPage> = YouTube::searchSummary,
         val search: suspend (String, YouTube.SearchFilter) -> Result<SearchResult> = YouTube::search,
         val searchContinuation: suspend (String) -> Result<SearchResult> = YouTube::searchContinuation,
+        val summaryNeedsRetry: (String) -> Boolean = { false },
+        val clearSummary: (String) -> Unit = {},
+        val configurationChanges: Flow<Unit> = emptyFlow(),
         val creditUpdates: Flow<String> = emptyFlow(),
         val withCredit: (SongItem) -> SongItem = { it },
         val onFailure: (Throwable) -> Unit = ::reportException,
@@ -70,6 +81,7 @@ class OnlineSearchViewModel internal constructor(
     fun submitQuery(query: String, refresh: Boolean = false) {
         val previous = request.value
         if (query == previous.query && !refresh) return
+        runtime.clearSummary(previous.query)
         loadMoreJob?.cancel()
         summaryPage = null
         viewStateMap.clear()
@@ -89,6 +101,9 @@ class OnlineSearchViewModel internal constructor(
         expected.active && request.value == expected && filter.value == expectedFilter
 
     init {
+        scope.launch {
+            runtime.configurationChanges.collect { submitQuery(query, refresh = true) }
+        }
         scope.launch {
             runtime.creditUpdates.collect { videoId ->
                 summaryPage = summaryPage?.let { page ->
@@ -113,7 +128,7 @@ class OnlineSearchViewModel internal constructor(
                     loadMoreJob?.cancel()
                     if (!request.active || request.query.isBlank()) return@collectLatest
                     if (filter == null) {
-                        if (summaryPage == null) {
+                        if (summaryPage == null || runtime.summaryNeedsRetry(request.query)) {
                             val result = runtime.searchSummary(request.query)
                             // The service wraps cancellation in Result. Check both job and
                             // request identity before publishing a late response.
@@ -126,7 +141,7 @@ class OnlineSearchViewModel internal constructor(
                         currentCoroutineContext().ensureActive()
                         if (!isCurrent(request, filter)) return@collectLatest
                         result.onSuccess {
-                            viewStateMap[filter.value] = ItemsPage(it.items.distinctBy { item -> item.id }, it.continuation)
+                            viewStateMap[filter.value] = ItemsPage(it.items.distinctBy { item -> item.searchIdentity() }, it.continuation)
                         }.onFailure(runtime.onFailure)
                     }
                 }
@@ -145,7 +160,7 @@ class OnlineSearchViewModel internal constructor(
             if (!isCurrent(request, filter)) return@launch
             result.onSuccess {
                 viewStateMap[filter.value] = ItemsPage(
-                    (viewState.items + it.items).distinctBy { item -> item.id },
+                    (viewState.items + it.items).distinctBy { item -> item.searchIdentity() },
                     it.continuation,
                 )
             }.onFailure(runtime.onFailure)

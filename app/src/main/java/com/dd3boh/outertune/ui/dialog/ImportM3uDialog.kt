@@ -65,6 +65,7 @@ import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.ui.component.EnumListPreference
 import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
 import com.dd3boh.outertune.utils.lmScannerCoroutine
+import com.dd3boh.outertune.utils.displayTitle
 import com.dd3boh.outertune.utils.reportException
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.compareM3uSong
@@ -201,7 +202,7 @@ fun ImportM3uDialog(
                         .padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp)
                 ) {
                     itemsIndexed(
-                        items = importedSongs.map { it.title },
+                        items = importedSongs.map { it.song.displayTitle },
                         key = { _, song -> song.hashCode() }
                     ) { index, item ->
                         Text(

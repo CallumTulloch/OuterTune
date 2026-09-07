@@ -46,7 +46,7 @@ data class HomePage(
         val items: List<YTItem>,
     ) {
         companion object {
-            fun fromMusicCarouselShelfRenderer(renderer: MusicCarouselShelfRenderer): Section? {
+            fun fromMusicCarouselShelfRenderer(renderer: MusicCarouselShelfRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): Section? {
                 return Section(
                     title = renderer.header?.musicCarouselShelfBasicHeaderRenderer?.title?.runs?.firstOrNull()?.text ?: return null,
                     label = renderer.header.musicCarouselShelfBasicHeaderRenderer.strapline?.runs?.firstOrNull()?.text,
@@ -55,18 +55,18 @@ data class HomePage(
                     items = renderer.contents.mapNotNull {
                         it.musicTwoRowItemRenderer
                     }.mapNotNull {
-                        fromMusicTwoRowItemRenderer(it)
+                        fromMusicTwoRowItemRenderer(it, language = language)
                     }.ifEmpty {
                         return null
                     }
                 )
             }
 
-            private fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer): YTItem? {
+            private fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
                 return when {
                     renderer.isSong -> {
                         SongItem(
-                            artistCredit = (renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull().orEmpty()).toArtistCredit("HomePage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                            artistCredit = (renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull().orEmpty()).toArtistCredit("HomePage", language).withVideoSource(renderer),
                             artistBrowseIds = renderer.menu.artistBrowseIds(),
                             id = renderer.navigationEndpoint.watchEndpoint?.videoId ?: return null,
                             title = renderer.title.runs?.firstOrNull()?.text ?: return null,
@@ -88,7 +88,7 @@ data class HomePage(
 
                     renderer.isAlbum -> {
                         AlbumItem(
-                            artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("HomePage", com.zionhuang.innertube.YouTube.locale.hl),
+                            artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("HomePage", language),
                             browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                             playlistId = renderer.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content
                                 ?.musicPlayButtonRenderer?.playNavigationEndpoint

@@ -6,6 +6,8 @@
 
 package com.dd3boh.outertune.ui.component.items
 
+import com.dd3boh.outertune.utils.displayTitle
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -131,7 +133,7 @@ internal fun SearchResultListItem(
             }
 
             Text(
-                text = item.title,
+                text = item.displayTitle,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,

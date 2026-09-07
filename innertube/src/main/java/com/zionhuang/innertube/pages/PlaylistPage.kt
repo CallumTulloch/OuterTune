@@ -5,6 +5,7 @@ import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.innertube.models.withVideoSource
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.artistBrowseIds
@@ -16,11 +17,12 @@ data class PlaylistPage(
     val songs: List<SongItem>,
     val songsContinuation: String?,
     val continuation: String?,
+    val requestLocale: YouTubeLocale? = null,
 ) {
     companion object {
-        fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
+        fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): SongItem? {
             return SongItem(
-                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("PlaylistPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("PlaylistPage", language).withVideoSource(renderer),
                     artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()

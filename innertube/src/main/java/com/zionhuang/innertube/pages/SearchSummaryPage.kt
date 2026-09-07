@@ -21,19 +21,20 @@ import com.zionhuang.innertube.utils.parseTime
 data class SearchSummary(
     val title: String,
     val items: List<YTItem>,
+    val isTopResult: Boolean = false,
 )
 
 data class SearchSummaryPage(
     val summaries: List<SearchSummary>,
 ) {
     companion object {
-        fun fromMusicCardShelfRenderer(renderer: MusicCardShelfRenderer): YTItem? {
+        fun fromMusicCardShelfRenderer(renderer: MusicCardShelfRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
             val subtitle = renderer.subtitle.runs?.splitBySeparator()
             return when {
                 renderer.onTap.watchEndpoint != null -> {
                     SongItem(
                         endpoint = renderer.onTap.watchEndpoint,
-                        artistCredit = (subtitle?.getOrNull(1).orEmpty()).toArtistCredit("SearchSummaryPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                        artistCredit = (subtitle?.getOrNull(1).orEmpty()).toArtistCredit("SearchSummaryPage", language).withVideoSource(renderer),
                         artistBrowseIds = renderer.menu.artistBrowseIds(),
                         id = renderer.onTap.watchEndpoint.videoId ?: return null,
                         title = renderer.title.runs?.firstOrNull()?.text ?: return null,
@@ -73,7 +74,7 @@ data class SearchSummaryPage(
 
                 renderer.onTap.browseEndpoint?.isAlbumEndpoint == true -> {
                     AlbumItem(
-                        artistCredit = (renderer.subtitle.runs.orEmpty()).toAlbumArtistCredit("SearchSummaryPage", com.zionhuang.innertube.YouTube.locale.hl),
+                        artistCredit = (renderer.subtitle.runs.orEmpty()).toAlbumArtistCredit("SearchSummaryPage", language),
                         browseId = renderer.onTap.browseEndpoint.browseId,
                         playlistId = renderer.buttons.firstOrNull()?.buttonRenderer?.command?.anyWatchEndpoint?.playlistId ?: return null,
                         title = renderer.title.runs?.firstOrNull()?.text ?: return null,
@@ -116,7 +117,7 @@ data class SearchSummaryPage(
             }
         }
 
-        fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): YTItem? {
+        fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
             val secondaryLine = renderer.flexColumns.getOrNull(1)
                 ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator()
                 ?: return null
@@ -128,7 +129,7 @@ data class SearchSummaryPage(
                 renderer.isSong -> {
                     SongItem(
                         endpoint = PageHelper.searchWatchEndpoint(renderer),
-                        artistCredit = (listRun.firstOrNull().orEmpty()).toArtistCredit("SearchSummaryPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                        artistCredit = (listRun.firstOrNull().orEmpty()).toArtistCredit("SearchSummaryPage", language).withVideoSource(renderer),
                         artistBrowseIds = renderer.menu.artistBrowseIds(),
                         id = renderer.playlistItemData?.videoId ?: return null,
                         title = renderer.flexColumns.firstOrNull()
@@ -170,7 +171,7 @@ data class SearchSummaryPage(
 
                 renderer.isAlbum -> {
                     AlbumItem(
-                        artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchSummaryPage", com.zionhuang.innertube.YouTube.locale.hl),
+                        artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchSummaryPage", language),
                         browseId = renderer.navigationEndpoint?.browseEndpoint?.browseId ?: return null,
                         playlistId = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchPlaylistEndpoint?.playlistId ?: return null,
                         title = renderer.flexColumns.firstOrNull()

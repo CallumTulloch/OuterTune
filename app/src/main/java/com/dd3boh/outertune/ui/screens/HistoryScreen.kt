@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.screens
 
+import com.dd3boh.outertune.utils.matchesMetadataQuery
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -59,7 +61,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastForEachReversed
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -180,16 +181,15 @@ fun HistoryScreen(
     }
 
     val eventsMap by viewModel.events.collectAsState()
-    val filteredEventsMap = remember(eventsMap, searchQuery) {
-        if (searchQuery.text.isEmpty()) eventsMap
-        else eventsMap
-            .mapValues { (_, songs) ->
-                songs.filter { song ->
-                    song.song.title.contains(searchQuery.text, ignoreCase = true) ||
-                            song.song.artists.fastAny { it.name.contains(searchQuery.text, ignoreCase = true) }
+    val filteredEventsMap by remember(eventsMap, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.text.isEmpty()) eventsMap
+            else eventsMap
+                .mapValues { (_, songs) ->
+                    songs.filter { song -> song.song.toMediaMetadata().matchesMetadataQuery(searchQuery.text) }
                 }
-            }
-            .filterValues { it.isNotEmpty() }
+                .filterValues { it.isNotEmpty() }
+        }
     }
     val filteredEventIndex: Map<Long, EventWithSong> by remember(filteredEventsMap) {
         derivedStateOf {

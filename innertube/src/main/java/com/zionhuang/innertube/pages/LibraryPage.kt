@@ -10,6 +10,7 @@ import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.Run
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
+import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.innertube.models.withVideoSource
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.artistBrowseIds
@@ -20,12 +21,13 @@ import com.zionhuang.innertube.utils.parseTime
 data class LibraryPage(
     val items: List<YTItem>,
     val continuation: String?,
+    val requestLocale: YouTubeLocale? = null,
 ) {
     companion object {
-        fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer): YTItem? {
+        fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
             return when {
                 renderer.isAlbum -> AlbumItem(
-                    artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("LibraryPage", com.zionhuang.innertube.YouTube.locale.hl),
+                    artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("LibraryPage", language),
                     browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                     playlistId = renderer.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content
                         ?.musicPlayButtonRenderer?.playNavigationEndpoint
@@ -81,10 +83,10 @@ data class LibraryPage(
             }
         }
 
-        fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): YTItem? {
+        fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
             return when {
                 renderer.isSong -> SongItem(
-                        artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("LibraryPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                        artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("LibraryPage", language).withVideoSource(renderer),
                         artistBrowseIds = renderer.menu.artistBrowseIds(),
                         id = renderer.playlistItemData?.videoId ?: return null,
                         title = renderer.flexColumns.firstOrNull()

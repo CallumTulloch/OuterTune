@@ -24,8 +24,8 @@ import com.dd3boh.outertune.extensions.reversed
 import com.dd3boh.outertune.models.cleanLocalMetadataText
 import com.dd3boh.outertune.models.ArtistIdentity
 import com.dd3boh.outertune.models.selectArtistByNormalizedName
-import com.dd3boh.outertune.ui.utils.resize
 import com.zionhuang.innertube.pages.ArtistPage
+import com.zionhuang.innertube.models.ArtistItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
@@ -128,6 +128,7 @@ interface ArtistsDao {
         )
     }
 
+    @Transaction
     fun resolveAndInsertArtist(
         id: String?,
         name: String,
@@ -135,7 +136,14 @@ interface ArtistsDao {
         thumbnailUrl: String? = null,
         channelId: String? = null,
         contextId: String? = null,
-    ): ArtistEntity = resolveArtist(id, name, isLocal, thumbnailUrl, channelId, contextId).also(::insert)
+    ): ArtistEntity {
+        val artist = resolveArtist(id, name, isLocal, thumbnailUrl, channelId, contextId)
+        insert(artist)
+        if (!isLocal) ArtistIdentity.onlineId(id)?.let { onlineId ->
+            updateRemoteArtistProfile(onlineId, thumbnailUrl, channelId, LocalDateTime.now())
+        }
+        return artistById(artist.id) ?: artist
+    }
 
     @Query("SELECT * FROM artist WHERE isLocal = 1 AND name LIKE '%' || :name || '%'")
     fun localArtistsByNameFuzzy(name: String): List<ArtistEntity>
@@ -148,7 +156,11 @@ interface ArtistsDao {
         FROM artist
             LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
             LEFT JOIN song ON sam.songId = song.id
-        WHERE artist.name LIKE '%' || :query || '%' AND (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL)
+        WHERE (artist.name LIKE '%' || :query || '%' OR (artist.isLocal = 0 AND EXISTS (
+            SELECT 1 FROM metadata_name
+            WHERE kind = 'ARTIST' AND (targetId = artist.onlineId OR targetId = artist.id)
+                AND name LIKE '%' || :query || '%'
+        ))) AND (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL)
         GROUP BY artist.id
         HAVING songCount > 0
         ORDER BY artist.bookmarkedAt ASC
@@ -164,7 +176,11 @@ interface ArtistsDao {
         FROM artist
             LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
             LEFT JOIN song ON sam.songId = song.id
-        WHERE artist.name LIKE '%' || :query || '%' AND song.inLibrary IS NOT NULL AND song.isLocal
+        WHERE (artist.name LIKE '%' || :query || '%' OR (artist.isLocal = 0 AND EXISTS (
+            SELECT 1 FROM metadata_name
+            WHERE kind = 'ARTIST' AND (targetId = artist.onlineId OR targetId = artist.id)
+                AND name LIKE '%' || :query || '%'
+        ))) AND song.inLibrary IS NOT NULL AND song.isLocal
         GROUP BY artist.id
         HAVING songCount > 0
         LIMIT :previewSize
@@ -174,15 +190,30 @@ interface ArtistsDao {
 
     @Transaction
     @Query("""
-        SELECT song.* 
-        FROM song_artist_map JOIN song ON song_artist_map.songId = song.id 
-        WHERE song_artist_map.artistId IN (SELECT id FROM artist WHERE name LIKE '%' || :query || '%')
+        SELECT DISTINCT song.*
+        FROM song_artist_map JOIN song ON song_artist_map.songId = song.id
+        WHERE song_artist_map.artistId IN (
+            SELECT id FROM artist
+            WHERE name LIKE '%' || :query || '%' OR (artist.isLocal = 0 AND EXISTS (
+                SELECT 1 FROM metadata_name
+                WHERE kind = 'ARTIST' AND (targetId = artist.onlineId OR targetId = artist.id)
+                    AND name LIKE '%' || :query || '%'
+            ))
+        )
             AND (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL)
         LIMIT :previewSize
     """)
     fun searchArtistSongs(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
 
-    @Query("SELECT * FROM artist WHERE name LIKE '%' || :query || '%' LIMIT :previewSize")
+    @Query("""
+        SELECT * FROM artist
+        WHERE name LIKE '%' || :query || '%' OR (artist.isLocal = 0 AND EXISTS (
+            SELECT 1 FROM metadata_name
+            WHERE kind = 'ARTIST' AND (targetId = artist.onlineId OR targetId = artist.id)
+                AND name LIKE '%' || :query || '%'
+        ))
+        LIMIT :previewSize
+    """)
     fun artistsByNameFuzzy(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<ArtistEntity>>
 
     @Query("SELECT * FROM artist WHERE isLocal != 1")
@@ -369,14 +400,26 @@ interface ArtistsDao {
     @Update
     fun update(artist: ArtistEntity)
 
+    /** Profile replies must not replace a stale whole entity or clear a known image with a thin reply. */
+    @Query("""
+        UPDATE artist SET
+            thumbnailUrl = COALESCE(NULLIF(TRIM(:thumbnailUrl), ''), thumbnailUrl),
+            channelId = COALESCE(NULLIF(TRIM(:channelId), ''), channelId),
+            lastUpdateTime = CASE WHEN NULLIF(TRIM(:thumbnailUrl), '') IS NOT NULL
+                THEN :observedAt ELSE lastUpdateTime END
+        WHERE isLocal = 0 AND (onlineId = :onlineId OR id = :onlineId)
+            AND (:onlineId GLOB 'UC*' OR :onlineId GLOB 'FEmusic_library_privately_owned_artist*')
+    """)
+    fun updateRemoteArtistProfile(onlineId: String, thumbnailUrl: String?, channelId: String?, observedAt: LocalDateTime): Int
+
+    fun saveArtistProfile(item: ArtistItem, observedAt: LocalDateTime = LocalDateTime.now()): Int {
+        val onlineId = ArtistIdentity.onlineId(item.id) ?: return 0
+        return updateRemoteArtistProfile(onlineId, item.thumbnail, item.channelId, observedAt)
+    }
+
     @Transaction
     fun update(artist: ArtistEntity, artistPage: ArtistPage) {
-        update(
-            artist.copy(
-                thumbnailUrl = artistPage.artist.thumbnail?.resize(544, 544),
-                lastUpdateTime = LocalDateTime.now()
-            )
-        )
+        if (artist.onlineArtistId == artistPage.artist.id) saveArtistProfile(artistPage.artist)
     }
 
     @Transaction

@@ -22,9 +22,9 @@ data class RelatedPage(
     val playlists: List<PlaylistItem>,
 ) {
     companion object {
-        fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
+        fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): SongItem? {
             return SongItem(
-                artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("RelatedPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("RelatedPage", language).withVideoSource(renderer),
                 artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()
@@ -50,10 +50,10 @@ data class RelatedPage(
             )
         }
 
-        fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer): YTItem? {
+        fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
             return when {
                 renderer.isAlbum -> AlbumItem(
-                    artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("RelatedPage", com.zionhuang.innertube.YouTube.locale.hl),
+                    artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("RelatedPage", language),
                     browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                     playlistId = renderer.thumbnailOverlay?.musicItemThumbnailOverlayRenderer
                         ?.content?.musicPlayButtonRenderer?.playNavigationEndpoint

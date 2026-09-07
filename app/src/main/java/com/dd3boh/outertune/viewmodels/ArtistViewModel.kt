@@ -24,7 +24,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ArtistViewModel @Inject constructor(
-    database: MusicDatabase,
+    private val database: MusicDatabase,
     savedStateHandle: SavedStateHandle,
     private val artistCreditRepository: ArtistCreditRepository,
 ) : ViewModel() {
@@ -87,6 +87,7 @@ class ArtistViewModel @Inject constructor(
             YouTube.artist(onlineId)
                 .onSuccess {
                     artistPage = it
+                    if (it.artist.id == onlineId) database.awaitTransaction { saveArtistProfile(it.artist) }
                 }.onFailure {
                     reportException(it)
                 }

@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.screens.artist
 
+import com.dd3boh.outertune.utils.displayName
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -215,7 +217,7 @@ fun ArtistItemsScreen(
                                     } else {
                                         playerConnection.playQueue(
                                             ListQueue(
-                                                title = "Artist songs: ${song.artists.firstOrNull()?.name}",
+                                                title = "Artist songs: ${song.artists.firstOrNull()?.displayName}",
                                                 items = itemsPage?.items.orEmpty()
                                                     .map { (it as SongItem).toMediaMetadata() },
                                                 startIndex = index
@@ -282,7 +284,7 @@ fun ArtistItemsScreen(
                                 when (item) {
                                     is SongItem -> playerConnection.playQueue(
                                         ListQueue(
-                                            title = "Artist songs: ${item.artists.firstOrNull()?.name}",
+                                            title = "Artist songs: ${item.artists.firstOrNull()?.displayName}",
                                             items = itemsPage?.items.orEmpty().map { (it as SongItem).toMediaMetadata() },
                                             startIndex = index
                                         )

@@ -254,7 +254,7 @@ fun OnlineSearchResult(
 
                     items(
                         items = summary.items,
-                        key = { "${summary.title}/${it.id}" }
+                        key = { "${summary.title}/${it.javaClass.simpleName}/${it.id}" }
                     ) { item ->
                         ytItemContent(item, summary.items)
                     }
@@ -272,7 +272,7 @@ fun OnlineSearchResult(
             } else {
                 items(
                     items = itemsPage?.items.orEmpty(),
-                    key = { it.id }
+                    key = { "${it.javaClass.simpleName}/${it.id}" }
                 ) { item ->
                     ytItemContent(item, itemsPage?.items.orEmpty())
                 }

@@ -387,4 +387,6 @@ while also allowing users to translate our app as well. New, specific strings to
     <string name="search_scope_local">Local</string>
     <string name="search_scope_offline">Online search is unavailable without a network connection. Searching locally.</string>
     <string name="search_scope_connection_restored">Connection restored. This search stays local; your saved choice applies next time you open search.</string>
+    <string name="prefer_english_original">Use English when it is the official original name</string>
+    <string name="prefer_english_original_description">Use verified original English names for songs, albums and artists. Other names follow the content language.</string>
 </resources>

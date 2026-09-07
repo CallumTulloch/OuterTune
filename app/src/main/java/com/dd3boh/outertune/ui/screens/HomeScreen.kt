@@ -103,6 +103,8 @@ import com.dd3boh.outertune.ui.menu.YouTubePlaylistMenu
 import com.dd3boh.outertune.ui.menu.YouTubeSongMenu
 import com.dd3boh.outertune.ui.utils.SnapLayoutInfoProvider
 import com.dd3boh.outertune.utils.rememberPreference
+import com.dd3boh.outertune.utils.displayName
+import com.dd3boh.outertune.utils.displayTitle
 import com.dd3boh.outertune.viewmodels.HomeViewModel
 import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.ArtistItem
@@ -593,7 +595,12 @@ fun HomeScreen(
                 item {
                     NavigationTitle(
                         label = stringResource(R.string.similar_to),
-                        title = it.title.title,
+                        title = when (val related = it.title) {
+                            is Song -> related.song.displayTitle
+                            is Album -> related.album.displayTitle
+                            is Artist -> related.artist.displayName
+                            is Playlist -> related.title
+                        },
                         thumbnail = it.title.thumbnailUrl?.let { thumbnailUrl ->
                             {
                                 val shape =
@@ -781,7 +788,7 @@ fun HomeScreen(
                                 val songs = database.albumSongs(luckyItem.id).first()
                                 playerConnection.playQueue(
                                     ListQueue(
-                                        title = luckyItem.title,
+                                        title = luckyItem.album.displayTitle,
                                         items = songs.map(Song::toMediaMetadata)
                                     )
                                 )

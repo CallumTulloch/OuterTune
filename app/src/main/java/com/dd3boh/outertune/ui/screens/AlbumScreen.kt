@@ -1,5 +1,8 @@
 package com.dd3boh.outertune.ui.screens
 
+import com.dd3boh.outertune.utils.displayTitle
+import com.dd3boh.outertune.utils.displayName
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -224,7 +227,7 @@ fun AlbumScreen(
                             verticalArrangement = Arrangement.Center,
                         ) {
                             AutoResizeText(
-                                text = albumWithSongsLocal.album.title,
+                                text = albumWithSongsLocal.album.displayTitle,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
@@ -243,14 +246,24 @@ fun AlbumScreen(
                                         append(albumWithSongsLocal.artistDisplayText())
                                     } else {
                                         val artists = credit?.artists?.map { item ->
-                                            MediaMetadata.Artist(item.ref ?: item.id, item.name)
-                                        } ?: albumWithSongsLocal.artists.map { MediaMetadata.Artist(it.id, it.name) }
+                                            MediaMetadata.Artist(
+                                                item.ref ?: item.id, item.name,
+                                                isLocal = albumWithSongsLocal.album.isLocal,
+                                                onlineId = item.id,
+                                            )
+                                        } ?: albumWithSongsLocal.artists.map {
+                                            MediaMetadata.Artist(
+                                                it.id, it.name,
+                                                isLocal = albumWithSongsLocal.album.isLocal || it.isLocal,
+                                                onlineId = it.onlineArtistId,
+                                            )
+                                        }
                                         artists.forEachIndexed { index, artist ->
                                             if (!artist.id.isNullOrBlank()) {
                                                 withLink(LinkAnnotation.Clickable(artist.id) {
                                                     navController.navigate("artist/${artist.id}")
-                                                }) { append(artist.name) }
-                                            } else append(artist.name)
+                                                }) { append(artist.displayName) }
+                                            } else append(artist.displayName)
                                             if (index != artists.lastIndex) {
                                                 append(if (credit == null || albumWithSongsLocal.album.isLocal) ", " else artistNameSeparator())
                                             }
@@ -385,7 +398,7 @@ fun AlbumScreen(
                             onClick = {
                                 playerConnection.playQueue(
                                     ListQueue(
-                                        title = albumWithSongsLocal.album.title,
+                                        title = albumWithSongsLocal.album.displayTitle,
                                         items = albumWithSongs?.songs?.mapNotNull { it.toMediaMetadata() }?.toList()
                                             ?: emptyList(),
                                         playlistId = albumWithSongsLocal.album.playlistId
@@ -410,7 +423,7 @@ fun AlbumScreen(
                             onClick = {
                                 playerConnection.playQueue(
                                     ListQueue(
-                                        title = albumWithSongsLocal.album.title,
+                                        title = albumWithSongsLocal.album.displayTitle,
                                         items = albumWithSongs?.songs?.mapNotNull { it.toMediaMetadata() }?.toList()
                                             ?: emptyList(),
                                         playlistId = albumWithSongsLocal.album.playlistId,
@@ -463,7 +476,7 @@ fun AlbumScreen(
                     onPlay = {
                         playerConnection.playQueue(
                             ListQueue(
-                                title = albumWithSongsLocal.album.title,
+                                title = albumWithSongsLocal.album.displayTitle,
                                 items = albumWithSongsLocal.songs.map { it.toMediaMetadata() },
                                 startIndex = index,
                                 playlistId = albumWithSongsLocal.album.playlistId

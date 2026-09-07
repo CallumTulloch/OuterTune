@@ -30,11 +30,25 @@ interface SongsDao {
     fun song(songId: String?): Flow<Song?>
 
     @Transaction
-    @Query("SELECT * FROM song WHERE title LIKE '%' || :query || '%' AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL) LIMIT :previewSize")
+    @Query("""
+        SELECT * FROM song
+        WHERE (title LIKE '%' || :query || '%' OR (isLocal = 0 AND EXISTS (
+            SELECT 1 FROM metadata_name
+            WHERE kind = 'SONG' AND targetId = song.id AND name LIKE '%' || :query || '%'
+        ))) AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL)
+        LIMIT :previewSize
+    """)
     fun searchSongs(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
 
     @Transaction
-    @Query("SELECT * FROM song WHERE title LIKE '%' || :query || '%' LIMIT :previewSize")
+    @Query("""
+        SELECT * FROM song
+        WHERE title LIKE '%' || :query || '%' OR (isLocal = 0 AND EXISTS (
+            SELECT 1 FROM metadata_name
+            WHERE kind = 'SONG' AND targetId = song.id AND name LIKE '%' || :query || '%'
+        ))
+        LIMIT :previewSize
+    """)
     fun searchSongsInDb(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
 
     @Transaction

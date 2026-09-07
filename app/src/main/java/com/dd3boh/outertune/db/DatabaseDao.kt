@@ -10,6 +10,7 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.dd3boh.outertune.db.daos.AlbumsDao
+import com.dd3boh.outertune.db.daos.MetadataNamesDao
 import com.dd3boh.outertune.db.daos.PlaylistsDao
 import com.dd3boh.outertune.db.daos.QueueDao
 import com.dd3boh.outertune.db.daos.SongsDao
@@ -59,7 +60,7 @@ internal fun resolveAlbumId(
 }
 
 @Dao
-interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao {
+interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNamesDao {
 
     /** A UI snapshot changing a favourite/library flag must not roll back newer track credits. */
     @Transaction

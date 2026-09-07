@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.dialog
 
+import com.dd3boh.outertune.utils.displayName
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -61,7 +63,7 @@ fun ArtistDialog(
                         .padding(horizontal = 24.dp),
                 ) {
                     Text(
-                        text = artist.name,
+                        text = artist.displayName,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -114,7 +116,7 @@ fun ArtistDialog(
                     )
                 }
                 Text(
-                    text = artist.name,
+                    text = artist.displayName,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,

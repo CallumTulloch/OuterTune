@@ -129,7 +129,7 @@ fun OnlineSearchScreen(
     ) {
         items(
             items = viewState.history,
-            key = { it.query }
+            key = { "history/${it.query}" }
         ) { history ->
             SuggestionItem(
                 query = history.query,
@@ -157,7 +157,7 @@ fun OnlineSearchScreen(
 
         items(
             items = viewState.suggestions,
-            key = { it }
+            key = { "suggestion/$it" }
         ) { query ->
             SuggestionItem(
                 query = query,
@@ -186,7 +186,7 @@ fun OnlineSearchScreen(
 
         items(
             items = viewState.items,
-            key = { it.id }
+            key = { "${it.javaClass.simpleName}/${it.id}" }
         ) { item ->
             val content: @Composable () -> Unit = {
                 YouTubeListItem(

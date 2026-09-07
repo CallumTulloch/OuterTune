@@ -8,9 +8,9 @@ import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
 object NewReleaseAlbumPage {
-    fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer): AlbumItem? {
+    fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): AlbumItem? {
         return AlbumItem(
-            artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("NewReleaseAlbumPage", com.zionhuang.innertube.YouTube.locale.hl),
+            artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("NewReleaseAlbumPage", language),
             browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
             playlistId = renderer.thumbnailOverlay
                 ?.musicItemThumbnailOverlayRenderer?.content

@@ -24,10 +24,11 @@ data class NextResult(
 )
 
 object NextPage {
-    fun fromPlaylistPanelVideoRenderer(renderer: PlaylistPanelVideoRenderer): SongItem? {
+    fun fromPlaylistPanelVideoRenderer(renderer: PlaylistPanelVideoRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): SongItem? {
         val longByLineRuns = renderer.longBylineText?.runs?.splitBySeparator() ?: return null
         return SongItem(
-                    artistCredit = (longByLineRuns.firstOrNull().orEmpty()).toArtistCredit("NextPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    endpoint = renderer.navigationEndpoint.anyWatchEndpoint,
+                    artistCredit = (longByLineRuns.firstOrNull().orEmpty()).toArtistCredit("NextPage", language).withVideoSource(renderer),
                     artistBrowseIds = renderer.menu.artistBrowseIds(),
             id = renderer.videoId ?: return null,
             title = renderer.title?.runs?.firstOrNull()?.text ?: return null,

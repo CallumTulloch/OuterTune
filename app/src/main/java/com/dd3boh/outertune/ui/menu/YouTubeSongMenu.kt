@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.menu
 
+import com.dd3boh.outertune.utils.displayTitle
+
 import android.content.Intent
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -101,7 +103,7 @@ fun YouTubeSongMenu(
 
 
     ListItem(
-        title = song.title,
+        title = song.displayTitle,
         subtitle = joinByBullet(
             song.artistDisplayText(),
             song.duration?.let { makeTimeString(it * 1000L) }
@@ -236,7 +238,7 @@ fun YouTubeSongMenu(
         ) {
             playerConnection.playQueue(
                 queue = ListQueue(
-                    title = song.title,
+                    title = song.displayTitle,
                     items = listOf(song.toMediaMetadata())
                 )
             )

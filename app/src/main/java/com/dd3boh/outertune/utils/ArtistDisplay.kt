@@ -27,7 +27,7 @@ fun artistDisplayText(
 ): String {
     if (preserveLegacy) return fallbackNames.joinToString()
     if (credit?.isVideoCredit() == true) {
-        return credit.artists.map { it.name }.ifEmpty { fallbackNames }.joinToString()
+        return credit.artists.map { it.displayName }.ifEmpty { fallbackNames }.joinToString()
             .ifBlank { credit.rawText }.ifBlank { unknownArtistName(language) }
     }
     if (credit != null) {
@@ -35,7 +35,7 @@ fun artistDisplayText(
             return credit.rawText
         }
         if (credit.artists.isNotEmpty()) {
-            return credit.artists.joinToString(artistNameSeparator(language)) { it.name }
+            return credit.artists.joinToString(artistNameSeparator(language)) { it.displayName }
         }
         if (credit.rawText.isNotBlank()) return credit.rawText
     }
@@ -43,17 +43,25 @@ fun artistDisplayText(
         .ifBlank { unknownArtistName(language) }
 }
 
-fun Song.artistDisplayText(): String = artistDisplayText(artistCredit, artists.map { it.name }, song.isLocal)
+fun Song.artistDisplayText(): String = artistDisplayText(
+    artistCredit, artists.map { if (song.isLocal) it.name else it.displayName }, song.isLocal,
+)
 
-fun SongItem.artistDisplayText(): String = artistDisplayText(artistCredit, artists.map { it.name })
+fun SongItem.artistDisplayText(): String = artistDisplayText(artistCredit, artists.map { it.displayName })
 
-fun MediaMetadata.artistDisplayText(): String = artistDisplayText(artistCredit, artists.map { it.name }, isLocal)
+fun MediaMetadata.artistDisplayText(): String = artistDisplayText(
+    artistCredit, artists.map { if (isLocal) it.name else it.displayName }, isLocal,
+)
 
-fun Album.artistDisplayText(): String = artistDisplayText(album.artistCredit, artists.map { it.name }, album.isLocal)
+fun Album.artistDisplayText(): String = artistDisplayText(
+    album.artistCredit, artists.map { if (album.isLocal) it.name else it.displayName }, album.isLocal,
+)
 
-fun AlbumWithSongs.artistDisplayText(): String = artistDisplayText(album.artistCredit, artists.map { it.name }, album.isLocal)
+fun AlbumWithSongs.artistDisplayText(): String = artistDisplayText(
+    album.artistCredit, artists.map { if (album.isLocal) it.name else it.displayName }, album.isLocal,
+)
 
-fun AlbumItem.artistDisplayText(): String = artistDisplayText(artistCredit, artists.orEmpty().map { it.name })
+fun AlbumItem.artistDisplayText(): String = artistDisplayText(artistCredit, artists.orEmpty().map { it.displayName })
 
 /** A literal/partial byline opens song information; it is not a person's navigation target. */
 fun MediaMetadata.hasCompleteArtistList(): Boolean =

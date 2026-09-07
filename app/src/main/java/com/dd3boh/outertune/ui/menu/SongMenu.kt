@@ -1,5 +1,8 @@
 package com.dd3boh.outertune.ui.menu
 
+import com.dd3boh.outertune.utils.displayTitle
+import com.dd3boh.outertune.db.entities.MetadataNameEntity
+
 import android.content.Intent
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -139,7 +142,7 @@ fun SongMenu(
     }
 
     ListItem(
-        title = song.song.title,
+        title = song.song.displayTitle,
         subtitle = joinByBullet(
             metadata.artistDisplayText(),
             makeTimeString(song.song.duration * 1000L)
@@ -286,7 +289,7 @@ fun SongMenu(
         ) {
             playerConnection.playQueue(
                 queue = ListQueue(
-                    title = song.title,
+                    title = song.song.displayTitle,
                     items = listOf(song.toMediaMetadata())
                 )
             )
@@ -373,11 +376,16 @@ fun SongMenu(
             icon = { Icon(imageVector = Icons.Rounded.Edit, contentDescription = null) },
             title = { Text(text = stringResource(R.string.edit_song)) },
             onDismiss = { showEditDialog = false },
-            initialTextFieldValue = TextFieldValue(song.song.title, TextRange(song.song.title.length)),
+            initialTextFieldValue = TextFieldValue(song.song.displayTitle, TextRange(song.song.displayTitle.length)),
             onDone = { title ->
                 onDismiss()
-                database.query {
+                database.transaction {
                     update(song.song.copy(title = title))
+                    if (!song.song.isLocal) {
+                        recordMetadataNames(
+                            listOf(MetadataNameEntity("SONG", song.id, "und", title, "manual", sourcePriority = 1000)),
+                        )
+                    }
                 }
             }
         )

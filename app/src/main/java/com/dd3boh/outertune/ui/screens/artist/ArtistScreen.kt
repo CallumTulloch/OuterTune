@@ -1,5 +1,10 @@
 package com.dd3boh.outertune.ui.screens.artist
 
+import com.dd3boh.outertune.utils.displayTitle
+import com.dd3boh.outertune.utils.displayName
+import com.dd3boh.outertune.utils.MetadataNames
+import com.dd3boh.outertune.models.metadata.OriginalNameKind
+
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -150,9 +155,14 @@ fun ArtistScreen(
     val snackbarHostState = LocalSnackbarHostState.current
     var showLocal by rememberSaveable(viewModel.artistId) { mutableStateOf(viewModel.initiallyInternal) }
     val librarySongItems = librarySongs.map { it.toMediaMetadata() }
-    val artistName = if (showLocal) {
-        libraryArtist?.artist?.name ?: artistContext?.name ?: artistPage?.artist?.title
-    } else artistPage?.artist?.title ?: libraryArtist?.artist?.name ?: artistContext?.name
+    val suppliedArtistName = if (showLocal) {
+        libraryArtist?.artist?.displayName ?: artistContext?.name ?: artistPage?.artist?.displayTitle
+    } else artistPage?.artist?.displayTitle ?: libraryArtist?.artist?.displayName ?: artistContext?.name
+    val artistName = (if (showLocal && libraryArtist?.artist?.isLocal == true) {
+        suppliedArtistName.orEmpty()
+    } else {
+        MetadataNames.resolve(OriginalNameKind.ARTIST, onlineArtistId, suppliedArtistName.orEmpty())
+    }).takeIf(String::isNotBlank)
 
     val transparentAppBar by remember {
         derivedStateOf {
@@ -269,7 +279,7 @@ fun ArtistScreen(
                                     playerConnection.playQueue(
                                         YouTubeQueue(radioEndpoint),
                                         isRadio = true,
-                                        title = "Radio: ${artistPage.artist.title}"
+                                        title = "Radio: ${artistPage.artist.displayTitle}"
                                     )
                                 },
                                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
@@ -345,7 +355,7 @@ fun ArtistScreen(
                                 onPlay = {
                                     playerConnection.playQueue(
                                         ListQueue(
-                                            title = "Library: ${libraryArtist?.artist?.name}",
+                                            title = "Library: ${libraryArtist?.artist?.displayName}",
                                             items = librarySongs.map { it.toMediaMetadata() },
                                             startIndex = index
                                         )
@@ -457,7 +467,7 @@ fun ArtistScreen(
                                                 } else {
                                                     playerConnection.playQueue(
                                                         ListQueue(
-                                                            title = "Artist songs (preview): ${artistPage.artist.title}",
+                                                            title = "Artist songs (preview): ${artistPage.artist.displayTitle}",
                                                             items = section.items.map { (it as SongItem).toMediaMetadata() },
                                                             startIndex = section.items.indexOf(
                                                                 song
@@ -506,7 +516,7 @@ fun ArtistScreen(
                                                                 item.toMediaMetadata()
                                                             ),
                                                             isRadio = true,
-                                                            title = artistPage.artist.title
+                                                            title = artistPage.artist.displayTitle
                                                         )
 
                                                         is AlbumItem -> navController.navigate(

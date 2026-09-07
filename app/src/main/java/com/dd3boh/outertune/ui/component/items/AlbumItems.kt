@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.component.items
 
+import com.dd3boh.outertune.utils.displayTitle
+
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,7 +73,7 @@ fun AlbumListItem(
     isPlaying: Boolean = false,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) = ListItem(
-    title = album.album.title,
+    title = album.album.displayTitle,
     subtitle = joinByBullet(
         album.artistDisplayText(),
         album.takeIf { it.album.songCount != 0 }?.let { album ->
@@ -134,7 +136,7 @@ fun AlbumGridItem(
     isPlaying: Boolean = false,
     fillMaxWidth: Boolean = false,
 ) = GridItem(
-    title = album.album.title,
+    title = album.album.displayTitle,
     subtitle = album.artistDisplayText(),
     badges = badges,
     thumbnailContent = {
@@ -158,7 +160,7 @@ fun AlbumGridItem(
                         ?.let {
                             playerConnection.playQueue(
                                 ListQueue(
-                                    title = album.album.title,
+                                    title = album.album.displayTitle,
                                     items = it
                                 )
                             )

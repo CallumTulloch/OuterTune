@@ -9,6 +9,9 @@
 
 package com.dd3boh.outertune.playback
 
+import com.dd3boh.outertune.utils.MetadataNames
+import kotlinx.coroutines.flow.debounce
+
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -278,6 +281,22 @@ class MusicService : MediaLibraryService(),
             .build()
 
         player.repeatMode = dataStore.get(RepeatModeKey, REPEAT_MODE_OFF)
+
+        scope.launch {
+            MetadataNames.updates.debounce(150).collect {
+                for (index in 0 until player.mediaItemCount) {
+                    val item = player.getMediaItemAt(index)
+                    val metadata = item.metadata ?: continue
+                    if (metadata.isLocal) continue
+                    val displayed = metadata.toMediaItem().mediaMetadata
+                    if (displayed != item.mediaMetadata) {
+                        // Change only Media3's display fields; preserve raw tags, URI, queue order and position.
+                        player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(displayed).build())
+                    }
+                }
+                updateNotification()
+            }
+        }
 
         scope.launch {
             artistCredits.updates.collect { (videoId, _) ->

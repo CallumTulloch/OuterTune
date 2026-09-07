@@ -15,12 +15,12 @@ import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
 object SearchSuggestionPage {
-    fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): YTItem? {
+    fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
         return when {
             renderer.isSong -> {
                 SongItem(
                     endpoint = PageHelper.searchWatchEndpoint(renderer),
-                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty().splitBySeparator().getOrNull(1).orEmpty()).toArtistCredit("SearchSuggestionPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty().splitBySeparator().getOrNull(1).orEmpty()).toArtistCredit("SearchSuggestionPage", language).withVideoSource(renderer),
                     artistBrowseIds = renderer.menu.artistBrowseIds(),
                     id = renderer.playlistItemData?.videoId ?: return null,
                     title = renderer.flexColumns.firstOrNull()
@@ -63,7 +63,7 @@ object SearchSuggestionPage {
                 val secondaryLine = renderer.flexColumns.getOrNull(1)
                     ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator() ?: return null
                 AlbumItem(
-                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchSuggestionPage", com.zionhuang.innertube.YouTube.locale.hl),
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchSuggestionPage", language),
                     browseId = renderer.navigationEndpoint?.browseEndpoint?.browseId ?: return null,
                     playlistId = renderer.menu?.menuRenderer?.items?.find {
                         it.menuNavigationItemRenderer?.icon?.iconType == "MUSIC_SHUFFLE"

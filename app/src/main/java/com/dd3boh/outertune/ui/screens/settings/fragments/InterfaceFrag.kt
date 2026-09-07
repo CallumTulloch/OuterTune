@@ -59,6 +59,7 @@ import com.dd3boh.outertune.constants.EnabledFiltersKey
 import com.dd3boh.outertune.constants.EnabledTabsKey
 import com.dd3boh.outertune.constants.LanguageCodeToName
 import com.dd3boh.outertune.constants.ListItemHeight
+import com.dd3boh.outertune.constants.PreferEnglishOriginalKey
 import com.dd3boh.outertune.constants.SYSTEM_DEFAULT
 import com.dd3boh.outertune.constants.SwipeToQueueKey
 import com.dd3boh.outertune.constants.SwipeToSkipKey
@@ -430,6 +431,10 @@ fun ColumnScope.LocalizationFrag() {
         key = ContentCountryKey,
         defaultValue = SYSTEM_DEFAULT,
     )
+    val (preferEnglishOriginal, onPreferEnglishOriginalChange) = rememberPreference(
+        key = PreferEnglishOriginalKey,
+        defaultValue = false,
+    )
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         AppLanguagePreference()
@@ -466,6 +471,13 @@ fun ColumnScope.LocalizationFrag() {
 
             onContentLanguageChange(newValue)
         }
+    )
+    SwitchPreference(
+        title = { Text(stringResource(R.string.prefer_english_original)) },
+        description = stringResource(R.string.prefer_english_original_description),
+        icon = { Icon(Icons.Rounded.Language, null) },
+        checked = preferEnglishOriginal,
+        onCheckedChange = onPreferEnglishOriginalChange,
     )
     ListPreference(
         title = { Text(stringResource(R.string.content_country)) },

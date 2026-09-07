@@ -1,4 +1,5 @@
 /*
+
  * Copyright (C) 2025 O﻿ute﻿rTu﻿ne Project
  *
  * SPDX-License-Identifier: GPL-3.0
@@ -7,6 +8,8 @@
  */
 
 package com.dd3boh.outertune.ui.component
+
+import com.dd3boh.outertune.utils.displayTitle
 
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
@@ -81,7 +84,7 @@ fun SwipeToQueueBox(
                 snackbarHostState?.showSnackbar(
                     message = context.getString(
                         R.string.song_added_to_queue,
-                        item.mediaMetadata.title
+                        item.mediaMetadata.displayTitle
                     ),
                     withDismissAction = true,
                     duration = SnackbarDuration.Short
@@ -95,7 +98,7 @@ fun SwipeToQueueBox(
                     snackbarHostState?.showSnackbar(
                         message = context.getString(
                             R.string.song_added_to_queue_end,
-                            item.mediaMetadata.title
+                            item.mediaMetadata.displayTitle
                         ),
                         withDismissAction = true,
                         duration = SnackbarDuration.Indefinite

@@ -8,10 +8,11 @@ import java.security.MessageDigest
 @JvmName("completedLibrary")
 suspend fun Result<PlaylistPage>.completed(): Result<PlaylistPage> = runCatching {
     val page = getOrThrow()
+    val requestLocale = page.requestLocale ?: YouTube.locale
     val songs = page.songs.toMutableList()
     var continuation = page.songsContinuation
     while (continuation != null) {
-        val continuationPage = YouTube.playlistContinuation(continuation).getOrThrow()
+        val continuationPage = YouTube.playlistContinuation(continuation, requestLocale = requestLocale).getOrThrow()
         songs += continuationPage.songs
         continuation = continuationPage.continuation
     }
@@ -19,23 +20,26 @@ suspend fun Result<PlaylistPage>.completed(): Result<PlaylistPage> = runCatching
         playlist = page.playlist,
         songs = songs,
         songsContinuation = null,
-        continuation = page.continuation
+        continuation = page.continuation,
+        requestLocale = requestLocale,
     )
 }
 
 @JvmName("completedPlaylist")
 suspend fun Result<LibraryPage>.completed(): Result<LibraryPage> = runCatching {
     val page = getOrThrow()
+    val requestLocale = page.requestLocale ?: YouTube.locale
     val items = page.items.toMutableList()
     var continuation = page.continuation
     while (continuation != null) {
-        val continuationPage = YouTube.libraryContinuation(continuation).getOrThrow()
+        val continuationPage = YouTube.libraryContinuation(continuation, requestLocale = requestLocale).getOrThrow()
         items += continuationPage.items
         continuation = continuationPage.continuation
     }
     LibraryPage(
         items = items,
-        continuation = page.continuation
+        continuation = page.continuation,
+        requestLocale = requestLocale,
     )
 }
 

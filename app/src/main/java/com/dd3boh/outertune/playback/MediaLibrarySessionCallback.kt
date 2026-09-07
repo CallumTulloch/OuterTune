@@ -1,5 +1,9 @@
 package com.dd3boh.outertune.playback
 
+import com.dd3boh.outertune.utils.displayTitle
+import com.dd3boh.outertune.utils.displayName
+import com.dd3boh.outertune.utils.artistDisplayText
+
 import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
@@ -190,7 +194,7 @@ class MediaLibrarySessionCallback @Inject constructor(
                 MusicService.ARTIST -> database.artistsInLibraryAsc().first().map { artist ->
                     browsableMediaItem(
                         "${MusicService.ARTIST}/${artist.id}",
-                        artist.artist.name,
+                        artist.artist.displayName,
                         context.resources.getQuantityString(R.plurals.n_song, artist.songCount, artist.songCount),
                         artist.artist.thumbnailUrl?.toUri(),
                         MediaMetadata.MEDIA_TYPE_ARTIST
@@ -200,8 +204,8 @@ class MediaLibrarySessionCallback @Inject constructor(
                 MusicService.ALBUM -> database.albumsInLibraryAsc().first().map { album ->
                     browsableMediaItem(
                         "${MusicService.ALBUM}/${album.id}",
-                        album.album.title,
-                        album.artists.joinToString { it.name },
+                        album.album.displayTitle,
+                        album.artistDisplayText(),
                         album.album.thumbnailUrl?.toUri(),
                         MediaMetadata.MEDIA_TYPE_ALBUM
                     )
@@ -462,9 +466,9 @@ class MediaLibrarySessionCallback @Inject constructor(
             .setMediaId("$path/$id")
             .setMediaMetadata(
                 MediaMetadata.Builder()
-                    .setTitle(song.title)
-                    .setSubtitle(artists.joinToString { it.name })
-                    .setArtist(artists.joinToString { it.name })
+                    .setTitle(song.displayTitle)
+                    .setSubtitle(artistDisplayText())
+                    .setArtist(artistDisplayText())
                     .setArtworkUri(song.thumbnailUrl?.toUri())
                     .setIsPlayable(isPlayable)
                     .setIsBrowsable(isBrowsable)
@@ -480,11 +484,11 @@ class MediaLibrarySessionCallback @Inject constructor(
         .setTag(this)
         .setMediaMetadata(
            MediaMetadata.Builder()
-                .setTitle(title)
-                .setSubtitle(artists.joinToString { it.name })
-                .setArtist(artists.joinToString { it.name })
+                .setTitle(displayTitle)
+                .setSubtitle(artistDisplayText())
+                .setArtist(artistDisplayText())
                 .setArtworkUri(thumbnailUrl?.toUri())
-                .setAlbumTitle(album?.title)
+                .setAlbumTitle(album?.displayTitle)
                 .setIsPlayable(isPlayable)
                 .setIsBrowsable(isBrowsable)
                 .setMediaType(MEDIA_TYPE_MUSIC)

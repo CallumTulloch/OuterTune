@@ -1,4 +1,5 @@
 /*
+
  * Copyright (C) 2024 z-huang/InnerTune
  * Copyright (C) 2025 O‌ute‌rTu‌ne Project
  *
@@ -8,6 +9,8 @@
  */
 
 package com.dd3boh.outertune.ui.component.items
+
+import com.dd3boh.outertune.utils.displayTitle
 
 import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
@@ -333,7 +336,7 @@ fun MediaMetadataListItem(
     preferredSize: Int,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) = ListItem(
-    title = mediaMetadata.title,
+    title = mediaMetadata.displayTitle,
     subtitle = joinByBullet(
         rememberResolvedArtistMetadata(mediaMetadata).artistDisplayText(),
         makeTimeString(mediaMetadata.duration * 1000L)
@@ -455,7 +458,7 @@ fun YouTubeListItem(
     }
 
     ListItem(
-        title = item.title,
+        title = item.displayTitle,
         subtitle = subtitle,
         badges = badges,
         thumbnailContent = {
@@ -516,7 +519,7 @@ fun YouTubeGridItem(
 ) = GridItem(
     title = {
         Text(
-            text = item.title,
+            text = item.displayTitle,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
             maxLines = 2,
@@ -588,7 +591,7 @@ fun YouTubeGridItem(
                         withContext(Dispatchers.Main) {
                             playerConnection.playQueue(
                                 ListQueue(
-                                    title = item.title,
+                                    title = item.displayTitle,
                                     items = it
                                 )
                             )
@@ -651,7 +654,7 @@ fun YouTubeCardItem(
                 .padding(horizontal = 8.dp)
         ) {
             Text(
-                text = item.title,
+                text = item.displayTitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,

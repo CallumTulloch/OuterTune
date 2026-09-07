@@ -7,6 +7,8 @@ import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.displayAlbumTitle
+import com.dd3boh.outertune.utils.displayTitle
 import com.zionhuang.innertube.models.SongItem
 
 val MediaItem.metadata: MediaMetadata?
@@ -19,11 +21,11 @@ fun Song.toMediaItem() = MediaItem.Builder()
     .setTag(toMediaMetadata())
     .setMediaMetadata(
         androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(song.title)
+            .setTitle(song.displayTitle)
             .setSubtitle(artistDisplayText())
             .setArtist(artistDisplayText())
             .setArtworkUri(song.thumbnailUrl?.toUri())
-            .setAlbumTitle(song.albumName)
+            .setAlbumTitle(song.displayAlbumTitle)
             .setMediaType(MEDIA_TYPE_MUSIC)
             .build()
     )
@@ -36,11 +38,11 @@ fun SongItem.toMediaItem() = MediaItem.Builder()
     .setTag(toMediaMetadata())
     .setMediaMetadata(
         androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(title)
+            .setTitle(displayTitle)
             .setSubtitle(artistDisplayText())
             .setArtist(artistDisplayText())
             .setArtworkUri(thumbnail.toUri())
-            .setAlbumTitle(album?.name)
+            .setAlbumTitle(album?.displayTitle)
             .setMediaType(MEDIA_TYPE_MUSIC)
             .build()
     )
@@ -53,11 +55,11 @@ fun MediaMetadata.toMediaItem() = MediaItem.Builder()
     .setTag(this)
     .setMediaMetadata(
         androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(title)
+            .setTitle(displayTitle)
             .setSubtitle(artistDisplayText())
             .setArtist(artistDisplayText())
             .setArtworkUri(thumbnailUrl?.toUri())
-            .setAlbumTitle(album?.title)
+            .setAlbumTitle(if (isLocal) album?.title else album?.displayTitle)
             .setMediaType(MEDIA_TYPE_MUSIC)
             .build()
     )

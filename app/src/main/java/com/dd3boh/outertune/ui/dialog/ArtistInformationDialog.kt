@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.dialog
 
+import com.dd3boh.outertune.utils.displayName
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -77,7 +79,10 @@ fun ArtistInformationDialog(
                     }
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
-                Text(artist.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (resolved.isLocal) artist.name else artist.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
         }
     }

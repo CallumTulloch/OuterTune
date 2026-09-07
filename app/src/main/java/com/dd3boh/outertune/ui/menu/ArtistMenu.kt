@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.menu
 
+import com.dd3boh.outertune.utils.displayName
+
 import android.content.Intent
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -97,7 +99,7 @@ fun ArtistMenu(
 
                     playerConnection.playQueue(
                         ListQueue(
-                            title = artist.artist.name,
+                            title = artist.artist.displayName,
                             items = songs,
                             playlistId = playlistId
                         )
@@ -124,7 +126,7 @@ fun ArtistMenu(
 
                     playerConnection.playQueue(
                         ListQueue(
-                            title = artist.artist.name,
+                            title = artist.artist.displayName,
                             items = songs,
                             playlistId = playlistId
                         )

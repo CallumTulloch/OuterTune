@@ -21,10 +21,10 @@ data class AlbumPage(
     val otherVersions: List<AlbumItem>,
 ) {
     companion object {
-        fun getArtistCredit(response: BrowseResponse) = (
+        fun getArtistCredit(response: BrowseResponse, language: String = com.zionhuang.innertube.YouTube.locale.hl) = (
             getHeader(response)?.straplineTextOne?.runs
                 ?: response.header?.musicDetailHeaderRenderer?.subtitle?.runs?.splitBySeparator()?.getOrNull(1)
-            ).orEmpty().toArtistCredit("album-header", com.zionhuang.innertube.YouTube.locale.hl)
+            ).orEmpty().toArtistCredit("album-header", language)
 
         fun getPlaylistId(response: BrowseResponse): String? {
             var playlistId = response.microformat?.microformatDataRenderer?.urlCanonical?.substringAfterLast('=')
@@ -76,20 +76,20 @@ data class AlbumPage(
             return header
         }
 
-        fun getSongs(response: BrowseResponse, album: AlbumItem): List<SongItem> {
+        fun getSongs(response: BrowseResponse, album: AlbumItem, language: String = com.zionhuang.innertube.YouTube.locale.hl): List<SongItem> {
             val tabs = response.contents?.singleColumnBrowseResultsRenderer?.tabs ?: response.contents?.twoColumnBrowseResultsRenderer?.tabs
             val shelfRenderer = tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicShelfRenderer ?:
                 response.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents?.firstOrNull()?.musicShelfRenderer
 
             val songs = shelfRenderer?.contents?.getItems()?.mapNotNull {
-                getSong(it, album)
+                getSong(it, album, language = language)
             }
             return songs ?: emptyList()
         }
 
-        fun getSong(renderer: MusicResponsiveListItemRenderer, album: AlbumItem? = null): SongItem? {
+        fun getSong(renderer: MusicResponsiveListItemRenderer, album: AlbumItem? = null, language: String = com.zionhuang.innertube.YouTube.locale.hl): SongItem? {
             return SongItem(
-                    artistCredit = (PageHelper.artistRuns(renderer.flexColumns)).toArtistCredit("AlbumPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistCredit = (PageHelper.artistRuns(renderer.flexColumns)).toArtistCredit("AlbumPage", language).withVideoSource(renderer),
                     artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = PageHelper.extractRuns(renderer.flexColumns, "MUSIC_VIDEO").firstOrNull()?.text ?: return null,

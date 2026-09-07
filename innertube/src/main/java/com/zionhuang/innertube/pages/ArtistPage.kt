@@ -33,40 +33,40 @@ data class ArtistPage(
     val description: String?,
 ) {
     companion object {
-        fun fromSectionListRendererContent(content: SectionListRenderer.Content): ArtistSection? {
+        fun fromSectionListRendererContent(content: SectionListRenderer.Content, language: String = com.zionhuang.innertube.YouTube.locale.hl): ArtistSection? {
             return when {
-                content.musicShelfRenderer != null -> fromMusicShelfRenderer(content.musicShelfRenderer)
-                content.musicCarouselShelfRenderer != null -> fromMusicCarouselShelfRenderer(content.musicCarouselShelfRenderer)
+                content.musicShelfRenderer != null -> fromMusicShelfRenderer(content.musicShelfRenderer, language = language)
+                content.musicCarouselShelfRenderer != null -> fromMusicCarouselShelfRenderer(content.musicCarouselShelfRenderer, language = language)
                 else -> null
             }
         }
 
-        private fun fromMusicShelfRenderer(renderer: MusicShelfRenderer): ArtistSection? {
+        private fun fromMusicShelfRenderer(renderer: MusicShelfRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): ArtistSection? {
             return ArtistSection(
                 title = renderer.title?.runs?.firstOrNull()?.text ?: "",
                 items = renderer.contents?.getItems()?.mapNotNull {
-                    fromMusicResponsiveListItemRenderer(it)
+                    fromMusicResponsiveListItemRenderer(it, language = language)
                 }?.ifEmpty { null } ?: return null,
                 moreEndpoint = renderer.title?.runs?.firstOrNull()?.navigationEndpoint?.browseEndpoint
             )
         }
 
-        private fun fromMusicCarouselShelfRenderer(renderer: MusicCarouselShelfRenderer): ArtistSection? {
+        private fun fromMusicCarouselShelfRenderer(renderer: MusicCarouselShelfRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): ArtistSection? {
             return ArtistSection(
                 title = renderer.header?.musicCarouselShelfBasicHeaderRenderer?.title?.runs?.firstOrNull()?.text ?: return null,
                 items = renderer.contents.mapNotNull {
                     it.musicTwoRowItemRenderer?.let { renderer ->
-                        fromMusicTwoRowItemRenderer(renderer)
+                        fromMusicTwoRowItemRenderer(renderer, language = language)
                     }
                 }.ifEmpty { null } ?: return null,
                 moreEndpoint = renderer.header.musicCarouselShelfBasicHeaderRenderer.moreContentButton?.buttonRenderer?.navigationEndpoint?.browseEndpoint
             )
         }
 
-        private fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
+        private fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): SongItem? {
             val artistRuns = PageHelper.artistRuns(renderer.flexColumns)
             return SongItem(
-                artistCredit = (artistRuns).toArtistCredit("ArtistPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                artistCredit = (artistRuns).toArtistCredit("ArtistPage", language).withVideoSource(renderer),
                 artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()
@@ -94,11 +94,11 @@ data class ArtistPage(
             )
         }
 
-        private fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer): YTItem? {
+        private fun fromMusicTwoRowItemRenderer(renderer: MusicTwoRowItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
             return when {
                 renderer.isSong -> {
                     SongItem(
-                        artistCredit = (renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull().orEmpty()).toArtistCredit("ArtistPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                        artistCredit = (renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull().orEmpty()).toArtistCredit("ArtistPage", language).withVideoSource(renderer),
                         artistBrowseIds = renderer.menu.artistBrowseIds(),
                         id = renderer.navigationEndpoint.watchEndpoint?.videoId ?: return null,
                         title = renderer.title.runs?.firstOrNull()?.text ?: return null,
@@ -120,7 +120,7 @@ data class ArtistPage(
 
                 renderer.isAlbum -> {
                     AlbumItem(
-                        artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("ArtistPage", com.zionhuang.innertube.YouTube.locale.hl),
+                        artistCredit = (renderer.subtitle?.runs.orEmpty()).toAlbumArtistCredit("ArtistPage", language),
                         browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                         playlistId = renderer.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content
                             ?.musicPlayButtonRenderer?.playNavigationEndpoint

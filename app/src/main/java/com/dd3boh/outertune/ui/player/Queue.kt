@@ -9,6 +9,9 @@
 
 package com.dd3boh.outertune.ui.player
 
+import androidx.compose.runtime.derivedStateOf
+import com.dd3boh.outertune.utils.matchesMetadataQuery
+
 import android.content.res.Configuration
 import android.util.Log
 import androidx.activity.compose.BackHandler
@@ -105,7 +108,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.fastAny
 import androidx.media3.common.Player.REPEAT_MODE_ALL
 import androidx.media3.common.Player.REPEAT_MODE_OFF
 import androidx.media3.common.Player.REPEAT_MODE_ONE
@@ -337,11 +339,10 @@ fun BoxScope.QueueContent(
     var searchQuery by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue())
     }
-    val filteredSongs = remember(mutableSongs, searchQuery) {
-        if (searchQuery.text.isEmpty()) mutableSongs
-        else mutableSongs.filter { song ->
-            song.title.contains(searchQuery.text, ignoreCase = true)
-                    || song.artists.fastAny { it.name.contains(searchQuery.text, ignoreCase = true) }
+    val filteredSongs by remember(mutableSongs, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.text.isEmpty()) mutableSongs.toList()
+            else mutableSongs.filter { song -> song.matchesMetadataQuery(searchQuery.text) }
         }
     }
     val focusRequester = remember { FocusRequester() }

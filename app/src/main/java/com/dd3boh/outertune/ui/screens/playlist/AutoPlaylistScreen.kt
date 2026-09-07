@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.screens.playlist
 
+import com.dd3boh.outertune.utils.matchesMetadataQuery
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -78,7 +80,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastSumBy
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.media3.exoplayer.offline.Download
@@ -180,12 +181,10 @@ fun AutoPlaylistScreen(
     var searchQuery by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue())
     }
-    val filteredSongs = remember(songs, searchQuery) {
-        if (searchQuery.text.isEmpty()) songs
-        else songs.filter { song ->
-            song.song.title.contains(searchQuery.text, ignoreCase = true) || song.artists.fastAny {
-                it.name.contains(searchQuery.text, ignoreCase = true)
-            }
+    val filteredSongs by remember(songs, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.text.isEmpty()) songs
+            else songs.filter { song -> song.toMediaMetadata().matchesMetadataQuery(searchQuery.text) }
         }
     }
     val focusRequester = remember { FocusRequester() }

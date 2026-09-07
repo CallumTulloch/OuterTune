@@ -1,4 +1,5 @@
 /*
+
  * Copyright (C) 2024 z-huang/InnerTune
  * Copyright (C) 2025 O﻿ute﻿rTu﻿ne Project
  *
@@ -8,6 +9,8 @@
  */
 
 package com.dd3boh.outertune.ui.player
+
+import com.dd3boh.outertune.utils.displayTitle
 
 import android.annotation.SuppressLint
 import androidx.compose.animation.fadeIn
@@ -249,7 +252,7 @@ fun MiniMediaInfo(
                 .padding(horizontal = 6.dp)
         ) {
             Text(
-                text = mediaMetadata.title,
+                text = mediaMetadata.displayTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,

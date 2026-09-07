@@ -1,6 +1,94 @@
 # 曲・アルバム・アーティスト情報の取得言語：調査と改修案
 
+## 追加実装：アルバムの原表記からの動的判定（2026-09-07）
+
+- 再依頼：特定曲だけ切り替わる実装を続けて改修し、画像・アルバム人物の反映遅延も確認する。後者は`2026-09-07-artist-image-persistence.md`に記録する。従来の未コミット差分を保持する。
+- ユーザー追加確認：日本の曲でも正式な英語タイトルは英語のまま使う。短い名前だけで判定できない場合は、アルバムを判断材料に適用する。これを受け、同一アルバムの各曲の原題を確認し、原題群の言語判定を短い曲名・アルバム名・人物名の補助に使う。国籍・歌唱言語を判断材料にしない。
+- 固定のNirvana3名称リストを削除し、既存の無version証拠JSONも自動的に確認済みへ昇格しない。英語・設定言語の名称キャッシュは保持する。
+- 同一videoIdのMusic `MUSIC_VIDEO_TYPE_ATV` とMain `videoDetails.title`を照合する。Mainの構造化された自動生成descriptionに限り、既知のMusic人物クレジット全文／アルバム名の一致で、その既存IDに対応する原表記も保存する。区切りから新しい人物IDを作らず、Topic作者名をクレジットへ転用しない。
+- 保存済みアルバムは、正規album APIの曲目を名前キャッシュへ補完する。収録曲の音声ダウンロードやライブラリ登録は増やさない。検索結果を見ただけで関連アルバム全件へ再帰しない。
+- 端末内のBSDモデル`langid-java:1.0.0`で元の表記と小文字化した入力を評価する。同一アルバムに直接対応する異なる曲IDの原題3件以上を使用し、双方で英語の確度が高い場合に短い名前を補う。明らかな非Latin原題、双方で強く一致した複数語の非英語原題は個別に保持。数字・記号だけの名称は不明とする。
+- 評価は自動推定であり、人による確認済み根拠とは区別する。原表記・対象ID・引用videoId/URL・判断方法・確度・入力指紋・評価時刻・形式/判定器versionをDBへ保存し、表示選択が読み取る。元情報・別名は残す。原題が増えた場合／判定器更新時には保存済み原題から再評価する。旧Main取得期限とは分離してv2の原情報を補完する。
+- 原表記の根拠はsource動画ごとの最新取得snapshotに限定する。正常取得の曲原題と同時刻の人物・アルバム候補だけを採用し、次の取得結果から消えた関連候補を表示判断へ残さない。古い候補も検索別名としては保持する。公開Mainの取得履歴と、認証情報を使うalbum全曲取得履歴のキーを分離した。
+- 実測時、単曲の短い文字列は言語誤判定が多かった（Nevermind13題中、単独で英語確度0.8超は3題、小文字化して4題）。13題の原題群は英語1.0。記録は`build/original-language-model-probe/results.md`と`langid-results.jsonl`。アルバム文脈でも、英語中心のアルバムに混ざる曖昧な外国語の短題まで常に正しく識別できる保証はない。不明／競合は設定言語を維持する。
+- 参考：原表記の所在は[YouTubeのArt Track仕様](https://support.google.com/youtube/answer/4443834?hl=en)、モデルは[langid-java](https://github.com/carrotsearch/langid-java)。同梱モデルのライセンス文をアプリassetsへ追加し、相対リソース読込み用の難読化規則を追加した。ML Kitも検討したが、本番には採用せず依存を残していない。
+- 最終確認は直下の表を参照。後半の固定3名称実装・198件などは以前の段階の記録であり、現在の最終結果ではない。
+
+### 最終確認と引き渡し（2026-09-07）
+
+対象はHEAD `d919963e`に今回の未コミット差分を加えたソース。ユーザーから配布版の動作確認は自身で行うこと、およびcommit・pushの依頼を受けた。以後の配布版端末確認は中止した。
+
+| 確認 | 結果 |
+| --- | --- |
+| 単体・ビルド | PASS。`:app:testCoreDebugUnitTest :app:assembleCoreDebugAndroidTest :app:assembleCoreDebug :app:assembleCoreRelease`、3分15秒。単体239件成功（本体約1.715秒）。`build/original-album-artwork-scoped-final.log`。Gradleの依存解決はその実行だけWindows-ROOT truststoreを指定し、TLS検証を維持した。 |
+| 最終端末テスト | PASS。7クラス26件、3.818秒。MetadataNames DB6、ArtistCredit DB6、実Repository表示統合1、ArtistImage DB1・Repository4、AlbumMetadata Repository6、AlbumOriginalContextEligibility2。`build/original-album-artwork-scoped-final-instrumentation.log`。 |
+| 原題の動的判定 | PASS。固定ID判定を注入せず、13曲の日英名・配信原題を投入して実Repositoryと同梱モデルが判定。OFF→ONで全13曲が英語、OFFで日本語優先へ戻り、日英の曲名・人物名の検索が可能。rawタイトル不変。 |
+| 実ダウンロード・DB | PASS、最終debugの新規データで実行。曲`ljUtuoFt-8c`のdateDownloadは完了時刻、アルバム人物creditは正規headerからCOMPLETE、album_artist_mapは元の人物ID、画像URLあり。アルバム未開封・再起動前の一覧に人物名と画像が出る。`build/original-album-ui/final-debug-unopened-library.png`、`final-debug-unopened/compact.json`。 |
+| 自動補完の範囲 | PASS。同じ実DBでfull album contextの取得成功はNevermind1枚のみ。13曲すべてにen/ja/undとENGLISH判定を保存。キュー保存だけの他アルバムを全曲展開しない。 |
+| 配布版 | core-release / arm64-v8a生成成功。起動・検索画面表示を確認。オンライン取得は既知のPC通信検査証明書で`Trust anchor for certification path not found`となりBLOCKED。配布版の原表記切替・R8後のモデル実行・再起動後表示は未確認。ユーザーが確認を引き受けたため、準備中だったオフライン復元確認も中止。 |
+
+途中のsnapshot失効修正後、表示統合テスト1件がタイムアウトした。fixtureが同一応答の曲・人物に別々の観測時刻を付けていたためで、実取得と同じ一つの時刻に揃え、最終26件で成功を確認した。最終debugの音声取得では一度失敗して再試行で完了した。ネットワークの一時失敗と、名称・画像・人物関係の保存を分けて確認している。
+
+最終APKのSHA-256：
+
+- core-debug / arm64-v8a：`d3ca29685b213001256bf36631873b3abfc0597f2e0fa95b57b073fbeff9d850`
+- core-release / arm64-v8a：`771cf66136db9dafaa27fbcf11bd49016fa620b1083a75d46400f680daa599d7`
+
+配布APKは`app/build/outputs/apk/core/release/OuterTune-0.10.2-b1-core-arm64-v8a-release-71.apk`。一時AVD `Pixel_9_API_35`（emulator-5554、read-only/no-snapshot-save）は終了し、元の状態を保ったまま解放した。実データでの再起動後画像表示の追加確認も未実施で、DB再オープン・失敗保持は自動テストで確認済み。配布版の確認はユーザーへ引き渡す。
+
+### 実ダウンロードでの追加発見
+
+一時AVDのデータを初期化し、Welcomeスキップ→オンライン検索→曲フィルター→先頭の対象曲を再生→プレーヤーメニューからダウンロード→ライブラリ、の順で確認した。対象は`ljUtuoFt-8c`、アルバム`MPREb_jPOYfjGgApr`、人物`UCrPe3hLA51968GwxHSZ1llw`。アルバム詳細未開封・プロセス再起動なしでアルバム人物名と画像が反映された。`build/original-album-ui/live-library-unopened.png`、`live-artist-list.png`、`live-before-album-open/summary.json`に証跡を保存。これは最新snapshot失効修正前の途中debugでのOBSERVEDであり、最終確認と区別する。
+
+同じsnapshotで、検索結果28曲を再生キューへ保存する既存処理が26件のアルバム仮行を作り、仮行の存在だけで全曲原表記を補完すると482曲まで展開することも分かった。未保存のalbum IDへ直接再帰する処理ではないが、キュー用仮行を利用者の登録済みアルバムと同一視していた。自動全曲補完はブックマーク、ライブラリ登録曲、ダウンロード中・完了曲を持つアルバムへ限定する。通常の日英名称補完と、実際に開いたアルバム画面からの名称取得は維持する。
+
+## 承認後の実装・検証（2026-09-07）
+
+ユーザーの「はい，その方針で行きたいと思います」を受けて実装を開始した。着手時HEADは`d919963e`、調査時の未コミット差分はコミット済みで作業ツリーはクリーンだった。以下の調査記録は根拠として維持する。
+
+- 名前を曲・アルバム・人物の安定IDに紐付け、英語と設定言語、同一言語の複数表記、取得元を独立したDBキャッシュへ保持する。検索結果のキャッシュ保存だけでライブラリには登録しない。
+- DBは24へ更新。既存移行不要の条件と開発再開時の初期化方針を維持し、schema JSONを同時生成する。
+- 全読取応答と全DB保存経路を補完対象にし、要求locale固定・日英検索・言語別継続ページ・失敗保持・再試行を接続する。
+- 表示は共通の読み出し処理へ集約。Rawクレジット・DB上の原情報・人物関係・再生URIを表示文字列で上書きしない。手動改名は自動選択より優先する。
+- 設定は承認済みの一項目・初期OFF。原表記根拠は対象IDごとに独立し、未確認を英語と推測しない。初期の確認済み根拠は今回裏取りしたNirvanaの3名称であり、カタログ全件の自動認定ではない。Main Art Trackの原曲名候補は取得できても未判定のまま保存する。
+- 検証完了：アプリ単体198件成功、innertubeは56件中43件成功・13件skip。Room schema 24を生成済み。端末DB照合で見つかった同一名称の優先度降格も修正し、最終版で端末テスト13件が成功した。
+- 検証端末：既存`Pixel_9_API_35`を`-read-only -no-window -no-audio -no-snapshot-save`で起動。端末ID`emulator-5554`、対応ABI`x86_64,arm64-v8a`。元のAVDに保存状態を書き戻さず、検証後に終了して操作を解放した。
+
+### 実装内容と検証結果
+
+- `MetadataNameRepository`がAPI応答およびDB保存済み対象から補完を起動する。英語＋設定言語を安定IDで照合し、曲は同条件で最大50件にまとめる。補完結果からの再帰的な関連人物取得を抑止する。取得状態は言語・地域・認証条件ごとに保存し、失敗・空応答で既存名を消さない。
+- `BilingualSearch`が設定言語と英語の概要・絞り込み・候補・続きの検索を扱う。片側失敗でも成功結果と再試行対象を保持する。継続情報は明示したJSON形式で検証・復元し、ロケール／認証変更時の古い結果を破棄する。
+- `metadata_target`、`metadata_name`、`metadata_fetch`を追加。ローカル検索は別名を`EXISTS`で参照し、登録済み範囲と重複防止を維持する。表示には共通選択を使用し、手動タイトルと端末内タグは自動表示より優先する。
+- 原表記の確認根拠は曲・アルバム・人物のID別に管理する。Main Art Trackから得た原題候補は`und`・未確認として保存し、その取得成功だけで英語と認定しない。確認済みカタログはNirvana関連の3 IDのみ。一般作品を網羅する自動原言語判定やMusicBrainzの常時照合は未実装。
+
+| 確認 | 結果・証跡 |
+| --- | --- |
+| 単体・ビルド | `:innertube:test :app:testCoreDebugUnitTest :app:assembleCoreDebugAndroidTest :app:assembleCoreDebug`成功、32秒。アプリ198件成功、innertube 43件成功・13件skip。`build/metadata-language-verified-check.log`。 |
+| Room・検索 | `MetadataNamesDatabaseTest`5件、既存`ArtistCreditDatabaseTest`6件成功。同一言語の別表記、取得条件、失敗保持、参照整合、保存済み範囲、別名追加時の検索更新を確認。 |
+| 実アプリとの接続 | `MetadataLanguageIntegrationTest`1件成功、0.488秒。英語／日本語名をDB保存し、既定OFF→ON→OFF、両言語の曲名／人物名検索、rawタイトル保持を確認。`build/metadata-language-integration-device.log`。 |
+| オフライン画面 | 日本語のアプリ表示＋コンテンツ言語で開始。設定の追加項目はコンテンツ言語の直下・初期OFF。曲一覧は「スメルズ・ライク・ティーン・スピリット／ニルヴァーナ」、ONで「Smells Like Teen Spirit／Nirvana」。プロセス再起動後もONを維持。ローカル検索`nirvan`で同じ曲・人物がヒット。 |
+| オンライン実応答 | 端末の通信を戻し、`nirvan`をオンライン検索。対象曲・アルバム・人物のen/ja取得状態がすべてSUCCESS。Mainの原題候補も独立してSUCCESS。検索・曲一覧・プレーヤーで共通表記を確認。 |
+| 再生中の切替 | 対象曲を実再生し、ON→OFF。MediaSessionはPLAYINGを維持し、位置73,290ms→76,291ms。通知メタデータは英語→日本語、アルバムNevermindを保持。曲・人物IDも不変。 |
+| 詳細画面 | OFFでライブラリの人物名・アルバムの人物名・アルバム詳細・人物詳細が「ニルヴァーナ」に一致。アルバム→人物の遷移、人物ヘッダー画像を確認。 |
+| 実DB照合 | `build/metadata-language-ui/database-evidence.json`。対象曲のrawタイトルは英語のまま、人物関係は元ID1件。en/ja/undと取得元別の行を保持。画面・階層は同フォルダのPNG/XML。 |
+
+途中の問題として、継続情報のserializer未生成は明示JSON形式へ変更し、debug端末テストのHilt接続はdebug source setのEntryPointで修正した。テスト用接続はreleaseには含めない。
+
+最後に、同じ名称の詳細応答（優先度100）が後着の埋め込み表記（20）で降格する問題を修正した。同一キーでは最大優先度・最新観測時刻・非null根拠を維持し、同一バッチ／別送・順序を逆にした4条件をDBテスト1件に追加。最終ソースで`:app:testCoreDebugUnitTest :app:assembleCoreDebugAndroidTest :app:assembleCoreDebug`成功（1分47秒、アプリ198件成功）。同じ3クラスの端末テストを再実行して13件すべて成功（1.935秒）。ログは`build/metadata-language-priority-check.log`と`build/metadata-language-final-device-tests.log`。更新APKの再起動後も人物詳細とプレーヤーの日本語表記を確認した（`final-songs-ja.png`は復元された人物詳細画面）。前表の詳細なオンライン操作はこのDAO修正前に行った確認として区別する。
+
+検証はクリーンな一時debugアプリに名称を保存するところから始め、その後は実サービスの検索・補完・再生・詳細表示を使用した。音声ダウンロード完了・ログインアカウント切替の実機操作・release縮小後の動作は今回の確認範囲に含まない。通常UI要求の認証条件はobserver通知時点で取得し、HTTP開始時点まで完全に固定する改修は含まない（補完要求は送信前・保存前に再確認）。
+
+検証用APKはcore-debug / arm64-v8a。配布用core-releaseは今回未作成。差分は未コミットのまま保持し、並行作業で変更された`AnchorDraggable.kt`は本課題で編集しない。
+
+最終検証APK：`app/build/outputs/apk/core/debug/OuterTune-0.10.2-b1-core-arm64-v8a-debug-71.apk`、SHA-256 `569377c8567b5aaf5ff345d1a220e8c89c61ca78a8592e9ca344aa3665663e28`。ZIP内のネイティブABIがarm64-v8aのみであることを確認。詳細オンライン操作時の途中APKはSHA-256 `7280d35ebd5ac8818d46023f696ddec9b773330c5732270c11c87826c777d6c1`で、最終APKと混同しない。`git diff --check`も成功。
+
 ## 現在の希望と推奨方針（最新の相談を反映）
+
+### 実装後の指摘：同じアルバム内の日本語・英語混在
+
+2026-09-07、ユーザーから「Smells Like Teen Spirit以外の同アルバム曲が日本語で、一部だけ英語は不自然」と指摘された。実装と先の検証端末から保存したDBを再照合した（ユーザー端末のDBを直接確認したものではない）。Nevermindの13曲すべてにen/ja/undの名称があり、`In Bloom`、`Come As You Are`、`Lithium`等の英語名も取得済みだった。
+
+原因は取得漏れではなく、`ReviewedOriginalNameEvidenceSource`の確認済みリストに曲として1 ID（`ljUtuoFt-8c`）しか登録していないこと。他の曲は`OriginalNamePolicy`の`ORIGINAL_UNCONFIRMED`となり、ONでも設定言語を使用する。アルバム名・人物名の確認は個別対象なので他曲へ波及しない。二言語の取得・保持と共通表示の基盤は動くが、任意の曲の原表記を確認・判定する機能は未完成であり、個別の確認済み3名称だけで利用者の期待する全体挙動を満たしたとは扱わない。固定リストを一曲ずつ増やすことではなく、原表記の根拠を取得・照合して各曲に判定結果を保持する経路が必要。今回の再確認ではアプリコード・設定は変更していない。
 
 2026-09-07。今回も調査と方針説明であり、アプリの実装は変更しない。対象はHEAD `4def7ed10c8862e17c1e2948a4fc17c57d84510e` と未コミット差分。以下を現在の希望として扱い、後半の初期相談の国・地域別ルールより優先する。
 

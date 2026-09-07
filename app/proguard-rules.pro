@@ -85,6 +85,8 @@
 }
 
 ## OuterTune required modules
+# Model loads its bundled langid.lzma with a class-relative resource path.
+-keepnames class com.carrotsearch.labs.langid.Model
 -keep class wah.mikooomich.ffMetadataEx.** { *; }
 -keep class com.kyant.taglib.** { *; }
 

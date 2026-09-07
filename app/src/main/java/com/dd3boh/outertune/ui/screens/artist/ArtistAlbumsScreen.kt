@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.screens.artist
 
+import com.dd3boh.outertune.utils.displayName
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
@@ -133,7 +135,7 @@ fun ArtistAlbumsScreen(
         }
 
         TopAppBar(
-            title = { Text(artist?.artist?.name.orEmpty()) },
+            title = { Text(artist?.artist?.displayName.orEmpty()) },
             navigationIcon = {
                 IconButton(
                     onClick = navController::navigateUp,

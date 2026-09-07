@@ -49,7 +49,7 @@ class ArtistCreditDatabaseTest {
             InternalDatabase.newTestInstance(context, filename).let { database ->
                 try {
                     assertNull(database.song(songId).first())
-                    assertEquals(23, database.openHelper.readableDatabase.version)
+                    assertEquals(MusicDatabase.MUSIC_DATABASE_VERSION, database.openHelper.readableDatabase.version)
                     database.openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE name = 'old_artist_test'").use {
                         assertFalse(it.moveToFirst())
                     }

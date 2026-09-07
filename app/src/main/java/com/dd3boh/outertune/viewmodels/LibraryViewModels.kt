@@ -71,7 +71,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.Duration
 import java.time.LocalDateTime
 import javax.inject.Inject
 
@@ -235,32 +234,7 @@ class LibraryArtistsViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) { syncUtils.refreshLibrary() }
     }
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
-            allArtists.collect { artists ->
-                artists
-                    ?.map { it.artist }
-                    ?.filter {
-                        it.onlineArtistId != null && (it.thumbnailUrl == null || Duration.between(
-                            it.lastUpdateTime,
-                            LocalDateTime.now()
-                        ) > Duration.ofDays(10))
-                    }
-                    ?.forEach { artist ->
-                        val onlineId = artist.onlineArtistId ?: return@forEach
-                        YouTube.artist(onlineId).onSuccess { artistPage ->
-                            database.query {
-                                update(artist.copy(
-                                    thumbnailUrl = artistPage.artist.thumbnail,
-                                    channelId = artistPage.artist.channelId,
-                                    lastUpdateTime = LocalDateTime.now(),
-                                ))
-                            }
-                        }
-                    }
-            }
-        }
-    }
+    // Saved artist images are repaired by the application-scoped ArtistImageRepository.
 }
 
 @HiltViewModel

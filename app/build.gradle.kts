@@ -206,6 +206,7 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.hilt.navigation)
     implementation(libs.datastore)
+    implementation(libs.langid.java)
 
     // compose
     implementation(libs.compose.runtime)

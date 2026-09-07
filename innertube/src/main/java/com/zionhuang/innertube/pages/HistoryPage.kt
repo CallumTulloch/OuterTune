@@ -21,18 +21,18 @@ data class HistoryPage(
     )
 
     companion object {
-        fun fromMusicShelfRenderer(renderer: MusicShelfRenderer): HistorySection {
+        fun fromMusicShelfRenderer(renderer: MusicShelfRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): HistorySection {
             return HistorySection(
                 title = renderer.title?.runs?.firstOrNull()?.text!!,
                 songs = renderer.contents?.getItems()?.mapNotNull {
-                    fromMusicResponsiveListItemRenderer(it)
+                    fromMusicResponsiveListItemRenderer(it, language = language)
                 }!!
             )
         }
 
-        private fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer): SongItem? {
+        private fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): SongItem? {
             return SongItem(
-                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("HistoryPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toArtistCredit("HistoryPage", language).withVideoSource(renderer),
                     artistBrowseIds = renderer.menu.artistBrowseIds(),
                 id = renderer.playlistItemData?.videoId ?: return null,
                 title = renderer.flexColumns.firstOrNull()

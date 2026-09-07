@@ -47,6 +47,10 @@ import com.dd3boh.outertune.utils.LocalArtworkPathKeyer
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.get
 import com.dd3boh.outertune.utils.reportException
+import com.dd3boh.outertune.repositories.MetadataNameRepository
+import com.dd3boh.outertune.repositories.ArtistImageRepository
+import com.dd3boh.outertune.repositories.AlbumMetadataRepository
+import javax.inject.Inject
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.kugou.KuGou
@@ -65,6 +69,9 @@ import java.util.Locale
 @HiltAndroidApp
 class App : Application(), SingletonImageLoader.Factory {
     private val TAG = App::class.simpleName.toString()
+    @Inject lateinit var metadataNames: MetadataNameRepository
+    @Inject lateinit var artistImages: ArtistImageRepository
+    @Inject lateinit var albumMetadata: AlbumMetadataRepository
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
@@ -106,6 +113,10 @@ class App : Application(), SingletonImageLoader.Factory {
         if (dataStore[UseLoginForBrowse] != false) {
             YouTube.useLoginForBrowse = true
         }
+
+        albumMetadata.start()
+        metadataNames.start()
+        artistImages.start()
 
         GlobalScope.launch {
             dataStore.data

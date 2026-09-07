@@ -193,6 +193,56 @@ class OnlineSearchViewModelTest {
         assertTrue(f.categories.isEmpty())
     }
 
+    @Test
+    fun `content settings change reloads the current category and invalidates its previous pagination`() = fixture { f ->
+        f.vm.filter.value = FILTER_SONG
+        f.start("Nirvana")
+        f.finishCategory("old", continuation = "old-next")
+        f.vm.loadMore()
+        f.run()
+        assertTrue(f.configurationChanges.tryEmit(Unit))
+        f.run()
+
+        assertTrue(f.continuations.single().cancelled)
+        assertTrue(f.vm.viewStateMap.isEmpty())
+        assertEquals("Nirvana", f.categories.last().query)
+        assertEquals(FILTER_SONG, f.vm.filter.value)
+        f.finishCategory("new")
+        assertEquals(listOf("new"), f.categoryIds(FILTER_SONG))
+    }
+
+    @Test
+    fun `settings change while inactive clears cached language but waits to request until reactivated`() = fixture { f ->
+        f.start("Nirvana")
+        f.finishSummary("old-language")
+        f.vm.setSearchActive(false)
+        f.run()
+        assertTrue(f.configurationChanges.tryEmit(Unit))
+        f.run()
+        assertNull(f.vm.summaryPage)
+        assertEquals(1, f.summaries.size)
+        f.vm.setSearchActive(true)
+        f.run()
+        assertEquals(2, f.summaries.size)
+    }
+
+    @Test
+    fun `return to a partial summary retries its missing language while retaining visible success`() = fixture { f ->
+        f.start("Nirvana")
+        f.finishSummary("successful-language")
+        f.summaryNeedsRetry = true
+        f.vm.filter.value = FILTER_SONG
+        f.run()
+        f.finishCategory("song")
+        f.vm.filter.value = null
+        f.run()
+        assertEquals(2, f.summaries.size)
+        assertEquals("successful-language", f.vm.summaryPage!!.summaries.single().items.single().id)
+        f.summaryNeedsRetry = false
+        f.finishSummary("both-languages")
+        assertEquals("both-languages", f.vm.summaryPage!!.summaries.single().items.single().id)
+    }
+
     private fun fixture(test: (Fixture) -> Unit) {
         val fixture = Fixture()
         try {
@@ -211,6 +261,8 @@ class OnlineSearchViewModelTest {
         val continuations = mutableListOf<Pending<SearchResult>>()
         val failures = mutableListOf<Throwable>()
         val creditUpdates = MutableSharedFlow<String>(extraBufferCapacity = 4)
+        val configurationChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+        var summaryNeedsRetry = false
         val enrichedTitles = mutableMapOf<String, String>()
         val vm = OnlineSearchViewModel(
             initialQuery = "",
@@ -219,6 +271,8 @@ class OnlineSearchViewModelTest {
                 searchSummary = { query -> Pending<SearchSummaryPage>(query).also(summaries::add).await() },
                 search = { query, filter -> Pending<SearchResult>(query, filter).also(categories::add).await() },
                 searchContinuation = { token -> Pending<SearchResult>(token).also(continuations::add).await() },
+                configurationChanges = configurationChanges,
+                summaryNeedsRetry = { summaryNeedsRetry },
                 creditUpdates = creditUpdates,
                 withCredit = { song -> song.copy(title = enrichedTitles[song.id] ?: song.title) },
                 onFailure = { failures += it },

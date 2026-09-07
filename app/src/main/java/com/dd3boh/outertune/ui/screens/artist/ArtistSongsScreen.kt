@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.screens.artist
 
+import com.dd3boh.outertune.utils.displayName
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -162,7 +164,7 @@ fun ArtistSongsScreen(
                                     action = {
                                         playerConnection.playQueue(
                                             ListQueue(
-                                                title = artist?.artist?.name,
+                                                title = artist?.artist?.displayName,
                                                 items = songs.map { it.toMediaMetadata() },
                                                 startShuffled = true,
                                                 playlistId = null,
@@ -210,7 +212,7 @@ fun ArtistSongsScreen(
                             withContext(Dispatchers.Main) {
                                 playerConnection.playQueue(
                                     ListQueue(
-                                        title = artist?.artist?.name,
+                                        title = artist?.artist?.displayName,
                                         items = songs.map { it.toMediaMetadata() },
                                         startIndex = index,
                                         playlistId = playlistId
@@ -230,7 +232,7 @@ fun ArtistSongsScreen(
         )
 
         TopAppBar(
-            title = { Text(artist?.artist?.name.orEmpty()) },
+            title = { Text(artist?.artist?.displayName.orEmpty()) },
             navigationIcon = {
                 IconButton(
                     onClick = navController::navigateUp,

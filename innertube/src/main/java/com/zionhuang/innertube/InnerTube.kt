@@ -31,6 +31,7 @@ class InnerTube {
     private var httpClient = createClient()
     private val visitorDataByClient = mutableMapOf<String, String>()
 
+    @Volatile
     var locale = YouTubeLocale(
         gl = Locale.getDefault().country,
         hl = Locale.getDefault().toLanguageTag()
@@ -110,12 +111,13 @@ class InnerTube {
         query: String? = null,
         params: String? = null,
         continuation: String? = null,
+        requestLocale: YouTubeLocale = locale,
     ) = httpClient.post("search") {
         ytClient(client, setLogin = useLoginForBrowse)
         setBody(
             SearchBody(
                 context = client.toContext(
-                    locale,
+                    requestLocale,
                     visitorData,
                     if (useLoginForBrowse) dataSyncId else null
                 ),
@@ -133,11 +135,12 @@ class InnerTube {
         playlistId: String?,
         signatureTimestamp: Int?,
         webPlayerPot: String?,
+        requestLocale: YouTubeLocale = locale,
     ): HttpResponse {
         val playerVisitorData = if (client.requiresFreshVisitorData) {
             visitorDataByClient[client.clientName] ?: httpClient.post("${client.apiUrl}visitor_id") {
                 ytClient(client)
-                setBody(VisitorBody(client.toContext(locale, null, null)))
+                setBody(VisitorBody(client.toContext(requestLocale, null, null)))
             }.body<VisitorResponse>().responseContext.visitorData?.also {
                 visitorDataByClient[client.clientName] = it
             }
@@ -154,7 +157,7 @@ class InnerTube {
             ytClient(client, setLogin = true)
             setBody(
                 PlayerBody(
-                    context = client.toContext(locale, playerVisitorData, dataSyncId).let {
+                    context = client.toContext(requestLocale, playerVisitorData, dataSyncId).let {
                     if (client.isEmbedded) {
                         it.copy(
                             thirdParty = Context.ThirdParty(
@@ -181,6 +184,22 @@ class InnerTube {
         }
     }
 
+    /** Public Main YouTube metadata; keep this separate from playback clients and credentials. */
+    suspend fun artTrackOriginalMetadata(
+        videoId: String,
+        requestLocale: YouTubeLocale = locale,
+    ) = httpClient.post("${YouTubeClient.API_URL_YOUTUBE}player") {
+        val client = YouTubeClient.WEB.copy(sendMusicHeaders = false)
+        ytClient(client)
+        setBody(
+            PlayerBody(
+                context = client.toContext(requestLocale, null, null),
+                videoId = videoId,
+                playlistId = null,
+            )
+        )
+    }
+
     suspend fun registerPlayback(
         url: String,
         cpn: String,
@@ -204,12 +223,13 @@ class InnerTube {
         params: String? = null,
         continuation: String? = null,
         setLogin: Boolean = false,
+        requestLocale: YouTubeLocale = locale,
     ) = httpClient.post("browse") {
         ytClient(client, setLogin = setLogin || useLoginForBrowse)
         setBody(
             BrowseBody(
                 context = client.toContext(
-                    locale,
+                    requestLocale,
                     visitorData,
                     if (setLogin || useLoginForBrowse) dataSyncId else null
                 ),
@@ -228,11 +248,12 @@ class InnerTube {
         index: Int?,
         params: String?,
         continuation: String? = null,
+        requestLocale: YouTubeLocale = locale,
     ) = httpClient.post("next") {
         ytClient(client, setLogin = true)
         setBody(
             NextBody(
-                context = client.toContext(locale, visitorData, dataSyncId),
+                context = client.toContext(requestLocale, visitorData, dataSyncId),
                 videoId = videoId,
                 playlistId = playlistId,
                 playlistSetVideoId = playlistSetVideoId,
@@ -246,11 +267,12 @@ class InnerTube {
     suspend fun getSearchSuggestions(
         client: YouTubeClient,
         input: String,
+        requestLocale: YouTubeLocale = locale,
     ) = httpClient.post("music/get_search_suggestions") {
         ytClient(client)
         setBody(
             GetSearchSuggestionsBody(
-                context = client.toContext(locale, visitorData, null),
+                context = client.toContext(requestLocale, visitorData, null),
                 input = input
             )
         )
@@ -260,11 +282,12 @@ class InnerTube {
         client: YouTubeClient,
         videoIds: List<String>?,
         playlistId: String?,
+        requestLocale: YouTubeLocale = locale,
     ) = httpClient.post("music/get_queue") {
         ytClient(client)
         setBody(
             GetQueueBody(
-                context = client.toContext(locale, visitorData, null),
+                context = client.toContext(requestLocale, visitorData, null),
                 videoIds = videoIds,
                 playlistId = playlistId
             )
@@ -274,6 +297,7 @@ class InnerTube {
     suspend fun getTranscript(
         client: YouTubeClient,
         videoId: String,
+        requestLocale: YouTubeLocale = locale,
     ) = httpClient.post("https://music.youtube.com/youtubei/v1/get_transcript") {
         parameter("key", "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX3")
         headers {
@@ -281,7 +305,7 @@ class InnerTube {
         }
         setBody(
             GetTranscriptBody(
-                context = client.toContext(locale, null, null),
+                context = client.toContext(requestLocale, null, null),
                 params = "\n${11.toChar()}$videoId".encodeBase64()
             )
         )

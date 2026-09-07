@@ -97,6 +97,7 @@ class HomeViewModel @Inject constructor(
                     val items = mutableListOf<YTItem>()
                     val onlineId = it.artist.onlineArtistId ?: return@mapNotNull null
                     YouTube.artist(onlineId).onSuccess { page ->
+                        if (page.artist.id == onlineId) database.awaitTransaction { saveArtistProfile(page.artist) }
                         items += page.sections.getOrNull(page.sections.size - 2)?.items.orEmpty()
                         items += page.sections.lastOrNull()?.items.orEmpty()
                     }

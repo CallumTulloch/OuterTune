@@ -10,6 +10,7 @@ import com.zionhuang.innertube.models.merge
 import com.zionhuang.innertube.models.Run
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.ArtistItem
+import com.zionhuang.innertube.models.ArtTrackOriginalMetadata
 import com.zionhuang.innertube.models.BrowseEndpoint
 import com.zionhuang.innertube.models.GridRenderer
 import com.zionhuang.innertube.models.MusicCarouselShelfRenderer
@@ -69,19 +70,20 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import java.net.Proxy
 import kotlin.random.Random
 
-internal fun parseSearchSummary(contents: List<SectionListRenderer.Content>): SearchSummaryPage =
+internal fun parseSearchSummary(contents: List<SectionListRenderer.Content>, language: String = YouTube.locale.hl): SearchSummaryPage =
     SearchSummaryPage(
         summaries = buildList {
             contents.forEach { content ->
                 content.musicCardShelfRenderer?.let { renderer ->
-                    val items = listOfNotNull(SearchSummaryPage.fromMusicCardShelfRenderer(renderer))
+                    val items = listOfNotNull(SearchSummaryPage.fromMusicCardShelfRenderer(renderer, language = language))
                         .plus(
                             renderer.contents
                                 ?.mapNotNull { it.musicResponsiveListItemRenderer }
-                                ?.mapNotNull(SearchSummaryPage.Companion::fromMusicResponsiveListItemRenderer)
+                                ?.mapNotNull { SearchSummaryPage.fromMusicResponsiveListItemRenderer(it, language = language) }
                                 .orEmpty()
                         )
                         .distinctBy { it.id }
@@ -91,6 +93,7 @@ internal fun parseSearchSummary(contents: List<SectionListRenderer.Content>): Se
                                 title = renderer.header?.musicCardShelfHeaderBasicRenderer?.title
                                     ?.runs?.firstOrNull()?.text.orEmpty(),
                                 items = items,
+                                isTopResult = true,
                             )
                         )
                     }
@@ -98,7 +101,7 @@ internal fun parseSearchSummary(contents: List<SectionListRenderer.Content>): Se
 
                 content.musicShelfRenderer?.let { renderer ->
                     val items = renderer.contents?.getItems()
-                        ?.mapNotNull(SearchSummaryPage.Companion::fromMusicResponsiveListItemRenderer)
+                        ?.mapNotNull { SearchSummaryPage.fromMusicResponsiveListItemRenderer(it, language = language) }
                         ?.distinctBy { it.id }
                         .orEmpty()
                     if (items.isNotEmpty()) {
@@ -115,7 +118,7 @@ internal fun parseSearchSummary(contents: List<SectionListRenderer.Content>): Se
             val itemSectionItems = contents
                 .flatMap { it.itemSectionRenderer?.contents.orEmpty() }
                 .mapNotNull { it.musicResponsiveListItemRenderer }
-                .mapNotNull(SearchSummaryPage.Companion::fromMusicResponsiveListItemRenderer)
+                .mapNotNull { SearchSummaryPage.fromMusicResponsiveListItemRenderer(it, language = language) }
                 .distinctBy { it.id }
             if (itemSectionItems.isNotEmpty()) {
                 add(SearchSummary(title = "", items = itemSectionItems))
@@ -137,12 +140,35 @@ internal fun List<YTItem>.withResolvedArtists(resolvedSongs: List<SongItem>): Li
     }
 }
 
+internal fun parseArtTrackOriginalMetadata(response: JsonElement, expectedVideoId: String): ArtTrackOriginalMetadata {
+    val details = response.jsonObject["videoDetails"]?.jsonObject ?: error("Missing art track metadata")
+    fun text(key: String) = details[key]?.jsonPrimitive?.contentOrNull
+    require(text("videoId") == expectedVideoId) { "Art track metadata belongs to another video" }
+    val title = text("title")?.takeIf { it.isNotBlank() } ?: error("Missing art track title")
+    return ArtTrackOriginalMetadata(expectedVideoId, title, text("author"), text("channelId"), text("shortDescription"))
+}
+
 /**
  * Parse useful data with [InnerTube] sending requests.
  * Modified from [ViMusic](https://github.com/vfsfitvnm/ViMusic)
  */
 object YouTube {
     private val innerTube = InnerTube()
+
+    /** Receives raw parsed names. Observers should enqueue work and return without blocking. */
+    @Volatile
+    var metadataObserver: ((items: List<YTItem>, requestLocale: YouTubeLocale, source: String) -> Unit)? = null
+
+    internal fun notifyMetadata(items: List<YTItem>, requestLocale: YouTubeLocale, source: String) {
+        if (items.isEmpty()) return
+        try {
+            metadataObserver?.invoke(items, requestLocale, source)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Optional metadata collection must not turn a successful browse or playback into a failure.
+        }
+    }
 
     var locale: YouTubeLocale
         get() = innerTube.locale
@@ -175,7 +201,7 @@ object YouTube {
             innerTube.useLoginForBrowse = value
         }
 
-    private suspend fun fetchMissingArtists(items: List<YTItem>): List<SongItem> {
+    private suspend fun fetchMissingArtists(items: List<YTItem>, requestLocale: YouTubeLocale = locale): List<SongItem> {
         val missingArtistIds = items
             .filterIsInstance<SongItem>()
             .filter { it.artists.isEmpty() }
@@ -184,36 +210,47 @@ object YouTube {
             .take(MAX_GET_QUEUE_SIZE)
         if (missingArtistIds.isEmpty()) return emptyList()
 
-        return queue(videoIds = missingArtistIds).getOrDefault(emptyList())
+        return queue(videoIds = missingArtistIds, requestLocale = requestLocale).getOrDefault(emptyList())
     }
 
-    suspend fun searchSuggestions(query: String): Result<SearchSuggestions> = runCatching {
-        val response = innerTube.getSearchSuggestions(WEB_REMIX, query).body<GetSearchSuggestionsResponse>()
+    suspend fun searchSuggestions(query: String, requestLocale: YouTubeLocale = locale): Result<SearchSuggestions> = runCatching {
+        val response = innerTube.getSearchSuggestions(WEB_REMIX, query, requestLocale = requestLocale).body<GetSearchSuggestionsResponse>()
         SearchSuggestions(
             queries = response.contents?.getOrNull(0)?.searchSuggestionsSectionRenderer?.contents?.mapNotNull { content ->
                 content.searchSuggestionRenderer?.suggestion?.runs?.joinToString(separator = "") { it.text }
             }.orEmpty(),
             recommendedItems = response.contents?.getOrNull(1)?.searchSuggestionsSectionRenderer?.contents?.mapNotNull {
                 it.musicResponsiveListItemRenderer?.let { renderer ->
-                    SearchSuggestionPage.fromMusicResponsiveListItemRenderer(renderer)
+                    SearchSuggestionPage.fromMusicResponsiveListItemRenderer(renderer, language = requestLocale.hl)
                 }
             }.orEmpty()
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.recommendedItems, requestLocale, "searchSuggestions")
     }
 
-    suspend fun searchSummary(query: String): Result<SearchSummaryPage> = runCatching {
-        val response = innerTube.search(WEB_REMIX, query).body<SearchResponse>()
+    // Preserve function-reference signatures while new callers can pin a request locale.
+    suspend fun searchSummary(query: String): Result<SearchSummaryPage> = searchSummary(query, locale)
+
+    suspend fun search(query: String, filter: SearchFilter): Result<SearchResult> = search(query, filter, locale)
+
+    suspend fun searchContinuation(continuation: String): Result<SearchResult> = searchContinuation(continuation, locale)
+
+    suspend fun searchSummary(query: String, requestLocale: YouTubeLocale): Result<SearchSummaryPage> = runCatching {
+        val response = innerTube.search(WEB_REMIX, query, requestLocale = requestLocale).body<SearchResponse>()
         val contents = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
             ?.tabRenderer?.content?.sectionListRenderer?.contents.orEmpty()
-        parseSearchSummary(contents)
+        parseSearchSummary(contents, language = requestLocale.hl)
+    }.onSuccess { page ->
+        notifyMetadata(page.summaries.flatMap { it.items }, requestLocale, "searchSummary")
     }
 
-    suspend fun search(query: String, filter: SearchFilter): Result<SearchResult> = runCatching {
-        val response = innerTube.search(WEB_REMIX, query, filter.value).body<SearchResponse>()
+    suspend fun search(query: String, filter: SearchFilter, requestLocale: YouTubeLocale): Result<SearchResult> = runCatching {
+        val response = innerTube.search(WEB_REMIX, query, filter.value, requestLocale = requestLocale).body<SearchResponse>()
         val items = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
             ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
             ?.musicShelfRenderer?.contents?.getItems()?.mapNotNull {
-                SearchPage.toYTItem(it)
+                SearchPage.toYTItem(it, language = requestLocale.hl)
             }.orEmpty()
         SearchResult(
             items = items,
@@ -221,28 +258,32 @@ object YouTube {
                 ?.tabRenderer?.content?.sectionListRenderer?.contents?.lastOrNull()
                 ?.musicShelfRenderer?.continuations?.getContinuation()
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.items, requestLocale, "search")
     }
 
-    suspend fun searchContinuation(continuation: String): Result<SearchResult> = runCatching {
-        val response = innerTube.search(WEB_REMIX, continuation = continuation).body<SearchResponse>()
+    suspend fun searchContinuation(continuation: String, requestLocale: YouTubeLocale): Result<SearchResult> = runCatching {
+        val response = innerTube.search(WEB_REMIX, continuation = continuation, requestLocale = requestLocale).body<SearchResponse>()
         val continuationPage = response.continuationContents?.musicShelfContinuation
             ?: error("Missing search continuation contents")
         val items = continuationPage.contents
             .mapNotNull {
-                SearchPage.toYTItem(it.musicResponsiveListItemRenderer)
+                SearchPage.toYTItem(it.musicResponsiveListItemRenderer, language = requestLocale.hl)
             }
         SearchResult(
             items = items,
             continuation = continuationPage.continuations?.getContinuation()
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.items, requestLocale, "searchContinuation")
     }
 
-    suspend fun album(browseId: String, withSongs: Boolean = true): Result<AlbumPage> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, browseId).body<BrowseResponse>()
+    suspend fun album(browseId: String, withSongs: Boolean = true, requestLocale: YouTubeLocale = locale, notifyMetadata: Boolean = true): Result<AlbumPage> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, browseId, requestLocale = requestLocale).body<BrowseResponse>()
         val playlistId = response.microformat?.microformatDataRenderer?.urlCanonical?.substringAfterLast('=')!!
         AlbumPage(
             album = AlbumItem(
-                artistCredit = AlbumPage.getArtistCredit(response),
+                artistCredit = AlbumPage.getArtistCredit(response, language = requestLocale.hl),
                 browseId = browseId,
                 playlistId = playlistId,
                 title = response.contents?.twoColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicResponsiveHeaderRenderer?.title?.runs?.firstOrNull()?.text!!,
@@ -255,22 +296,24 @@ object YouTube {
                 year = response.contents.twoColumnBrowseResultsRenderer.tabs.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicResponsiveHeaderRenderer?.subtitle?.runs?.lastOrNull()?.text?.toIntOrNull(),
                 thumbnail = response.contents.twoColumnBrowseResultsRenderer.tabs.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.musicResponsiveHeaderRenderer?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.lastOrNull()?.url!!,
             ),
-            songs = if (withSongs) albumSongs(playlistId).getOrThrow() else emptyList(),
+            songs = if (withSongs) albumSongs(playlistId, requestLocale = requestLocale, notifyMetadata = notifyMetadata).getOrThrow() else emptyList(),
             otherVersions = response.contents.twoColumnBrowseResultsRenderer.secondaryContents?.sectionListRenderer?.contents?.getOrNull(1)?.musicCarouselShelfRenderer?.contents
                 ?.mapNotNull { it.musicTwoRowItemRenderer }
-                ?.mapNotNull(NewReleaseAlbumPage::fromMusicTwoRowItemRenderer)
+                ?.mapNotNull { NewReleaseAlbumPage.fromMusicTwoRowItemRenderer(it, language = requestLocale.hl) }
                 .orEmpty()
         )
+    }.onSuccess { page ->
+        if (notifyMetadata) YouTube.notifyMetadata(listOf(page.album) + page.songs + page.otherVersions, requestLocale, "album")
     }
 
-    suspend fun albumSongs(playlistId: String): Result<List<SongItem>> = runCatching {
-        var response = innerTube.browse(WEB_REMIX, "VL$playlistId").body<BrowseResponse>()
+    suspend fun albumSongs(playlistId: String, requestLocale: YouTubeLocale = locale, notifyMetadata: Boolean = true): Result<List<SongItem>> = runCatching {
+        var response = innerTube.browse(WEB_REMIX, "VL$playlistId", requestLocale = requestLocale).body<BrowseResponse>()
         val songs = response.contents?.twoColumnBrowseResultsRenderer
             ?.secondaryContents?.sectionListRenderer
             ?.contents?.firstOrNull()
             ?.musicPlaylistShelfRenderer?.contents?.getItems()
             ?.mapNotNull {
-                AlbumPage.getSong(it)
+                AlbumPage.getSong(it, language = requestLocale.hl)
             }!!
             .toMutableList()
         var continuation = response.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer
@@ -279,19 +322,22 @@ object YouTube {
             response = innerTube.browse(
                 client = WEB_REMIX,
                 continuation = continuation,
+                requestLocale = requestLocale,
             ).body<BrowseResponse>()
             val continuationItems = response.onResponseReceivedActions?.firstOrNull()
                 ?.appendContinuationItemsAction?.continuationItems
             if (continuationItems != null) {
-                songs += continuationItems.getItems().mapNotNull { AlbumPage.getSong(it) }
+                songs += continuationItems.getItems().mapNotNull { AlbumPage.getSong(it, language = requestLocale.hl) }
             }
             continuation = response.continuationContents?.musicPlaylistShelfContinuation?.continuations?.getContinuation()
         }
         songs
+    }.onSuccess { page ->
+        if (notifyMetadata) YouTube.notifyMetadata(page, requestLocale, "albumSongs")
     }
 
-    suspend fun artist(browseId: String): Result<ArtistPage> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, browseId).body<BrowseResponse>()
+    suspend fun artist(browseId: String, requestLocale: YouTubeLocale = locale, notifyMetadata: Boolean = true): Result<ArtistPage> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, browseId, requestLocale = requestLocale).body<BrowseResponse>()
 
         ArtistPage(
             artist = ArtistItem(
@@ -314,13 +360,15 @@ object YouTube {
             ),
             sections = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
                 ?.tabRenderer?.content?.sectionListRenderer?.contents
-                ?.mapNotNull(ArtistPage::fromSectionListRendererContent)!!,
+                ?.mapNotNull { ArtistPage.fromSectionListRendererContent(it, language = requestLocale.hl) }!!,
             description = response.header?.musicImmersiveHeaderRenderer?.description?.runs?.firstOrNull()?.text
         )
+    }.onSuccess { page ->
+        if (notifyMetadata) YouTube.notifyMetadata(listOf(page.artist) + page.sections.flatMap { it.items }, requestLocale, "artist")
     }
 
-    suspend fun artistItems(endpoint: BrowseEndpoint): Result<ArtistItemsPage> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, endpoint.browseId, endpoint.params).body<BrowseResponse>()
+    suspend fun artistItems(endpoint: BrowseEndpoint, requestLocale: YouTubeLocale = locale): Result<ArtistItemsPage> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, endpoint.browseId, endpoint.params, requestLocale = requestLocale).body<BrowseResponse>()
         val gridRenderer = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
             ?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()
             ?.gridRenderer
@@ -329,7 +377,7 @@ object YouTube {
                 title = gridRenderer.header?.gridHeaderRenderer?.title?.runs?.firstOrNull()?.text.orEmpty(),
                 items = gridRenderer.items.mapNotNull {
                     it.musicTwoRowItemRenderer?.let { renderer ->
-                        ArtistItemsPage.fromMusicTwoRowItemRenderer(renderer)
+                        ArtistItemsPage.fromMusicTwoRowItemRenderer(renderer, language = requestLocale.hl)
                     }
                 },
                 continuation = gridRenderer.continuations?.getContinuation()
@@ -341,15 +389,17 @@ object YouTube {
             ArtistItemsPage(
                 title = response.header?.musicHeaderRenderer?.title?.runs?.firstOrNull()?.text!!,
                 items = musicPlaylistShelfRenderer?.contents?.getItems()?.mapNotNull {
-                        ArtistItemsPage.fromMusicResponsiveListItemRenderer(it)
+                        ArtistItemsPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl)
                     }!!,
                 continuation = musicPlaylistShelfRenderer.contents.getContinuation()
             )
         }
+    }.onSuccess { page ->
+        notifyMetadata(page.items, requestLocale, "artistItems")
     }
 
-    suspend fun artistItemsContinuation(continuation: String): Result<ArtistItemsContinuationPage> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, continuation = continuation).body<BrowseResponse>()
+    suspend fun artistItemsContinuation(continuation: String, requestLocale: YouTubeLocale = locale): Result<ArtistItemsContinuationPage> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, continuation = continuation, requestLocale = requestLocale).body<BrowseResponse>()
 
         when {
             response.continuationContents?.gridContinuation != null -> {
@@ -357,7 +407,7 @@ object YouTube {
                 ArtistItemsContinuationPage(
                     items = gridContinuation.items.mapNotNull {
                         it.musicTwoRowItemRenderer?.let { renderer ->
-                            ArtistItemsPage.fromMusicTwoRowItemRenderer(renderer)
+                            ArtistItemsPage.fromMusicTwoRowItemRenderer(renderer, language = requestLocale.hl)
                         }
                     },
                     continuation = gridContinuation.continuations?.getContinuation()
@@ -368,7 +418,7 @@ object YouTube {
                 val musicPlaylistShelfContinuation = response.continuationContents.musicPlaylistShelfContinuation
                 ArtistItemsContinuationPage(
                     items = musicPlaylistShelfContinuation.contents.getItems().mapNotNull {
-                        ArtistItemsPage.fromMusicResponsiveListItemRenderer(it)
+                        ArtistItemsPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl)
                     },
                     continuation = musicPlaylistShelfContinuation.continuations?.getContinuation()
                 )
@@ -379,19 +429,22 @@ object YouTube {
                     ?.appendContinuationItemsAction?.continuationItems
                 ArtistItemsContinuationPage(
                     items = continuationItems?.getItems()?.mapNotNull {
-                        ArtistItemsPage.fromMusicResponsiveListItemRenderer(it)
+                        ArtistItemsPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl)
                     }!!,
                     continuation = continuationItems.getContinuation()
                 )
             }
         }
+    }.onSuccess { page ->
+        notifyMetadata(page.items, requestLocale, "artistItemsContinuation")
     }
 
-    suspend fun playlist(playlistId: String): Result<PlaylistPage> = runCatching {
+    suspend fun playlist(playlistId: String, requestLocale: YouTubeLocale = locale): Result<PlaylistPage> = runCatching {
         val response = innerTube.browse(
             client = WEB_REMIX,
             browseId = "VL$playlistId",
-            setLogin = true
+            setLogin = true,
+            requestLocale = requestLocale,
         ).body<BrowseResponse>()
 
         val base = response.contents?.twoColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()
@@ -423,27 +476,31 @@ object YouTube {
             ),
             songs = response.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer
                 ?.contents?.firstOrNull()?.musicPlaylistShelfRenderer?.contents?.getItems()?.mapNotNull {
-                    PlaylistPage.fromMusicResponsiveListItemRenderer(it)
+                    PlaylistPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl)
                 }!!,
             songsContinuation = response.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer
                 .contents.firstOrNull()?.musicPlaylistShelfRenderer?.contents?.getContinuation(),
             continuation = response.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer
-                .continuations?.getContinuation()
+                .continuations?.getContinuation(),
+            requestLocale = requestLocale,
         )
+    }.onSuccess { page ->
+        notifyMetadata(listOf(page.playlist) + page.songs, requestLocale, "playlist")
     }
 
-    suspend fun playlistContinuation(continuation: String) = runCatching {
+    suspend fun playlistContinuation(continuation: String, requestLocale: YouTubeLocale = locale) = runCatching {
         val response = innerTube.browse(
             client = WEB_REMIX,
             continuation = continuation,
-            setLogin = true
+            setLogin = true,
+            requestLocale = requestLocale,
         ).body<BrowseResponse>()
 
         val musicPlaylistShelfContinuation = response.continuationContents?.musicPlaylistShelfContinuation
         if (musicPlaylistShelfContinuation != null) {
             PlaylistContinuationPage(
                 songs = musicPlaylistShelfContinuation.contents.getItems().mapNotNull {
-                    PlaylistPage.fromMusicResponsiveListItemRenderer(it)
+                    PlaylistPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl)
                 },
                 continuation = musicPlaylistShelfContinuation.continuations?.getContinuation()
             )
@@ -452,19 +509,21 @@ object YouTube {
                 ?.appendContinuationItemsAction?.continuationItems
             PlaylistContinuationPage(
                 songs = continuationItems?.getItems()?.mapNotNull {
-                        PlaylistPage.fromMusicResponsiveListItemRenderer(it)
+                        PlaylistPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl)
                     } ?: emptyList(),
                 continuation = continuationItems?.getContinuation()
             )
         }
+    }.onSuccess { page ->
+        notifyMetadata(page.songs, requestLocale, "playlistContinuation")
     }
 
-    suspend fun home(continuation: String? = null, params: String? = null): Result<HomePage> = runCatching {
+    suspend fun home(continuation: String? = null, params: String? = null, requestLocale: YouTubeLocale = locale): Result<HomePage> = runCatching {
         if (continuation != null) {
-            return@runCatching homeContinuation(continuation).getOrThrow()
+            return@runCatching homeContinuation(continuation, requestLocale = requestLocale).getOrThrow()
         }
 
-        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_home", params = params).body<BrowseResponse>()
+        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_home", params = params, requestLocale = requestLocale).body<BrowseResponse>()
         val continuation = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
             ?.tabRenderer?.content?.sectionListRenderer?.continuations?.getContinuation()
         val sectionListRender = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
@@ -472,15 +531,17 @@ object YouTube {
             val sections = sectionListRender?.contents!!
             .mapNotNull { it.musicCarouselShelfRenderer }
             .mapNotNull {
-                HomePage.Section.fromMusicCarouselShelfRenderer(it)
+                HomePage.Section.fromMusicCarouselShelfRenderer(it, language = requestLocale.hl)
             }.toMutableList()
         val chips = sectionListRender?.header?.chipCloudRenderer?.chips?.mapNotNull { HomePage.Chip.fromChipCloudChipRenderer(it) }
         HomePage(chips, sections, continuation)
+    }.onSuccess { page ->
+        notifyMetadata(page.sections.flatMap { it.items }, requestLocale, "home")
     }
 
-    private suspend fun homeContinuation(continuation: String): Result<HomePage> = runCatching {
+    private suspend fun homeContinuation(continuation: String, requestLocale: YouTubeLocale = locale): Result<HomePage> = runCatching {
         val response =
-            innerTube.browse(WEB_REMIX, continuation = continuation).body<BrowseResponse>()
+            innerTube.browse(WEB_REMIX, continuation = continuation, requestLocale = requestLocale).body<BrowseResponse>()
         val continuation =
             response.continuationContents?.sectionListContinuation?.continuations?.getContinuation()
         HomePage(
@@ -488,19 +549,21 @@ object YouTube {
             response.continuationContents?.sectionListContinuation?.contents
             ?.mapNotNull { it.musicCarouselShelfRenderer }
             ?.mapNotNull {
-                HomePage.Section.fromMusicCarouselShelfRenderer(it)
+                HomePage.Section.fromMusicCarouselShelfRenderer(it, language = requestLocale.hl)
             }.orEmpty(), continuation
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.sections.flatMap { it.items }, requestLocale, "homeContinuation")
     }
 
-    suspend fun explore(): Result<ExplorePage> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_explore").body<BrowseResponse>()
+    suspend fun explore(requestLocale: YouTubeLocale = locale): Result<ExplorePage> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_explore", requestLocale = requestLocale).body<BrowseResponse>()
         ExplorePage(
             newReleaseAlbums = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.find {
                 it.musicCarouselShelfRenderer?.header?.musicCarouselShelfBasicHeaderRenderer?.moreContentButton?.buttonRenderer?.navigationEndpoint?.browseEndpoint?.browseId == "FEmusic_new_releases_albums"
             }?.musicCarouselShelfRenderer?.contents
                 ?.mapNotNull { it.musicTwoRowItemRenderer }
-                ?.mapNotNull(NewReleaseAlbumPage::fromMusicTwoRowItemRenderer).orEmpty(),
+                ?.mapNotNull { NewReleaseAlbumPage.fromMusicTwoRowItemRenderer(it, language = requestLocale.hl) }.orEmpty(),
             moodAndGenres = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.find {
                 it.musicCarouselShelfRenderer?.header?.musicCarouselShelfBasicHeaderRenderer?.moreContentButton?.buttonRenderer?.navigationEndpoint?.browseEndpoint?.browseId == "FEmusic_moods_and_genres"
             }?.musicCarouselShelfRenderer?.contents
@@ -508,24 +571,28 @@ object YouTube {
                 ?.mapNotNull(MoodAndGenres.Companion::fromMusicNavigationButtonRenderer)
                 .orEmpty()
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.newReleaseAlbums, requestLocale, "explore")
     }
 
-    suspend fun newReleaseAlbums(): Result<List<AlbumItem>> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_new_releases_albums").body<BrowseResponse>()
+    suspend fun newReleaseAlbums(requestLocale: YouTubeLocale = locale): Result<List<AlbumItem>> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_new_releases_albums", requestLocale = requestLocale).body<BrowseResponse>()
         response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.firstOrNull()?.gridRenderer?.items
             ?.mapNotNull { it.musicTwoRowItemRenderer }
-            ?.mapNotNull(NewReleaseAlbumPage::fromMusicTwoRowItemRenderer)
+            ?.mapNotNull { NewReleaseAlbumPage.fromMusicTwoRowItemRenderer(it, language = requestLocale.hl) }
             .orEmpty()
+    }.onSuccess { page ->
+        notifyMetadata(page, requestLocale, "newReleaseAlbums")
     }
 
-    suspend fun moodAndGenres(): Result<List<MoodAndGenres>> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_moods_and_genres").body<BrowseResponse>()
+    suspend fun moodAndGenres(requestLocale: YouTubeLocale = locale): Result<List<MoodAndGenres>> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, browseId = "FEmusic_moods_and_genres", requestLocale = requestLocale).body<BrowseResponse>()
         response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents!!
             .mapNotNull(MoodAndGenres.Companion::fromSectionListRendererContent)
     }
 
-    suspend fun browse(browseId: String, params: String?): Result<BrowseResult> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, browseId = browseId, params = params).body<BrowseResponse>()
+    suspend fun browse(browseId: String, params: String?, requestLocale: YouTubeLocale = locale): Result<BrowseResult> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, browseId = browseId, params = params, requestLocale = requestLocale).body<BrowseResponse>()
         BrowseResult(
             title = response.header?.musicHeaderRenderer?.title?.runs?.firstOrNull()?.text,
             items = response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents?.mapNotNull { content ->
@@ -535,7 +602,7 @@ object YouTube {
                             title = content.gridRenderer.header?.gridHeaderRenderer?.title?.runs?.firstOrNull()?.text,
                             items = content.gridRenderer.items
                                 .mapNotNull(GridRenderer.Item::musicTwoRowItemRenderer)
-                                .mapNotNull(RelatedPage.Companion::fromMusicTwoRowItemRenderer)
+                                .mapNotNull { RelatedPage.fromMusicTwoRowItemRenderer(it, language = requestLocale.hl) }
                         )
                     }
 
@@ -544,7 +611,7 @@ object YouTube {
                             title = content.musicCarouselShelfRenderer.header?.musicCarouselShelfBasicHeaderRenderer?.title?.runs?.firstOrNull()?.text,
                             items = content.musicCarouselShelfRenderer.contents
                                 .mapNotNull(MusicCarouselShelfRenderer.Content::musicTwoRowItemRenderer)
-                                .mapNotNull(RelatedPage.Companion::fromMusicTwoRowItemRenderer)
+                                .mapNotNull { RelatedPage.fromMusicTwoRowItemRenderer(it, language = requestLocale.hl) }
                         )
                     }
 
@@ -552,13 +619,16 @@ object YouTube {
                 }
             }.orEmpty()
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.items.flatMap { it.items }, requestLocale, "browse")
     }
 
-    suspend fun library(browseId: String, tabIndex: Int = 0) = runCatching {
+    suspend fun library(browseId: String, tabIndex: Int = 0, requestLocale: YouTubeLocale = locale) = runCatching {
         val response = innerTube.browse(
             client = WEB_REMIX,
             browseId = browseId,
-            setLogin = true
+            setLogin = true,
+            requestLocale = requestLocale,
         ).body<BrowseResponse>()
 
         val tabs = response.contents?.singleColumnBrowseResultsRenderer?.tabs
@@ -573,29 +643,34 @@ object YouTube {
         when {
             contents?.gridRenderer != null -> {
                 LibraryPage(
+                    requestLocale = requestLocale,
                     items = contents.gridRenderer.items
                         .mapNotNull (GridRenderer.Item::musicTwoRowItemRenderer)
-                        .mapNotNull { LibraryPage.fromMusicTwoRowItemRenderer(it) },
+                        .mapNotNull { LibraryPage.fromMusicTwoRowItemRenderer(it, language = requestLocale.hl) },
                     continuation = contents.gridRenderer.continuations?.getContinuation()
                 )
             }
 
             else -> { // contents?.musicShelfRenderer != null
                 LibraryPage(
+                    requestLocale = requestLocale,
                     items = contents?.musicShelfRenderer?.contents!!
                         .mapNotNull (MusicShelfRenderer.Content::musicResponsiveListItemRenderer)
-                        .mapNotNull { LibraryPage.fromMusicResponsiveListItemRenderer(it) },
+                        .mapNotNull { LibraryPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl) },
                     continuation = contents.musicShelfRenderer.continuations?.getContinuation()
                 )
             }
         }
+    }.onSuccess { page ->
+        notifyMetadata(page.items, requestLocale, "library")
     }
 
-    suspend fun libraryContinuation(continuation: String) = runCatching {
+    suspend fun libraryContinuation(continuation: String, requestLocale: YouTubeLocale = locale) = runCatching {
         val response = innerTube.browse(
             client = WEB_REMIX,
             continuation = continuation,
-            setLogin = true
+            setLogin = true,
+            requestLocale = requestLocale,
         ).body<BrowseResponse>()
 
         val contents = response.continuationContents
@@ -605,7 +680,7 @@ object YouTube {
                 LibraryContinuationPage(
                     items = contents.gridContinuation.items
                         .mapNotNull (GridRenderer.Item::musicTwoRowItemRenderer)
-                        .mapNotNull { LibraryPage.fromMusicTwoRowItemRenderer(it) },
+                        .mapNotNull { LibraryPage.fromMusicTwoRowItemRenderer(it, language = requestLocale.hl) },
                     continuation = contents.gridContinuation.continuations?.getContinuation()
                 )
             }
@@ -614,26 +689,29 @@ object YouTube {
                 LibraryContinuationPage(
                     items = contents?.musicShelfContinuation?.contents!!
                         .mapNotNull (MusicShelfRenderer.Content::musicResponsiveListItemRenderer)
-                        .mapNotNull { LibraryPage.fromMusicResponsiveListItemRenderer(it) },
+                        .mapNotNull { LibraryPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl) },
                     continuation = contents.musicShelfContinuation.continuations?.getContinuation()
                 )
             }
         }
+    }.onSuccess { page ->
+        notifyMetadata(page.items, requestLocale, "libraryContinuation")
     }
 
-    suspend fun libraryRecentActivity(): Result<LibraryPage> = runCatching {
+    suspend fun libraryRecentActivity(requestLocale: YouTubeLocale = locale): Result<LibraryPage> = runCatching {
         val continuation = LibraryFilter.FILTER_RECENT_ACTIVITY.value
 
         val response = innerTube.browse(
             client = WEB_REMIX,
             continuation = continuation,
-            setLogin = true
+            setLogin = true,
+            requestLocale = requestLocale,
         ).body<BrowseResponse>()
 
         val items = response.continuationContents?.sectionListContinuation?.contents?.firstOrNull()
             ?.gridRenderer?.items!!.mapNotNull {
                 it.musicTwoRowItemRenderer?.let { renderer ->
-                    LibraryPage.fromMusicTwoRowItemRenderer(renderer)
+                    LibraryPage.fromMusicTwoRowItemRenderer(renderer, language = requestLocale.hl)
                 }
             }.toMutableList()
 
@@ -647,20 +725,24 @@ object YouTube {
          */
         items.forEachIndexed { index, item ->
             if (item is ArtistItem)
-                items[index] = artist(item.id).getOrNull()?.artist!!.copy(thumbnail = item.thumbnail)
+                items[index] = artist(item.id, requestLocale = requestLocale).getOrNull()?.artist!!.copy(thumbnail = item.thumbnail)
         }
 
         LibraryPage(
             items = items,
-            continuation = null
+            continuation = null,
+            requestLocale = requestLocale,
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.items, requestLocale, "libraryRecentActivity")
     }
 
-    suspend fun musicHistory() = runCatching {
+    suspend fun musicHistory(requestLocale: YouTubeLocale = locale) = runCatching {
         val response = innerTube.browse(
             client = WEB_REMIX,
             browseId = "FEmusic_history",
-            setLogin = true
+            setLogin = true,
+            requestLocale = requestLocale,
         ).body<BrowseResponse>()
 
         HistoryPage(
@@ -668,10 +750,12 @@ object YouTube {
                 ?.tabRenderer?.content?.sectionListRenderer?.contents
                 ?.mapNotNull {
                     it.musicShelfRenderer?.let { musicShelfRenderer ->
-                        HistoryPage.fromMusicShelfRenderer(musicShelfRenderer)
+                        HistoryPage.fromMusicShelfRenderer(musicShelfRenderer, language = requestLocale.hl)
                     }
                 }
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.sections.orEmpty().flatMap { it.songs }, requestLocale, "musicHistory")
     }
 
     suspend fun likeVideo(videoId: String, like: Boolean) = runCatching {
@@ -695,8 +779,8 @@ object YouTube {
             innerTube.unsubscribeChannel(WEB_REMIX, channelId)
     }
 
-    suspend fun getChannelId(browseId: String): String {
-        artist(browseId).onSuccess {
+    suspend fun getChannelId(browseId: String, requestLocale: YouTubeLocale = locale): String {
+        artist(browseId, requestLocale = requestLocale).onSuccess {
             return it.artist.channelId ?: ""
         }
         return ""
@@ -730,8 +814,19 @@ object YouTube {
         innerTube.deletePlaylist(WEB_REMIX, playlistId)
     }
 
-    suspend fun player(videoId: String, playlistId: String? = null, client: YouTubeClient, signatureTimestamp: Int? = null, webPlayerPot: String? = null): Result<PlayerResponse> = runCatching {
-        innerTube.player(client, videoId, playlistId, signatureTimestamp, webPlayerPot).body<PlayerResponse>()
+    suspend fun player(videoId: String, playlistId: String? = null, client: YouTubeClient, signatureTimestamp: Int? = null, webPlayerPot: String? = null, requestLocale: YouTubeLocale = locale): Result<PlayerResponse> = runCatching {
+        innerTube.player(client, videoId, playlistId, signatureTimestamp, webPlayerPot, requestLocale = requestLocale).body<PlayerResponse>()
+    }
+
+    /** Caller must first verify MUSIC_VIDEO_TYPE_ATV. Returned names remain unclassified candidates. */
+    suspend fun artTrackOriginalMetadata(
+        videoId: String,
+        requestLocale: YouTubeLocale = locale,
+    ): Result<ArtTrackOriginalMetadata> = runCatching {
+        parseArtTrackOriginalMetadata(
+            innerTube.artTrackOriginalMetadata(videoId, requestLocale).body<JsonElement>(),
+            expectedVideoId = videoId,
+        )
     }
 
     suspend fun registerPlayback(playlistId: String? = null, playbackTracking: String) = runCatching {
@@ -754,7 +849,7 @@ object YouTube {
         )
     }
 
-    suspend fun next(endpoint: WatchEndpoint, continuation: String? = null): Result<NextResult> = runCatching {
+    suspend fun next(endpoint: WatchEndpoint, continuation: String? = null, requestLocale: YouTubeLocale = locale): Result<NextResult> = runCatching {
         val response = innerTube.next(
             WEB_REMIX,
             endpoint.videoId,
@@ -762,7 +857,9 @@ object YouTube {
             endpoint.playlistSetVideoId,
             endpoint.index,
             endpoint.params,
-            continuation).body<NextResponse>()
+            continuation,
+            requestLocale = requestLocale,
+        ).body<NextResponse>()
         val playlistPanelRenderer = response.continuationContents?.playlistPanelContinuation
             ?: response.contents.singleColumnMusicWatchNextResultsRenderer.tabbedRenderer
                 .watchNextTabbedResultsRenderer.tabs[0].tabRenderer.content?.musicQueueRenderer
@@ -772,7 +869,7 @@ object YouTube {
             ?.header?.musicQueueHeaderRenderer?.subtitle?.runs?.firstOrNull()?.text
         val items = playlistPanelRenderer.contents.mapNotNull { content ->
             content.playlistPanelVideoRenderer
-                ?.let(NextPage::fromPlaylistPanelVideoRenderer)
+                ?.let { NextPage.fromPlaylistPanelVideoRenderer(it, language = requestLocale.hl) }
                 ?.let { it to content.playlistPanelVideoRenderer.selected }
         }
         val songs = items.map { it.first }
@@ -780,7 +877,7 @@ object YouTube {
 
         // load automix items
         playlistPanelRenderer.contents.lastOrNull()?.automixPreviewVideoRenderer?.content?.automixPlaylistVideoRenderer?.navigationEndpoint?.watchPlaylistEndpoint?.let { watchPlaylistEndpoint ->
-            return@runCatching next(watchPlaylistEndpoint).getOrThrow().let { result ->
+            return@runCatching next(watchPlaylistEndpoint, requestLocale = requestLocale).getOrThrow().let { result ->
                 result.copy(
                     title = title,
                     items = songs + result.items,
@@ -800,23 +897,25 @@ object YouTube {
             continuation = playlistPanelRenderer.continuations?.getContinuation(),
             endpoint = endpoint
         )
+    }.onSuccess { page ->
+        notifyMetadata(page.items, requestLocale, "next")
     }
 
-    suspend fun lyrics(endpoint: BrowseEndpoint): Result<String?> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, endpoint.browseId, endpoint.params).body<BrowseResponse>()
+    suspend fun lyrics(endpoint: BrowseEndpoint, requestLocale: YouTubeLocale = locale): Result<String?> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, endpoint.browseId, endpoint.params, requestLocale = requestLocale).body<BrowseResponse>()
         response.contents?.sectionListRenderer?.contents?.firstOrNull()?.musicDescriptionShelfRenderer?.description?.runs?.firstOrNull()?.text
     }
 
-    suspend fun related(endpoint: BrowseEndpoint): Result<RelatedPage> = runCatching {
-        val response = innerTube.browse(WEB_REMIX, endpoint.browseId).body<BrowseResponse>()
+    suspend fun related(endpoint: BrowseEndpoint, requestLocale: YouTubeLocale = locale): Result<RelatedPage> = runCatching {
+        val response = innerTube.browse(WEB_REMIX, endpoint.browseId, requestLocale = requestLocale).body<BrowseResponse>()
         val songs = mutableListOf<SongItem>()
         val albums = mutableListOf<AlbumItem>()
         val artists = mutableListOf<ArtistItem>()
         val playlists = mutableListOf<PlaylistItem>()
         response.contents?.sectionListRenderer?.contents?.forEach { sectionContent ->
             sectionContent.musicCarouselShelfRenderer?.contents?.forEach { content ->
-                when (val item = content.musicResponsiveListItemRenderer?.let(RelatedPage.Companion::fromMusicResponsiveListItemRenderer)
-                    ?: content.musicTwoRowItemRenderer?.let(RelatedPage.Companion::fromMusicTwoRowItemRenderer)) {
+                when (val item = content.musicResponsiveListItemRenderer?.let { RelatedPage.fromMusicResponsiveListItemRenderer(it, language = requestLocale.hl) }
+                    ?: content.musicTwoRowItemRenderer?.let { RelatedPage.fromMusicTwoRowItemRenderer(it, language = requestLocale.hl) }) {
                     is SongItem -> if (content.musicResponsiveListItemRenderer?.overlay
                             ?.musicItemThumbnailOverlayRenderer?.content
                             ?.musicPlayButtonRenderer?.playNavigationEndpoint
@@ -832,36 +931,42 @@ object YouTube {
             }
         }
         RelatedPage(songs, albums, artists, playlists)
+    }.onSuccess { page ->
+        notifyMetadata(page.songs + page.albums + page.artists + page.playlists, requestLocale, "related")
     }
 
-    suspend fun queue(videoIds: List<String>? = null, playlistId: String? = null): Result<List<SongItem>> = runCatching {
+    suspend fun queue(videoIds: List<String>? = null, playlistId: String? = null, requestLocale: YouTubeLocale = locale, notifyMetadata: Boolean = true): Result<List<SongItem>> = runCatching {
         if (videoIds != null) {
             assert(videoIds.size <= MAX_GET_QUEUE_SIZE) // Max video limit
         }
-        innerTube.getQueue(WEB_REMIX, videoIds, playlistId).body<GetQueueResponse>().queueDatas
+        innerTube.getQueue(WEB_REMIX, videoIds, playlistId, requestLocale = requestLocale).body<GetQueueResponse>().queueDatas
             .mapNotNull {
                 it.content.playlistPanelVideoRenderer?.let { renderer ->
-                    NextPage.fromPlaylistPanelVideoRenderer(renderer)
+                    NextPage.fromPlaylistPanelVideoRenderer(renderer, language = requestLocale.hl)
                 }
             }
+    }.onSuccess { page ->
+        if (notifyMetadata) YouTube.notifyMetadata(page, requestLocale, "queue")
     }
 
     /** Called only for relevant visible/selected songs. The app owns scheduling and cache policy. */
-    suspend fun resolveArtistCredit(song: SongItem): Result<ArtistCredit> =
-        resolveTrackArtistCredit(song).map { it.credit }
+    suspend fun resolveArtistCredit(song: SongItem, requestLocale: YouTubeLocale = locale): Result<ArtistCredit> =
+        resolveTrackArtistCredit(song, requestLocale = requestLocale).map { it.credit }
 
     /** Preserve album metadata already obtained by the same queue request used for artist credits. */
-    suspend fun resolveTrackArtistCredit(song: SongItem): Result<ArtistCreditResolution> =
+    suspend fun resolveTrackArtistCredit(song: SongItem, requestLocale: YouTubeLocale = locale): Result<ArtistCreditResolution> =
         resolveTrackArtistCredit(
             song = song,
-            getQueue = { queue(videoIds = listOf(song.id)).getOrThrow() },
-            browse = { innerTube.browse(WEB_REMIX, it).body<JsonElement>() },
+            requestLocale = requestLocale,
+            getQueue = { queue(videoIds = listOf(song.id), requestLocale = requestLocale).getOrThrow() },
+            browse = { innerTube.browse(WEB_REMIX, it, requestLocale = requestLocale).body<JsonElement>() },
         )
 
     internal suspend fun resolveTrackArtistCredit(
         song: SongItem,
         getQueue: suspend () -> List<SongItem>,
         browse: suspend (String) -> JsonElement,
+        requestLocale: YouTubeLocale = locale,
     ): Result<ArtistCreditResolution> {
         return try {
             var credit = ArtistCreditResolver.beginAttempt(song.artistCredit ?: ArtistCredit(
@@ -869,7 +974,7 @@ object YouTube {
                 if (song.artists.size > 1 || song.artists.singleOrNull()?.id != null) song.artists else emptyList(),
                 if (song.artists.size > 1 || song.artists.singleOrNull()?.id != null)
                     ArtistCreditStatus.COMPLETE else ArtistCreditStatus.RAW,
-                "song", locale.hl))
+                "song", requestLocale.hl))
             var album = song.album
             fun result() = Result.success(ArtistCreditResolution(credit, album))
             if (credit.evidence.any { it.startsWith("video-source:") } ||
@@ -913,8 +1018,8 @@ object YouTube {
         catch (error: Exception) { Result.failure(error) }
     }
 
-    suspend fun transcript(videoId: String): Result<String> = runCatching {
-        val response = innerTube.getTranscript(WEB, videoId).body<GetTranscriptResponse>()
+    suspend fun transcript(videoId: String, requestLocale: YouTubeLocale = locale): Result<String> = runCatching {
+        val response = innerTube.getTranscript(WEB, videoId, requestLocale = requestLocale).body<GetTranscriptResponse>()
         response.actions?.firstOrNull()?.updateEngagementPanelAction?.content?.transcriptRenderer?.body?.transcriptBodyRenderer?.cueGroups?.joinToString(separator = "\n") { group ->
             val time = group.transcriptCueGroupRenderer.cues[0].transcriptCueRenderer.startOffsetMs
             val text = group.transcriptCueGroupRenderer.cues[0].transcriptCueRenderer.cue.simpleText

@@ -1,4 +1,5 @@
 /*
+
  * Copyright (C) 2024 z-huang/InnerTune
  * Copyright (C) 2025 OuterTune Project
  *
@@ -8,6 +9,8 @@
  */
 
 package com.dd3boh.outertune.ui.player
+
+import com.dd3boh.outertune.utils.displayTitle
 
 import android.annotation.SuppressLint
 import android.content.res.Configuration
@@ -801,7 +804,7 @@ fun ControlsContent(
                 Row {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = mediaMetadata?.title ?: "",
+                            text = mediaMetadata?.displayTitle ?: "",
                             style = MaterialTheme.typography.titleLarge,
                             color = onBackgroundColor,
                             fontWeight = FontWeight.Bold,

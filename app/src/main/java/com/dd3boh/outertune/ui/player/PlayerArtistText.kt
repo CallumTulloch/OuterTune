@@ -1,5 +1,7 @@
 package com.dd3boh.outertune.ui.player
 
+import com.dd3boh.outertune.utils.displayName
+
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
@@ -34,7 +36,7 @@ fun PlayerArtistText(
         Row {
             resolved.artists.forEachIndexed { index, artist ->
                 Text(
-                    text = artist.name,
+                    text = if (resolved.isLocal) artist.name else artist.displayName,
                     style = MaterialTheme.typography.titleMedium,
                     color = color,
                     maxLines = 1,

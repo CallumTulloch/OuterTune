@@ -31,6 +31,7 @@ import com.dd3boh.outertune.models.toStoredJson
 import com.dd3boh.outertune.models.artistCreditFromJson
 import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.ArtistCredit
+import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.zionhuang.innertube.models.merge
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -43,6 +44,26 @@ import kotlinx.coroutines.flow.map
 interface AlbumsDao : ArtistCreditDao {
 
     // region Gets
+    @Query("SELECT * FROM album WHERE isLocal = 0")
+    fun remoteAlbumsForMetadata(): Flow<List<AlbumEntity>>
+
+    /** Queue persistence also creates album stubs; only an explicit save warrants a full track list. */
+    @Query("""
+        SELECT EXISTS (
+            SELECT 1 FROM album
+            WHERE album.id = :albumId AND album.isLocal = 0 AND (
+                album.bookmarkedAt IS NOT NULL OR EXISTS (
+                    SELECT 1 FROM song_album_map
+                    JOIN song ON song.id = song_album_map.songId
+                    WHERE song_album_map.albumId = album.id AND song.isLocal = 0 AND (
+                        song.inLibrary IS NOT NULL OR song.dateDownload > 0
+                    )
+                )
+            )
+        )
+    """)
+    fun isAlbumOriginalContextEligible(albumId: String): Boolean
+
     @Transaction
     @Query("""
         SELECT album.*, count(song.dateDownload) downloadCount
@@ -63,7 +84,10 @@ interface AlbumsDao : ArtistCreditDao {
         FROM album
             LEFT JOIN song_album_map ON song_album_map.albumId = album.id
             LEFT JOIN song ON song.id = song_album_map.songId
-        WHERE album.title LIKE '%' || :query || '%' AND (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL)
+        WHERE (album.title LIKE '%' || :query || '%' OR (album.isLocal = 0 AND EXISTS (
+            SELECT 1 FROM metadata_name
+            WHERE kind = 'ALBUM' AND targetId = album.id AND name LIKE '%' || :query || '%'
+        ))) AND (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL)
         GROUP BY album.id
         LIMIT :previewSize
     """)
@@ -451,6 +475,33 @@ interface AlbumsDao : ArtistCreditDao {
         if (album.artistCreditJson == json && albumArtistIdsForAlbum(albumId) == artists.map { it.id }.distinct()) return
         if (album.artistCreditJson != json) updateAlbumArtistCreditJson(albumId, json)
         replaceAlbumArtistMaps(albumId, artists)
+    }
+
+    /** Apply only the real album header to an already saved album; never import its other songs. */
+    @Transaction
+    fun applySavedAlbumHeader(albumId: String, header: AlbumItem, language: String): Boolean {
+        if (header.browseId != albumId || language.isBlank()) return false
+        val album = albumById(albumId)?.takeUnless { it.isLocal } ?: return false
+        val supplied = header.creditForPersistence()
+        if (supplied.language.isNotEmpty() && supplied.language != language) return false
+        val incoming = supplied.copy(language = language)
+        if (incoming.status == ArtistCreditStatus.CONFLICT ||
+            (incoming.rawText.isBlank() && incoming.artists.isEmpty()) || incoming.artists.any { it.name.isBlank() }) return false
+        val previous = album.artistCredit
+        if (previous != null && previous.language.isNotEmpty() && previous.language != language) {
+            // A new locale can complete an earlier raw header only if every established person is
+            // explicitly accounted for by the new header's IDs. Names alone cannot prove this.
+            if (previous.status !in setOf(ArtistCreditStatus.RAW, ArtistCreditStatus.PARTIAL) ||
+                incoming.status != ArtistCreditStatus.COMPLETE || incoming.artists.isEmpty()) return false
+            val oldIds = previous.artists.map { ArtistIdentity.onlineId(it.id) ?: return false }
+            val newIds = incoming.artists.map { ArtistIdentity.onlineId(it.id) ?: return false }
+            if (!newIds.containsAll(oldIds)) return false
+            updateAlbumArtistCreditJson(albumId, previous.copy(
+                rawText = incoming.rawText, language = language,
+            ).toStoredJson())
+        }
+        applyAlbumArtistCredit(albumId, incoming)
+        return true
     }
     // endregion
 

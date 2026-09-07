@@ -505,10 +505,10 @@ class SyncUtils @Inject constructor(
             runBlocking {
                 remoteArtists.forEach { remoteArtist ->
                     launch(Dispatchers.IO) {
-                        val localArtist = database.artist(remoteArtist.id).firstOrNull()
                         val isLikedArtist = likedArtists.contains(remoteArtist)
 
                         database.awaitTransaction {
+                            val localArtist = artistByOnlineId(remoteArtist.id)
                             if (localArtist == null) {
                                 insert(
                                     ArtistEntity(
@@ -519,9 +519,10 @@ class SyncUtils @Inject constructor(
                                         bookmarkedAt = if (isLikedArtist) LocalDateTime.now() else null
                                     )
                                 )
-                            } else if (localArtist.artist.bookmarkedAt == null && isLikedArtist) {
-                                update(localArtist.artist.localToggleLike())
+                            } else if (localArtist.bookmarkedAt == null && isLikedArtist) {
+                                update(localArtist.localToggleLike())
                             }
+                            saveArtistProfile(remoteArtist)
                         }
                     }
                 }

@@ -22,7 +22,7 @@ data class SearchResult(
 )
 
 object SearchPage {
-    fun toYTItem(renderer: MusicResponsiveListItemRenderer): YTItem? {
+    fun toYTItem(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
         val secondaryLine = renderer.flexColumns.getOrNull(1)
             ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator()
             ?: return null
@@ -30,7 +30,7 @@ object SearchPage {
             renderer.isSong -> {
                 SongItem(
                     endpoint = PageHelper.searchWatchEndpoint(renderer),
-                    artistCredit = (secondaryLine.firstOrNull().orEmpty()).toArtistCredit("SearchPage", com.zionhuang.innertube.YouTube.locale.hl).withVideoSource(renderer),
+                    artistCredit = (secondaryLine.firstOrNull().orEmpty()).toArtistCredit("SearchPage", language).withVideoSource(renderer),
                     artistBrowseIds = renderer.menu.artistBrowseIds(),
                     id = renderer.playlistItemData?.videoId ?: return null,
                     title = renderer.flexColumns.firstOrNull()
@@ -70,7 +70,7 @@ object SearchPage {
             }
             renderer.isAlbum -> {
                 AlbumItem(
-                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchPage", com.zionhuang.innertube.YouTube.locale.hl),
+                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchPage", language),
                     browseId = renderer.navigationEndpoint?.browseEndpoint?.browseId ?: return null,
                     playlistId = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.anyWatchEndpoint?.playlistId ?: return null,
                     title = renderer.flexColumns.firstOrNull()

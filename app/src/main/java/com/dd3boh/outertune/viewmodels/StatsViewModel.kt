@@ -14,8 +14,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.Duration
-import java.time.LocalDateTime
 import javax.inject.Inject
 
 // redoing this whole feature later, plz ignore the slop code
@@ -43,29 +41,7 @@ class StatsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
-        // fetch missing artist metadata
-        viewModelScope.launch {
-            mostPlayedArtists.collect { artists ->
-                artists
-                    .map { it.artist }
-                    .filter {
-                        it.onlineArtistId != null && (it.thumbnailUrl == null ||
-                            Duration.between(it.lastUpdateTime, LocalDateTime.now()) > Duration.ofDays(10))
-                    }
-                    .forEach { artist ->
-                        val onlineId = artist.onlineArtistId ?: return@forEach
-                        YouTube.artist(onlineId).onSuccess { artistPage ->
-                            database.query {
-                                update(artist.copy(
-                                    thumbnailUrl = artistPage.artist.thumbnail,
-                                    channelId = artistPage.artist.channelId,
-                                    lastUpdateTime = LocalDateTime.now(),
-                                ))
-                            }
-                        }
-                    }
-            }
-        }
+        // Saved artist images are repaired independently of this screen's subscriptions.
         // fetch missing album metadata
         viewModelScope.launch {
             mostPlayedAlbums.collect { albums ->

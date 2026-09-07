@@ -1,5 +1,8 @@
 package com.dd3boh.outertune.ui.screens.playlist
 
+import com.dd3boh.outertune.utils.MetadataNames
+import com.dd3boh.outertune.utils.matchesMetadataQuery
+
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -81,7 +84,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastSumBy
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.viewModelScope
@@ -193,6 +195,7 @@ fun LocalPlaylistScreen(
     var searchQuery by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue())
     }
+    val metadataRevision by MetadataNames.updates.collectAsState()
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(isSearching) {
         if (isSearching) {
@@ -200,22 +203,19 @@ fun LocalPlaylistScreen(
         }
     }
 
-    LaunchedEffect(query) {
-        snapshotFlow { searchQuery }.debounce { 300L }.collectLatest {
-            if (searchQuery.text != query.text) {
-                searchQuery = query
+    LaunchedEffect(Unit) {
+        snapshotFlow { query }.debounce { 300L }.collectLatest {
+            searchQuery = it
+        }
+    }
 
-                if (!searchQuery.text.isEmpty()) {
-                    mutableSongs.clear()
-                    mutableSongs.addAll(
-                        playlistWithSongs.second.filter { song ->
-                            song.song.title.contains(searchQuery.text, ignoreCase = true) || song.song.artists.fastAny {
-                                it.name.contains(searchQuery.text, ignoreCase = true)
-                            }
-                        }
-                    )
-                }
+    LaunchedEffect(playlistWithSongs.second, searchQuery.text, metadataRevision, isSearching) {
+        if (isSearching) {
+            val matches = playlistWithSongs.second.filter { song ->
+                searchQuery.text.isEmpty() || song.song.toMediaMetadata().matchesMetadataQuery(searchQuery.text)
             }
+            mutableSongs.clear()
+            mutableSongs.addAll(matches)
         }
     }
 

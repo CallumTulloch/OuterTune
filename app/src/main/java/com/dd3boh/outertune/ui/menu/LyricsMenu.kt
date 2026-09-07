@@ -1,6 +1,7 @@
 package com.dd3boh.outertune.ui.menu
 
 import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.displayTitle
 
 import android.app.SearchManager
 import android.content.Intent
@@ -96,7 +97,7 @@ fun LyricsMenu(
         TextFieldDialog(
             onDismiss = { showEditDialog = false },
             icon = { Icon(imageVector = Icons.Rounded.Edit, contentDescription = null) },
-            title = { Text(text = mediaMetadataProvider().title) },
+            title = { Text(text = mediaMetadataProvider().displayTitle) },
             initialTextFieldValue = TextFieldValue(lyricsProvider()?.lyrics.orEmpty()),
             singleLine = false,
             onDone = {
@@ -123,17 +124,18 @@ fun LyricsMenu(
     val searchMediaMetadata = remember(showSearchDialog) {
         mediaMetadataProvider()
     }
+    // Start with the displayed names when opening the dialog, then preserve the user's query edits.
     val (titleField, onTitleFieldChange) = rememberSaveable(showSearchDialog, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(
             TextFieldValue(
-                text = mediaMetadataProvider().title
+                text = searchMediaMetadata.displayTitle
             )
         )
     }
     val (artistField, onArtistFieldChange) = rememberSaveable(showSearchDialog, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(
             TextFieldValue(
-                text = mediaMetadataProvider().artistDisplayText()
+                text = searchMediaMetadata.artistDisplayText()
             )
         )
     }
@@ -319,7 +321,7 @@ fun LyricsMenu(
             onDismiss = { showDeleteLyric = false },
             content = {
                 Text(
-                    text = stringResource(R.string.delete_lyric_confirm, mediaMetadataProvider().title),
+                    text = stringResource(R.string.delete_lyric_confirm, mediaMetadataProvider().displayTitle),
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(horizontal = 18.dp)
                 )

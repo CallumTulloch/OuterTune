@@ -1,4 +1,5 @@
 /*
+
  * Copyright (C) 2024 z-huang/InnerTune
  * Copyright (C) 2025 O⁠ute⁠rTu⁠ne Project
  *
@@ -8,6 +9,9 @@
  */
 
 package com.dd3boh.outertune.ui.dialog
+
+import com.dd3boh.outertune.utils.displayTitle
+import com.dd3boh.outertune.utils.artistDisplayText
 
 import android.content.ClipData
 import android.text.format.Formatter
@@ -523,9 +527,9 @@ fun DetailsDialog(
                     .sizeIn(minWidth = 280.dp, maxWidth = 560.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                val details = mutableListOf(
-                    stringResource(R.string.song_title) to mediaMetadata.title,
-                    stringResource(R.string.song_artists) to mediaMetadata.artists?.joinToString { it.name },
+                val details = mutableListOf<Pair<String, String?>>(
+                    stringResource(R.string.song_title) to mediaMetadata.displayTitle,
+                    stringResource(R.string.song_artists) to mediaMetadata.artistDisplayText(),
                     stringResource(R.string.media_id) to mediaMetadata.id,
                     stringResource(R.string.play_count) to currentPlayCount.toString()
                 )

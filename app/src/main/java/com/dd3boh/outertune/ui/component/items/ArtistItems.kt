@@ -1,4 +1,5 @@
 /*
+
  * Copyright (C) 2025 O⁠ute⁠rTu⁠ne Project
  *
  * SPDX-License-Identifier: GPL-3.0
@@ -6,6 +7,8 @@
  * For any other attributions, refer to the git commit history
  */
 package com.dd3boh.outertune.ui.component.items
+
+import com.dd3boh.outertune.utils.displayName
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -129,7 +132,7 @@ fun ArtistListItem(
     },
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) = ListItem(
-    title = artist.artist.name,
+    title = artist.artist.displayName,
     subtitle = getNSongsString(artist.songCount, artist.downloadCount),
     badges = badges,
     thumbnailContent = {
@@ -177,7 +180,7 @@ fun ArtistGridItem(
     },
     fillMaxWidth: Boolean = false,
 ) = GridItem(
-    title = artist.artist.name,
+    title = artist.artist.displayName,
     subtitle = getNSongsString(artist.songCount, artist.downloadCount),
     badges = badges,
     thumbnailContent = {

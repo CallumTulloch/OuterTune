@@ -25,6 +25,9 @@ import com.dd3boh.outertune.db.entities.Event
 import com.dd3boh.outertune.db.entities.FormatEntity
 import com.dd3boh.outertune.db.entities.GenreEntity
 import com.dd3boh.outertune.db.entities.LyricsEntity
+import com.dd3boh.outertune.db.entities.MetadataFetchEntity
+import com.dd3boh.outertune.db.entities.MetadataNameEntity
+import com.dd3boh.outertune.db.entities.MetadataTargetEntity
 import com.dd3boh.outertune.db.entities.PlayCountEntity
 import com.dd3boh.outertune.db.entities.PlaylistEntity
 import com.dd3boh.outertune.db.entities.PlaylistEntity.Companion.generatePlaylistId
@@ -82,7 +85,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 23
+        const val MUSIC_DATABASE_VERSION = 24
     }
 }
 
@@ -91,6 +94,9 @@ class MusicDatabase(
         SongEntity::class,
         ArtistEntity::class,
         ArtistAlias::class,
+        MetadataTargetEntity::class,
+        MetadataNameEntity::class,
+        MetadataFetchEntity::class,
         AlbumEntity::class,
         PlaylistEntity::class,
         SongArtistMap::class,
@@ -157,7 +163,7 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_16_17)
                     .addMigrations(MIGRATION_20_21)
                     .addMigrations(MIGRATION_21_22)
-                    // This development restart intentionally has no 22 -> 23 migration.
+                    // This development restart intentionally has no 22 -> 23 or 23 -> 24 migration.
                     // A version-specific fallback conflicts with the retained 21 -> 22 migration.
                     .fallbackToDestructiveMigration(true)
                     .build()
