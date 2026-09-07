@@ -5,8 +5,8 @@ import com.zionhuang.innertube.models.YouTubeClient
 import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.innertube.models.body.*
 import com.zionhuang.innertube.models.response.VisitorResponse
+import com.zionhuang.innertube.utils.cookieAuthorization
 import com.zionhuang.innertube.utils.parseCookieString
-import com.zionhuang.innertube.utils.sha1
 import io.ktor.client.*
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.*
@@ -95,10 +95,9 @@ class InnerTube {
             if (setLogin && client.loginSupported) {
                 cookie?.let { cookie ->
                     append("cookie", cookie)
-                    if ("SAPISID" !in cookieMap) return@let
-                    val currentTime = System.currentTimeMillis() / 1000
-                    val sapisidHash = sha1("$currentTime ${cookieMap["SAPISID"]} ${YouTubeClient.ORIGIN_YOUTUBE_MUSIC}")
-                    append("Authorization", "SAPISIDHASH ${currentTime}_${sapisidHash} SAPISID1PHASH ${currentTime}_${sapisidHash} SAPISID3PHASH ${currentTime}_${sapisidHash}")
+                    cookieAuthorization(cookieMap, YouTubeClient.ORIGIN_YOUTUBE_MUSIC)?.let {
+                        append("Authorization", it)
+                    }
                 }
             }
         }
