@@ -1,0 +1,725 @@
+{
+  "note": "Independent public HTTP observations; not a read of the user device database. JSON paths locate the source values in locally retained raw responses. Display text and public content IDs only; tracking fields omitted.",
+  "records": [
+    {
+      "label": "nirvana-song-search-ja",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "Nirvana Smells Like Teen Spirit",
+        "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:34:46.933070+00:00",
+      "status": 200,
+      "sha256": "90e69f48d0753f7e09e13c056bdcc82968c7f79530c55b735921e3481b0356f7",
+      "seconds": 0.69,
+      "groups": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "スメルズ・ライク・ティーン・スピリット",
+              "videoId": "ljUtuoFt-8c"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "ニルヴァーナ",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "Nevermind",
+              "browseId": "MPREb_jPOYfjGgApr",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "5:02"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[2].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "再生回数 30億 回"
+            }
+          ]
+        }
+      ],
+      "properties": []
+    },
+    {
+      "label": "nirvana-song-search-en",
+      "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "en"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "query": "Nirvana Smells Like Teen Spirit",
+        "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:34:46.935076+00:00",
+      "status": 200,
+      "sha256": "07a747a0aa56d5c851f0d4dabc221529f964e2a90071d96deb232d784789b96e",
+      "seconds": 0.7,
+      "groups": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "Smells Like Teen Spirit",
+              "videoId": "ljUtuoFt-8c"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "Nirvana",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "Nevermind",
+              "browseId": "MPREb_jPOYfjGgApr",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "5:02"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[2].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "3B plays"
+            }
+          ]
+        }
+      ],
+      "properties": []
+    },
+    {
+      "label": "nirvana-queue-ja",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "ljUtuoFt-8c",
+          "hTWKbfoikeg"
+        ]
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:35:10.873436+00:00",
+      "status": 200,
+      "sha256": "1f32a2d72dbe432b8302c69503b8596d711069ff2173fcb019962ed1e7c93db3",
+      "seconds": 0.3,
+      "groups": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "スメルズ・ライク・ティーン・スピリット"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "ニルヴァーナ",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "Nevermind",
+              "browseId": "MPREb_jPOYfjGgApr",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "1991年"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.shortBylineText",
+          "runs": [
+            {
+              "text": "ニルヴァーナ"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "スメルズ・ライク・ティーン・スピリット"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "Nirvana",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "22億回視聴"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "高評価 1552万 件"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.shortBylineText",
+          "runs": [
+            {
+              "text": "Nirvana"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.videoId",
+          "value": "ljUtuoFt-8c"
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_OMV"
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.videoId",
+          "value": "hTWKbfoikeg"
+        }
+      ]
+    },
+    {
+      "label": "nirvana-queue-en",
+      "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "en"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "videoIds": [
+          "ljUtuoFt-8c",
+          "hTWKbfoikeg"
+        ]
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:35:10.875433+00:00",
+      "status": 200,
+      "sha256": "34cd21ab5f44a7f051b0cc97456464713ead9a267e69cf2dd42b7c88bb31605c",
+      "seconds": 0.28,
+      "groups": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "Smells Like Teen Spirit"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "Nirvana",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "Nevermind",
+              "browseId": "MPREb_jPOYfjGgApr",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "1991"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.shortBylineText",
+          "runs": [
+            {
+              "text": "Nirvana"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.title",
+          "runs": [
+            {
+              "text": "Smells Like Teen Spirit"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.longBylineText",
+          "runs": [
+            {
+              "text": "Nirvana",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "2.2B views"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "15M likes"
+            }
+          ]
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.shortBylineText",
+          "runs": [
+            {
+              "text": "Nirvana"
+            }
+          ]
+        }
+      ],
+      "properties": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.videoId",
+          "value": "ljUtuoFt-8c"
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_OMV"
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.videoId",
+          "value": "hTWKbfoikeg"
+        }
+      ]
+    },
+    {
+      "label": "nirvana-album-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_jPOYfjGgApr"
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:35:10.877436+00:00",
+      "status": 200,
+      "sha256": "7b708673986632e11f0ce118b14161b87e7b796e204bc515416657014b3e948f",
+      "seconds": 0.51,
+      "groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "Nevermind"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.subtitle",
+          "runs": [
+            {
+              "text": "アルバム"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "1991年"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.straplineTextOne",
+          "runs": [
+            {
+              "text": "ニルヴァーナ",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        }
+      ],
+      "properties": []
+    },
+    {
+      "label": "nirvana-album-en",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "en"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "MPREb_jPOYfjGgApr"
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:35:11.157928+00:00",
+      "status": 200,
+      "sha256": "9e0820b126f0568a9ba43246bb24d77503aff3a942f90dac9951a6fc541a4886",
+      "seconds": 0.45,
+      "groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "Nevermind"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.subtitle",
+          "runs": [
+            {
+              "text": "Album"
+            },
+            {
+              "text": " • "
+            },
+            {
+              "text": "1991"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicResponsiveHeaderRenderer.straplineTextOne",
+          "runs": [
+            {
+              "text": "Nirvana",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        }
+      ],
+      "properties": []
+    },
+    {
+      "label": "nirvana-artist-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "UCrPe3hLA51968GwxHSZ1llw"
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:35:11.189839+00:00",
+      "status": 200,
+      "sha256": "c6da6d7b37fd9dee11e673befc8a47fa1f981895c61a079a227e84cc6ac02222",
+      "seconds": 0.55,
+      "groups": [
+        {
+          "path": "$.header.musicImmersiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "ニルヴァーナ"
+            }
+          ]
+        }
+      ],
+      "properties": []
+    },
+    {
+      "label": "nirvana-artist-en",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "en"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "UCrPe3hLA51968GwxHSZ1llw"
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:35:11.398985+00:00",
+      "status": 200,
+      "sha256": "2e1ca1d0d6fffcf6e97408bfd63c84e6e71c9f6809bdd193a9fe7878d779cffd",
+      "seconds": 0.49,
+      "groups": [
+        {
+          "path": "$.header.musicImmersiveHeaderRenderer.title",
+          "runs": [
+            {
+              "text": "Nirvana"
+            }
+          ]
+        }
+      ],
+      "properties": []
+    },
+    {
+      "label": "nirvana-album-songs-ja",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "ja"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "VLOLAK5uy_lYnxawfGdkGePjdFhIYaS6LjP-Md6UYf0"
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:35:44.734259+00:00",
+      "status": 200,
+      "sha256": "778ceb20e888b877a830ba54387d6a600c85fb0a5270e59ecc929446108f728a",
+      "seconds": 0.38,
+      "groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "スメルズ・ライク・ティーン・スピリット",
+              "videoId": "ljUtuoFt-8c",
+              "playlistId": "OLAK5uy_lYnxawfGdkGePjdFhIYaS6LjP-Md6UYf0"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "ニルヴァーナ",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[2].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "Nevermind",
+              "browseId": "MPREb_jPOYfjGgApr",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            }
+          ]
+        }
+      ],
+      "properties": []
+    },
+    {
+      "label": "nirvana-album-songs-en",
+      "url": "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false",
+      "request": {
+        "context": {
+          "client": {
+            "clientName": "WEB_REMIX",
+            "clientVersion": "1.20250310.01.00",
+            "gl": "JP",
+            "hl": "en"
+          },
+          "request": {
+            "internalExperimentFlags": [],
+            "useSsl": true
+          },
+          "user": {
+            "lockedSafetyMode": false
+          }
+        },
+        "browseId": "VLOLAK5uy_lYnxawfGdkGePjdFhIYaS6LjP-Md6UYf0"
+      },
+      "authenticated": false,
+      "requested_at_utc": "2026-09-06T19:35:44.736259+00:00",
+      "status": 200,
+      "sha256": "5ede852d2a32f3b63a7ae7acb1941983019ba3858b2e5526849862ebfbaac749",
+      "seconds": 0.36,
+      "groups": [
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "Smells Like Teen Spirit",
+              "videoId": "ljUtuoFt-8c",
+              "playlistId": "OLAK5uy_lYnxawfGdkGePjdFhIYaS6LjP-Md6UYf0"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[1].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "Nirvana",
+              "browseId": "UCrPe3hLA51968GwxHSZ1llw",
+              "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+            }
+          ]
+        },
+        {
+          "path": "$.contents.twoColumnBrowseResultsRenderer.secondaryContents.sectionListRenderer.contents[0].musicPlaylistShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[2].musicResponsiveListItemFlexColumnRenderer.text",
+          "runs": [
+            {
+              "text": "Nevermind",
+              "browseId": "MPREb_jPOYfjGgApr",
+              "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+            }
+          ]
+        }
+      ],
+      "properties": []
+    }
+  ]
+}

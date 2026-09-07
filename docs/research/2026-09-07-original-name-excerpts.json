@@ -1,0 +1,1100 @@
+{
+  "investigationDate": "2026-09-07",
+  "scope": "Public metadata only; no account, app changes or media retrieval. Previous Nirvana Music evidence reused separately.",
+  "verifiedNewYouTubeResponses": 17,
+  "music": {
+    "conditions": {
+      "gl": "JP",
+      "authenticated": false,
+      "client": "WEB_REMIX",
+      "clientVersion": "1.20250310.01.00",
+      "matching": "Matching by exact observed video ID, not rank",
+      "request_count": 10
+    },
+    "responses": [
+      {
+        "label": "bts-search-en",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "en"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "BTS Dynamite",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:20:51.999348+00:00",
+        "sha256": "33c13333854ffb099b42c641d985b1f6ba6d2536a3d892d3cd717705a6a53647"
+      },
+      {
+        "label": "bts-search-ja",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "BTS Dynamite",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:20:51.919383+00:00",
+        "sha256": "768fdd445d2f76a98443221f75282a96f171392cc6448adca65f941befb27e71"
+      },
+      {
+        "label": "kenshi-search-en",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "en"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "米津玄師 Lemon",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:20:51.885342+00:00",
+        "sha256": "ebe0d2c975f3a0984fab3ac0d926e1c08cd7c5244d49085a6b9cf9b72c9716b4"
+      },
+      {
+        "label": "kenshi-search-ja",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "米津玄師 Lemon",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:20:51.125555+00:00",
+        "sha256": "809e523c12d92beeef762c406e9d2a211d4041e24d5dec0b0a4144e2865582da"
+      },
+      {
+        "label": "samples-queue-en",
+        "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "en"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoIds": [
+            "by4SYYWlhEs",
+            "LgSLygQdHS4",
+            "HaEYUJ2aRHs",
+            "SXoQHp2cQQc"
+          ]
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:21:39.861537+00:00",
+        "sha256": "80c95c03bf8a042a019d221fb1adf4a77854b1c23dd30e812644476e769c0cc7"
+      },
+      {
+        "label": "samples-queue-ja",
+        "url": "https://music.youtube.com/youtubei/v1/music/get_queue?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "videoIds": [
+            "by4SYYWlhEs",
+            "LgSLygQdHS4",
+            "HaEYUJ2aRHs",
+            "SXoQHp2cQQc"
+          ]
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:21:39.859341+00:00",
+        "sha256": "5390aadbf123cab403b375b855ccf6e400eaa0bdf41f16e12561d06fe1bad07f"
+      },
+      {
+        "label": "stromae-search-en",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "en"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "Stromae Alors on danse",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:20:52.577258+00:00",
+        "sha256": "0f677b83043d9de3490af9f513235cc4b33b095300a9fbf19d2929604e1b6ad8"
+      },
+      {
+        "label": "stromae-search-ja",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "Stromae Alors on danse",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:20:52.525354+00:00",
+        "sha256": "fb9e333705ec295b60b515981d0caf8a6cdc4ab1246df6808aba1c7021a1a89b"
+      },
+      {
+        "label": "yoasobi-search-en",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "en"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "YOASOBI 夜に駆ける",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:20:51.124029+00:00",
+        "sha256": "8f0fa9d0616abba927689faf56bfe4c41f4ed7e2b4641fbbf722020db43accbf"
+      },
+      {
+        "label": "yoasobi-search-ja",
+        "url": "https://music.youtube.com/youtubei/v1/search?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB_REMIX",
+              "clientVersion": "1.20250310.01.00",
+              "gl": "JP",
+              "hl": "ja"
+            },
+            "request": {
+              "internalExperimentFlags": [],
+              "useSsl": true
+            },
+            "user": {
+              "lockedSafetyMode": false
+            }
+          },
+          "query": "YOASOBI 夜に駆ける",
+          "params": "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        },
+        "authenticated": false,
+        "status": 200,
+        "requested_at_utc": "2026-09-07T06:20:51.120524+00:00",
+        "sha256": "890fad6127688a86ea6ceb324e97ab5247864a79e1222985e4f02ac1c1655ff4"
+      }
+    ],
+    "records": [
+      {
+        "label": "bts-search-en",
+        "sample": "bts",
+        "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer",
+        "videoId": "HaEYUJ2aRHs",
+        "title": "Dynamite",
+        "linkedNames": [
+          {
+            "text": "BTS",
+            "browseId": "UC9vrvNSL3xcWGSkV86REBSg"
+          },
+          {
+            "text": "BE",
+            "browseId": "MPREb_M6GxuQGhwkR"
+          }
+        ]
+      },
+      {
+        "label": "bts-search-ja",
+        "sample": "bts",
+        "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer",
+        "videoId": "HaEYUJ2aRHs",
+        "title": "Dynamite",
+        "linkedNames": [
+          {
+            "text": "BTS (방탄소년단)",
+            "browseId": "UC9vrvNSL3xcWGSkV86REBSg"
+          },
+          {
+            "text": "BE",
+            "browseId": "MPREb_M6GxuQGhwkR"
+          }
+        ]
+      },
+      {
+        "label": "kenshi-search-en",
+        "sample": "kenshi",
+        "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer",
+        "videoId": "LgSLygQdHS4",
+        "title": "Lemon",
+        "linkedNames": [
+          {
+            "text": "Kenshi Yonezu",
+            "browseId": "UCC_OGcKdYY-aWFvVMFVGbzw"
+          },
+          {
+            "text": "Lemon",
+            "browseId": "MPREb_maDtpR4n7BF"
+          }
+        ]
+      },
+      {
+        "label": "kenshi-search-ja",
+        "sample": "kenshi",
+        "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer",
+        "videoId": "LgSLygQdHS4",
+        "title": "Lemon",
+        "linkedNames": [
+          {
+            "text": "米津玄師",
+            "browseId": "UCC_OGcKdYY-aWFvVMFVGbzw"
+          },
+          {
+            "text": "Lemon",
+            "browseId": "MPREb_maDtpR4n7BF"
+          }
+        ]
+      },
+      {
+        "label": "samples-queue-en",
+        "sample": "yoasobi",
+        "path": "$.queueDatas[0].content.playlistPanelVideoRenderer",
+        "videoId": "by4SYYWlhEs",
+        "title": "夜に駆ける",
+        "linkedNames": [
+          {
+            "text": "YOASOBI",
+            "browseId": "UCI6B8NkZKqlFWoiC_xE-hzA"
+          },
+          {
+            "text": "夜に駆ける",
+            "browseId": "MPREb_LfJd6hctedK"
+          }
+        ]
+      },
+      {
+        "label": "samples-queue-en",
+        "sample": "kenshi",
+        "path": "$.queueDatas[1].content.playlistPanelVideoRenderer",
+        "videoId": "LgSLygQdHS4",
+        "title": "Lemon",
+        "linkedNames": [
+          {
+            "text": "Kenshi Yonezu",
+            "browseId": "UCC_OGcKdYY-aWFvVMFVGbzw"
+          },
+          {
+            "text": "Lemon",
+            "browseId": "MPREb_maDtpR4n7BF"
+          }
+        ]
+      },
+      {
+        "label": "samples-queue-en",
+        "sample": "bts",
+        "path": "$.queueDatas[2].content.playlistPanelVideoRenderer",
+        "videoId": "HaEYUJ2aRHs",
+        "title": "Dynamite",
+        "linkedNames": [
+          {
+            "text": "BTS",
+            "browseId": "UC9vrvNSL3xcWGSkV86REBSg"
+          },
+          {
+            "text": "BE",
+            "browseId": "MPREb_M6GxuQGhwkR"
+          }
+        ]
+      },
+      {
+        "label": "samples-queue-en",
+        "sample": "stromae",
+        "path": "$.queueDatas[3].content.playlistPanelVideoRenderer",
+        "videoId": "SXoQHp2cQQc",
+        "title": "Alors on danse (Radio Edit)",
+        "linkedNames": [
+          {
+            "text": "Stromae",
+            "browseId": "UC0Jtyp9fC2lW9LaW-sDpCkw"
+          },
+          {
+            "text": "Alors On Danse",
+            "browseId": "MPREb_9IYYNHD8JCt"
+          }
+        ]
+      },
+      {
+        "label": "samples-queue-ja",
+        "sample": "yoasobi",
+        "path": "$.queueDatas[0].content.playlistPanelVideoRenderer",
+        "videoId": "by4SYYWlhEs",
+        "title": "夜に駆ける",
+        "linkedNames": [
+          {
+            "text": "YOASOBI",
+            "browseId": "UCI6B8NkZKqlFWoiC_xE-hzA"
+          },
+          {
+            "text": "夜に駆ける",
+            "browseId": "MPREb_LfJd6hctedK"
+          }
+        ]
+      },
+      {
+        "label": "samples-queue-ja",
+        "sample": "kenshi",
+        "path": "$.queueDatas[1].content.playlistPanelVideoRenderer",
+        "videoId": "LgSLygQdHS4",
+        "title": "Lemon",
+        "linkedNames": [
+          {
+            "text": "米津玄師",
+            "browseId": "UCC_OGcKdYY-aWFvVMFVGbzw"
+          },
+          {
+            "text": "Lemon",
+            "browseId": "MPREb_maDtpR4n7BF"
+          }
+        ]
+      },
+      {
+        "label": "samples-queue-ja",
+        "sample": "bts",
+        "path": "$.queueDatas[2].content.playlistPanelVideoRenderer",
+        "videoId": "HaEYUJ2aRHs",
+        "title": "Dynamite",
+        "linkedNames": [
+          {
+            "text": "BTS (방탄소년단)",
+            "browseId": "UC9vrvNSL3xcWGSkV86REBSg"
+          },
+          {
+            "text": "BE",
+            "browseId": "MPREb_M6GxuQGhwkR"
+          }
+        ]
+      },
+      {
+        "label": "samples-queue-ja",
+        "sample": "stromae",
+        "path": "$.queueDatas[3].content.playlistPanelVideoRenderer",
+        "videoId": "SXoQHp2cQQc",
+        "title": "Alors on danse (Radio Edit)",
+        "linkedNames": [
+          {
+            "text": "Stromae",
+            "browseId": "UC0Jtyp9fC2lW9LaW-sDpCkw"
+          },
+          {
+            "text": "Alors On Danse",
+            "browseId": "MPREb_9IYYNHD8JCt"
+          }
+        ]
+      },
+      {
+        "label": "stromae-search-en",
+        "sample": "stromae",
+        "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer",
+        "videoId": "SXoQHp2cQQc",
+        "title": "Alors on danse (Radio Edit)",
+        "linkedNames": [
+          {
+            "text": "Stromae",
+            "browseId": "UC0Jtyp9fC2lW9LaW-sDpCkw"
+          },
+          {
+            "text": "Alors On Danse",
+            "browseId": "MPREb_9IYYNHD8JCt"
+          }
+        ]
+      },
+      {
+        "label": "stromae-search-ja",
+        "sample": "stromae",
+        "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer",
+        "videoId": "SXoQHp2cQQc",
+        "title": "Alors on danse (Radio Edit)",
+        "linkedNames": [
+          {
+            "text": "Stromae",
+            "browseId": "UC0Jtyp9fC2lW9LaW-sDpCkw"
+          },
+          {
+            "text": "Alors On Danse",
+            "browseId": "MPREb_9IYYNHD8JCt"
+          }
+        ]
+      },
+      {
+        "label": "yoasobi-search-en",
+        "sample": "yoasobi",
+        "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer",
+        "videoId": "by4SYYWlhEs",
+        "title": "夜に駆ける",
+        "linkedNames": [
+          {
+            "text": "YOASOBI",
+            "browseId": "UCI6B8NkZKqlFWoiC_xE-hzA"
+          },
+          {
+            "text": "夜に駆ける",
+            "browseId": "MPREb_LfJd6hctedK"
+          }
+        ]
+      },
+      {
+        "label": "yoasobi-search-ja",
+        "sample": "yoasobi",
+        "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer",
+        "videoId": "by4SYYWlhEs",
+        "title": "夜に駆ける",
+        "linkedNames": [
+          {
+            "text": "YOASOBI",
+            "browseId": "UCI6B8NkZKqlFWoiC_xE-hzA"
+          },
+          {
+            "text": "夜に駆ける",
+            "browseId": "MPREb_LfJd6hctedK"
+          }
+        ]
+      }
+    ]
+  },
+  "observedMusicVideoTypes": [
+    {
+      "label": "bts-search-en",
+      "videoId": "HaEYUJ2aRHs",
+      "types": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "bts-search-ja",
+      "videoId": "HaEYUJ2aRHs",
+      "types": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "kenshi-search-en",
+      "videoId": "LgSLygQdHS4",
+      "types": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "kenshi-search-ja",
+      "videoId": "LgSLygQdHS4",
+      "types": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "samples-queue-en",
+      "videoId": "by4SYYWlhEs",
+      "types": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "samples-queue-en",
+      "videoId": "LgSLygQdHS4",
+      "types": [
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "samples-queue-en",
+      "videoId": "HaEYUJ2aRHs",
+      "types": [
+        {
+          "path": "$.queueDatas[2].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[2].content.playlistPanelVideoRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "samples-queue-en",
+      "videoId": "SXoQHp2cQQc",
+      "types": [
+        {
+          "path": "$.queueDatas[3].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[3].content.playlistPanelVideoRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "samples-queue-ja",
+      "videoId": "by4SYYWlhEs",
+      "types": [
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[0].content.playlistPanelVideoRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "samples-queue-ja",
+      "videoId": "LgSLygQdHS4",
+      "types": [
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[1].content.playlistPanelVideoRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "samples-queue-ja",
+      "videoId": "HaEYUJ2aRHs",
+      "types": [
+        {
+          "path": "$.queueDatas[2].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[2].content.playlistPanelVideoRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "samples-queue-ja",
+      "videoId": "SXoQHp2cQQc",
+      "types": [
+        {
+          "path": "$.queueDatas[3].content.playlistPanelVideoRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.queueDatas[3].content.playlistPanelVideoRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "stromae-search-en",
+      "videoId": "SXoQHp2cQQc",
+      "types": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "stromae-search-ja",
+      "videoId": "SXoQHp2cQQc",
+      "types": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "yoasobi-search-en",
+      "videoId": "by4SYYWlhEs",
+      "types": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    },
+    {
+      "label": "yoasobi-search-ja",
+      "videoId": "by4SYYWlhEs",
+      "types": [
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.overlay.musicItemThumbnailOverlayRenderer.content.musicPlayButtonRenderer.playNavigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.flexColumns[0].musicResponsiveListItemFlexColumnRenderer.text.runs[0].navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        },
+        {
+          "path": "$.contents.tabbedSearchResultsRenderer.tabs[0].tabRenderer.content.sectionListRenderer.contents[0].musicShelfRenderer.contents[0].musicResponsiveListItemRenderer.menu.menuRenderer.items[0].menuNavigationItemRenderer.navigationEndpoint.watchEndpoint.watchEndpointMusicSupportedConfigs.watchEndpointMusicConfig.musicVideoType",
+          "value": "MUSIC_VIDEO_TYPE_ATV"
+        }
+      ]
+    }
+  ],
+  "main": [
+    {
+      "label": "ljUtuoFt-8c-oembed-ja",
+      "status": 200,
+      "oembed": {
+        "title": "Smells Like Teen Spirit",
+        "author_name": "Nirvana - Topic",
+        "author_url": "https://www.youtube.com/channel/UCrPe3hLA51968GwxHSZ1llw",
+        "provider_name": "YouTube"
+      },
+      "response": {
+        "url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DljUtuoFt-8c&format=json",
+        "request": null,
+        "request_headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+          "Accept-Language": "ja"
+        },
+        "authenticated": false,
+        "requested_at_utc": "2026-09-07T06:24:00.229589+00:00",
+        "status": 200,
+        "sha256": "965cfe596e166c11a21c6cb609f7fde56b5d6290f8c1494d58c13125a10c9777"
+      }
+    },
+    {
+      "label": "ljUtuoFt-8c-player-ja",
+      "status": 200,
+      "videoDetails": {
+        "videoId": "ljUtuoFt-8c",
+        "title": "Smells Like Teen Spirit",
+        "author": "Nirvana - Topic",
+        "channelId": "UCrPe3hLA51968GwxHSZ1llw"
+      },
+      "playabilityStatus": {
+        "status": "UNPLAYABLE",
+        "reason": "動画を再生できません"
+      },
+      "language_fields": [],
+      "descriptionOpening": "Provided to YouTube by Universal Music Group\n\nSmells Like Teen Spirit · Nirvana\n\nNevermind",
+      "response": {
+        "url": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB",
+              "clientVersion": "2.20250312.04.00",
+              "hl": "ja",
+              "gl": "JP"
+            }
+          },
+          "videoId": "ljUtuoFt-8c"
+        },
+        "request_headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+          "Accept-Language": "ja",
+          "Content-Type": "application/json",
+          "X-YouTube-Client-Name": "1",
+          "X-YouTube-Client-Version": "2.20250312.04.00"
+        },
+        "authenticated": false,
+        "requested_at_utc": "2026-09-07T06:24:00.233095+00:00",
+        "status": 200,
+        "sha256": "130ef88092d1390b0cee8c8308b027fde296bd02b9c50a75c1c0d82b9a9c4be9"
+      }
+    },
+    {
+      "label": "ljUtuoFt-8c-watch-ja",
+      "status": 200,
+      "videoDetails": {
+        "videoId": "ljUtuoFt-8c",
+        "title": "Smells Like Teen Spirit",
+        "author": "Nirvana - Topic",
+        "channelId": "UCrPe3hLA51968GwxHSZ1llw"
+      },
+      "playabilityStatus": {
+        "status": "OK",
+        "reason": null
+      },
+      "language_fields": [],
+      "descriptionOpening": "Provided to YouTube by Universal Music Group\n\nSmells Like Teen Spirit · Nirvana\n\nNevermind",
+      "response": {
+        "url": "https://www.youtube.com/watch?v=ljUtuoFt-8c&hl=ja&gl=JP",
+        "request": null,
+        "request_headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+          "Accept-Language": "ja"
+        },
+        "authenticated": false,
+        "requested_at_utc": "2026-09-07T06:24:00.231589+00:00",
+        "status": 200,
+        "sha256": "279a885e0c460bfcce1ba17b9bbf7418e22b8b3e6a60f895a7fbf5915cc8c16f"
+      }
+    },
+    {
+      "label": "bts-main-player-ja",
+      "status": 200,
+      "videoDetails": {
+        "videoId": "HaEYUJ2aRHs",
+        "title": "Dynamite",
+        "author": "BTS - Topic",
+        "channelId": "UC9vrvNSL3xcWGSkV86REBSg"
+      },
+      "playabilityStatus": {
+        "status": "UNPLAYABLE",
+        "reason": "動画を再生できません"
+      },
+      "language_fields": [],
+      "descriptionOpening": "Provided to YouTube by 'BigHit Entertainment'\n\nDynamite · BTS (방탄소년단)\n\nBE",
+      "response": {
+        "url": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB",
+              "clientVersion": "2.20250312.04.00",
+              "hl": "ja",
+              "gl": "JP"
+            }
+          },
+          "videoId": "HaEYUJ2aRHs"
+        },
+        "request_headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+          "Accept-Language": "ja",
+          "Content-Type": "application/json",
+          "X-YouTube-Client-Name": "1",
+          "X-YouTube-Client-Version": "2.20250312.04.00"
+        },
+        "authenticated": false,
+        "requested_at_utc": "2026-09-07T06:24:50.194160+00:00",
+        "status": 200,
+        "sha256": "9c6d51a3ff7cef0bf4bc862acd632950ece42a0440733c74152eedc78354906a"
+      }
+    },
+    {
+      "label": "kenshi-main-player-ja",
+      "status": 200,
+      "videoDetails": {
+        "videoId": "LgSLygQdHS4",
+        "title": "Lemon",
+        "author": "Kenshi Yonezu - Topic",
+        "channelId": "UCC_OGcKdYY-aWFvVMFVGbzw"
+      },
+      "playabilityStatus": {
+        "status": "UNPLAYABLE",
+        "reason": "動画を再生できません"
+      },
+      "language_fields": [],
+      "descriptionOpening": "Provided to YouTube by Sony Music Labels Inc.\n\nLemon · Kenshi Yonezu\n\nLemon",
+      "response": {
+        "url": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB",
+              "clientVersion": "2.20250312.04.00",
+              "hl": "ja",
+              "gl": "JP"
+            }
+          },
+          "videoId": "LgSLygQdHS4"
+        },
+        "request_headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+          "Accept-Language": "ja",
+          "Content-Type": "application/json",
+          "X-YouTube-Client-Name": "1",
+          "X-YouTube-Client-Version": "2.20250312.04.00"
+        },
+        "authenticated": false,
+        "requested_at_utc": "2026-09-07T06:24:50.191652+00:00",
+        "status": 200,
+        "sha256": "cc660a50374b1a3ae61cbf9882f6b2950720aa3ecf6473d8855b0f16d3426a93"
+      }
+    },
+    {
+      "label": "stromae-main-player-ja",
+      "status": 200,
+      "videoDetails": {
+        "videoId": "SXoQHp2cQQc",
+        "title": "Alors on danse (Radio Edit)",
+        "author": "Stromae - Topic",
+        "channelId": "UC0Jtyp9fC2lW9LaW-sDpCkw"
+      },
+      "playabilityStatus": {
+        "status": "UNPLAYABLE",
+        "reason": "動画を再生できません"
+      },
+      "language_fields": [],
+      "descriptionOpening": "Provided to YouTube by Universal Music Group\n\nAlors on danse (Radio Edit) · Stromae\n\nAlors On Danse",
+      "response": {
+        "url": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB",
+              "clientVersion": "2.20250312.04.00",
+              "hl": "ja",
+              "gl": "JP"
+            }
+          },
+          "videoId": "SXoQHp2cQQc"
+        },
+        "request_headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+          "Accept-Language": "ja",
+          "Content-Type": "application/json",
+          "X-YouTube-Client-Name": "1",
+          "X-YouTube-Client-Version": "2.20250312.04.00"
+        },
+        "authenticated": false,
+        "requested_at_utc": "2026-09-07T06:24:50.546120+00:00",
+        "status": 200,
+        "sha256": "aa74fe1c05c7017ed0891f36084dafe932c5db7d3b8f7797d6d25b20517831b5"
+      }
+    },
+    {
+      "label": "yoasobi-main-player-ja",
+      "status": 200,
+      "videoDetails": {
+        "videoId": "by4SYYWlhEs",
+        "title": "夜に駆ける",
+        "author": "YOASOBI - Topic",
+        "channelId": "UCI6B8NkZKqlFWoiC_xE-hzA"
+      },
+      "playabilityStatus": {
+        "status": "UNPLAYABLE",
+        "reason": "動画を再生できません"
+      },
+      "language_fields": [],
+      "descriptionOpening": "Provided to YouTube by The Orchard Enterprises\n\n夜に駆ける · YOASOBI · Ayase\n\n夜に駆ける",
+      "response": {
+        "url": "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+        "request": {
+          "context": {
+            "client": {
+              "clientName": "WEB",
+              "clientVersion": "2.20250312.04.00",
+              "hl": "ja",
+              "gl": "JP"
+            }
+          },
+          "videoId": "by4SYYWlhEs"
+        },
+        "request_headers": {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+          "Accept-Language": "ja",
+          "Content-Type": "application/json",
+          "X-YouTube-Client-Name": "1",
+          "X-YouTube-Client-Version": "2.20250312.04.00"
+        },
+        "authenticated": false,
+        "requested_at_utc": "2026-09-07T06:24:50.189645+00:00",
+        "status": 200,
+        "sha256": "3f45217ab74d9dbf5877d34748a29f093573386a06f9bf49887eab9151a8df9e"
+      }
+    }
+  ],
+  "mainStructuredMusicCard": {
+    "label": "ljUtuoFt-8c-watch-ja",
+    "path": "$.engagementPanels[3].engagementPanelSectionListRenderer.content.structuredDescriptionContentRenderer.items[3].horizontalCardListRenderer.cards[0].videoAttributeViewModel",
+    "title": "スメルズ・ライク・ティーン・スピリット",
+    "subtitle": "Nirvana",
+    "albumText": "Nevermind",
+    "linkedVideoId": "hTWKbfoikeg",
+    "linkedPlaylistId": "OLAK5uy_kEQJGO2SZ0k-vJ8b-F2AJLfKnw0cFydNg",
+    "observation": "Localized music card inside the Main watch response; linked IDs differ from the requested Art Track and its previously observed Music album playlist. Do not treat this card as the original-name record of the requested ID."
+  },
+  "limits": [
+    "Requested language is not a declaration of original name language.",
+    "Main Art Track metadata documents the delivered original text; English-original eligibility still needs evidence.",
+    "Channel author is not the formal artist credit; description punctuation is not an ID relation.",
+    "No explicit original-name language was exposed in the inspected Music responses or selected Main metadata."
+  ]
+}
