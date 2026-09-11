@@ -2,14 +2,14 @@ package com.dd3boh.outertune.playback
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import android.widget.Toast.LENGTH_SHORT
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
 import androidx.media3.database.DatabaseProvider
-import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.common.C
 import androidx.media3.datasource.cache.CacheSpan
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -73,7 +73,6 @@ import java.io.IOException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -113,31 +112,16 @@ class DownloadUtil @Inject constructor(
 
     private val connectivityManager = context.getSystemService<ConnectivityManager>()!!
     private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
-    private val songUrlCache = ConcurrentHashMap<String, Pair<String, Long>>()
-    private val dataSourceFactory = ResolvingDataSource.Factory(
-        CacheDataSource.Factory()
-            .setCache(playerCache)
-            .setUpstreamDataSourceFactory(
-                OkHttpDataSource.Factory(
-                    OkHttpClient.Builder()
-                        .proxy(YouTube.proxy)
-                        .build()
-                )
-            )
-    ) { dataSpec ->
-        val mediaId = dataSpec.key ?: error("No media id")
-        val length = if (dataSpec.length >= 0) dataSpec.length else 1
-        if (playerCache.isCached(mediaId, dataSpec.position, length)) {
-            return@Factory dataSpec
-        }
-
-        songUrlCache[mediaId]?.takeIf { it.second > System.currentTimeMillis() }?.let {
-            return@Factory dataSpec.withUri(it.first.toUri())
-        }
-
-        val playbackData = resolvePlaybackData(mediaId)
-        dataSpec.withUri(playbackData.streamUrl.toUri())
-    }
+    private val songUrlCache = PlaybackUrlCache(SystemClock::elapsedRealtime)
+    private val dataSourceFactory = createResolvingPlayerCacheDataSourceFactory(
+        playerCache = playerCache,
+        upstreamFactory = OkHttpDataSource.Factory(OkHttpClient.Builder().proxy(YouTube.proxy).build()),
+        resolver = { dataSpec ->
+            val mediaId = dataSpec.key ?: error("No media id")
+            val url = songUrlCache[mediaId] ?: resolvePlaybackData(mediaId).streamUrl
+            dataSpec.withUri(url.toUri())
+        },
+    )
     val downloadNotificationHelper = DownloadNotificationHelper(context, ExoDownloadService.CHANNEL_ID)
     val downloadManager: DownloadManager =
         DownloadManager(context, databaseProvider, downloadCache, dataSourceFactory, Executor(Runnable::run)).apply {
@@ -258,17 +242,18 @@ class DownloadUtil @Inject constructor(
     }
 
     private suspend fun prepareAndDownload(songs: List<MediaMetadata>) {
+        val requestLocale = YouTube.locale
         val songsById = songs.associateBy(MediaMetadata::id)
         val missingAlbumIds = songsById.values.filter { !it.isLocal && it.album == null }.map(MediaMetadata::id)
         val queueSongs = missingAlbumIds.chunked(YouTube.MAX_GET_QUEUE_SIZE).flatMap { videoIds ->
-            YouTube.queue(videoIds = videoIds).onFailure {
+            YouTube.queue(videoIds = videoIds, requestLocale = requestLocale).onFailure {
                 reportException(it)
                 Log.w(TAG, "Unable to resolve album metadata for ${videoIds.size} download(s)", it)
             }.getOrDefault(emptyList())
         }.associateBy(SongItem::id)
 
         songsById.values.forEach { original ->
-            val withAlbum = queueSongs[original.id]?.let { resolved ->
+            val withAlbum = queueSongs[original.id]?.takeIf { YouTube.locale == requestLocale }?.let { resolved ->
                 mergeResolvedMetadata(original, resolved.toMediaMetadata())
             } ?: original
             // A warm cache may be thinner than the metadata read from the saved library.
@@ -310,24 +295,29 @@ class DownloadUtil @Inject constructor(
 
     private fun resolvePlaybackData(mediaId: String): YTPlayerUtils.PlaybackData {
         val playbackData = runBlocking(Dispatchers.IO) {
+            val hasExistingBytes = playerCache.getCachedSpans(mediaId).isNotEmpty()
+                || downloadCache.getCachedSpans(mediaId).isNotEmpty()
+            val requiredItag = if (hasExistingBytes) database.format(mediaId).first()?.itag else null
             YTPlayerUtils.playerResponseForPlayback(
                 mediaId,
                 audioQuality = audioQuality,
                 connectivityManager = connectivityManager,
+                requiredItag = requiredItag,
             )
         }.getOrThrow()
         val format = playbackData.format
 
-        database.query {
-            upsert(
+        runBlocking(Dispatchers.IO) {
+            database.upsert(
                 FormatEntity(
                     id = mediaId,
                     itag = format.itag,
                     mimeType = format.mimeType.split(";")[0],
-                    codecs = format.mimeType.split("codecs=")[1].removeSurrounding("\""),
+                    codecs = format.mimeType.substringAfter("codecs=", "").substringBefore(';')
+                        .trim().removeSurrounding("\""),
                     bitrate = format.bitrate,
                     sampleRate = format.audioSampleRate,
-                    contentLength = format.contentLength!!,
+                    contentLength = format.contentLength ?: C.LENGTH_UNSET.toLong(),
                     loudnessDb = playbackData.audioConfig?.loudnessDb,
                     playbackTrackingUrl = playbackData.playbackTracking?.videostatsPlaybackUrl?.baseUrl
                 )
@@ -336,8 +326,7 @@ class DownloadUtil @Inject constructor(
 
         // Keep the signed stream URL unchanged. Media3 sends byte ranges through the
         // HTTP Range header; appending query parameters can invalidate the CDN request.
-        songUrlCache[mediaId] = playbackData.streamUrl to
-                (System.currentTimeMillis() + playbackData.streamExpiresInSeconds * 1000L)
+        songUrlCache.put(mediaId, playbackData.streamUrl, playbackData.streamExpiresInSeconds)
         return playbackData
     }
 
@@ -408,32 +397,8 @@ class DownloadUtil @Inject constructor(
     suspend fun migrateDownloads() = withDownloadProcessing {
         var runs = 0
         try {
-            // "skeleton" of old download manager to access old download data
-            val dataSourceFactory = ResolvingDataSource.Factory(
-                CacheDataSource.Factory()
-                    .setCache(playerCache)
-                    .setUpstreamDataSourceFactory(
-                        OkHttpDataSource.Factory(
-                            OkHttpClient.Builder()
-                                .proxy(YouTube.proxy)
-                                .build()
-                        )
-                    )
-            ) { dataSpec ->
-                return@Factory dataSpec
-            }
-
-            val downloadManager: DownloadManager = DownloadManager(
-                context,
-                databaseProvider,
-                downloadCache,
-                dataSourceFactory,
-                Executor(Runnable::run)
-            ).apply {
-                maxParallelDownloads = 3
-            }
-
-            // actual migration code
+            // Read the existing manager's index. A second manager would also start pending
+            // downloads, previously with an unresolved URL and without the format guard.
             val downloadedSongs = mutableMapOf<String, Download>()
             val cursor = downloadManager.downloadIndex.getDownloads()
             try {
@@ -653,6 +618,7 @@ class DownloadUtil @Inject constructor(
                     download: Download,
                     finalException: Exception?
                 ) {
+                    if (download.state == Download.STATE_FAILED) songUrlCache.invalidate(download.request.id)
                     downloadStateScope.launch {
                         try {
                             downloadStateMutex.withLock {

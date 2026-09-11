@@ -3,12 +3,12 @@ package com.dd3boh.outertune.viewmodels
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
-import com.zionhuang.innertube.models.YTItem
+import com.zionhuang.innertube.pages.BrowseResult
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
@@ -17,23 +17,12 @@ class BrowseViewModel @Inject constructor(
 ) : ViewModel() {
     private val browseId: String? = savedStateHandle.get<String>("browseId")
 
-    val items = MutableStateFlow<List<YTItem>?>(emptyList())
-    val title = MutableStateFlow<String?>("")
-
-    init {
-        viewModelScope.launch {
-            browseId?.let {
-                YouTube.browse(browseId, null).onSuccess { result ->
-                    // Store the title
-                    title.value = result.title
-
-                    // Flatten the nested structure to get all YTItems
-                    val allItems = result.items.flatMap { it.items }
-                    items.value = allItems
-                }.onFailure {
-                    reportException(it)
-                }
-            }
-        }
-    }
+    private val loader = LocalizedPageLoader(viewModelScope, initial = { locale ->
+        browseId?.let { YouTube.browse(it, null, requestLocale = locale) }
+            ?: Result.success(BrowseResult(null, emptyList()))
+    })
+    val items = loader.page.map { it?.items?.flatMap { section -> section.items } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val title = loader.page.map { it?.title }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 }

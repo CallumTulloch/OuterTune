@@ -124,10 +124,10 @@ data class ArtistPage(
                         browseId = renderer.navigationEndpoint.browseEndpoint?.browseId ?: return null,
                         playlistId = renderer.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content
                             ?.musicPlayButtonRenderer?.playNavigationEndpoint
-                            ?.anyWatchEndpoint?.playlistId ?: return null,
+                            ?.anyWatchEndpoint?.playlistId,
                         title = renderer.title.runs?.firstOrNull()?.text ?: return null,
                         artists = null,
-                        year = renderer.subtitle?.runs?.lastOrNull()?.text?.toIntOrNull(),
+                        year = renderer.subtitle?.runs?.lastOrNull()?.text?.removeSuffix("年")?.toIntOrNull(),
                         thumbnail = renderer.thumbnailRenderer.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,
                         explicit = renderer.subtitleBadges?.find {
                             it.musicInlineBadgeRenderer?.icon?.iconType == "MUSIC_EXPLICIT_BADGE"

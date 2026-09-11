@@ -41,6 +41,12 @@ class OriginalAlbumLanguageResolver(
                 if (bySong.size < MIN_CONTEXT_TRACKS ||
                     bySong.values.any { values -> values.map { comparable(it.name) }.distinct().size != 1 }) return@forEach
                 val tracks = bySong.values.map { values -> values.minBy { it.name } }.sortedBy { it.target.id }
+                // A majority-English aggregate cannot establish the language of ambiguous titles
+                // or artist names on an album that also contains clearly non-English originals.
+                if (tracks.any { hasNonLatinLetters(it.name) }) return@forEach
+                for (track in tracks) {
+                    if (hasMultipleWords(track.name) && evidence(track.name).strongForeignLanguage() != null) return@forEach
+                }
                 val input = tracks.joinToString("\n") { it.name }
                 val contextEvidence = evidence(input)
                 val confidence = minOf(contextEvidence.original.english(), contextEvidence.lowercase.english())
@@ -60,10 +66,10 @@ class OriginalAlbumLanguageResolver(
             } else {
                 val text = evidence(candidate.name)
                 val foreign = text.strongForeignLanguage()
-                val english = maxOf(text.original.english(), text.lowercase.english())
+                val english = minOf(text.original.english(), text.lowercase.english())
                 when {
                     // Both case variants must agree: isolated high scores misclassify short titles.
-                    wordPattern.findAll(candidate.name).take(2).count() >= 2 && foreign != null ->
+                    hasMultipleWords(candidate.name) && foreign != null ->
                         Decision(OriginalNameLanguage.OTHER, foreign.confidence, "individual-${foreign.language}")
                     english >= INDIVIDUAL_CONFIDENCE ->
                         Decision(OriginalNameLanguage.ENGLISH, english, "individual-english")
@@ -108,7 +114,7 @@ class OriginalAlbumLanguageResolver(
     }
 
     companion object {
-        const val METHOD_VERSION = "langid-java-1.0.0/album-language-v1"
+        const val METHOD_VERSION = "langid-java-1.0.0/album-language-v2"
         private const val INDIVIDUAL_CONFIDENCE = 0.90f
         private const val CONTEXT_CONFIDENCE = 0.95f
         private const val MIN_CONTEXT_TRACKS = 3
@@ -124,6 +130,7 @@ class OriginalAlbumLanguageResolver(
         }
 
         private fun hasLetters(text: String): Boolean = text.codePoints().anyMatch(Character::isLetter)
+        private fun hasMultipleWords(text: String): Boolean = wordPattern.findAll(text).take(2).count() >= 2
 
         private fun comparable(text: String): String = Normalizer.normalize(text.trim(), Normalizer.Form.NFC)
         private fun encoded(text: String): String = "${text.length}:$text"

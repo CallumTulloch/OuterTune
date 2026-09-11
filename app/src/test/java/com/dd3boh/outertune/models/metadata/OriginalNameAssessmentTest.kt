@@ -91,13 +91,26 @@ class OriginalNameAssessmentTest {
         assertNull(decode("[]"))
         assertNull(decode("{\"source\":\"YOUTUBE_MAIN\",\"language\":\"ENGLISH\",\"verification\":\"CONFIRMED\"}"))
         for (key in listOf("formatVersion", "resolverVersion")) {
+            val supported = if (key == "formatVersion") OriginalNameAssessmentCodec.FORMAT_VERSION
+                else OriginalNameAssessmentCodec.RESOLVER_VERSION
             assertNull(decode(JsonObject(document() - key).toString()))
-            for (value in listOf(JsonPrimitive(0), JsonPrimitive(2), JsonPrimitive("1"), JsonPrimitive(1.0), JsonNull)) {
+            for (value in listOf(JsonPrimitive(0), JsonPrimitive(supported + 1), JsonPrimitive("$supported"),
+                JsonPrimitive(supported.toDouble()), JsonNull)) {
                 assertNull("$key=$value", decode(changed(key, value)))
             }
         }
-        assertEncodingRejected(assessment.copy(formatVersion = 2))
-        assertEncodingRejected(assessment.copy(resolverVersion = 2))
+        assertEncodingRejected(assessment.copy(formatVersion = OriginalNameAssessmentCodec.FORMAT_VERSION + 1))
+        assertEncodingRejected(assessment.copy(resolverVersion = OriginalNameAssessmentCodec.RESOLVER_VERSION + 1))
+    }
+
+    @Test
+    fun `previous resolver decisions expire while original inputs remain available for reassessment`() {
+        val candidate = ArtTrackOriginalName(songTarget, assessment.originalName, videoId, "MPREalbum")
+        val current = Json.parseToJsonElement(ArtTrackOriginalNameCodec.encode(candidate, assessment)).jsonObject
+        val previous = JsonObject(current + ("resolverVersion" to JsonPrimitive(1))).toString()
+
+        assertNull(decode(previous))
+        assertEquals(candidate, ArtTrackOriginalNameCodec.decode(previous, songTarget, assessment.originalName))
     }
 
     @Test

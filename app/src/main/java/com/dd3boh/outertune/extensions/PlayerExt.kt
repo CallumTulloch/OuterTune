@@ -12,6 +12,12 @@ import com.dd3boh.outertune.models.MediaMetadata
 import java.util.ArrayDeque
 
 fun Player.togglePlayPause() {
+    if (playbackState == Player.STATE_ENDED) {
+        seekToDefaultPosition()
+        prepare()
+        play()
+        return
+    }
     if (!playWhenReady && playbackState == Player.STATE_IDLE) {
         prepare()
     }

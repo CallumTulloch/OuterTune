@@ -59,10 +59,14 @@ import com.zionhuang.innertube.YouTube
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -281,25 +285,32 @@ class LibraryAlbumsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            allAlbums.collect { albums ->
-                albums
-                    ?.filter {
-                        !it.album.isLocal && it.album.songCount == 0
-                    }?.forEach { album ->
-                        YouTube.album(album.id).onSuccess { albumPage ->
-                            database.query {
-                                update(album.album, albumPage)
-                            }
-                        }.onFailure {
-                            reportException(it)
-                            if (it.message?.contains("NOT_FOUND") == true) {
-                                database.query {
-                                    delete(album.album)
+            combine(allAlbums, YouTube.localeUpdates) { albums, locale -> albums to locale }
+                .collectLatest { (albums, requestLocale) ->
+                    albums
+                        ?.filter {
+                            !it.album.isLocal && it.album.songCount == 0
+                        }?.forEach { album ->
+                            val response = YouTube.album(album.id, requestLocale = requestLocale)
+                            currentCoroutineContext().ensureActive()
+                            if (YouTube.locale != requestLocale) return@forEach
+                            response.onSuccess { albumPage ->
+                                database.awaitTransaction {
+                                    if (YouTube.locale != requestLocale) return@awaitTransaction
+                                    update(album.album, albumPage)
+                                }
+                            }.onFailure {
+                                if (it is CancellationException) throw it
+                                reportException(it)
+                                if (it.message?.contains("NOT_FOUND") == true) {
+                                    database.awaitTransaction {
+                                        if (YouTube.locale != requestLocale) return@awaitTransaction
+                                        delete(album.album)
+                                    }
                                 }
                             }
                         }
-                    }
-            }
+                }
         }
     }
 }

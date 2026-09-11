@@ -37,11 +37,18 @@ class AutomaticOriginalNamePolicyTest {
 
     @Test fun `conflicting automatic names or languages keep configured name independent of arrival order`() {
         val first = assessment()
-        for (second in listOf(first.copy(originalName = "Another original"), first.copy(language = OriginalNameLanguage.OTHER))) {
+        for (second in listOf(first.copy(originalName = "Another original"), first.copy(language = OriginalNameLanguage.OTHER),
+            first.copy(originalName = "Another original", language = OriginalNameLanguage.UNKNOWN))) {
             val forwards = select(listOf(first, second))
             assertEquals(OriginalNameSelectionReason.CONFLICTING_EVIDENCE, forwards.reason)
             assertEquals(forwards, select(listOf(second, first)))
         }
+    }
+
+    @Test fun `unknown language for the same spelling does not contradict English evidence`() {
+        val first = assessment()
+        val result = select(listOf(first, first.copy(language = OriginalNameLanguage.UNKNOWN)))
+        assertEquals(OriginalNameSelectionReason.AUTOMATIC_ENGLISH_ORIGINAL, result.reason)
     }
 
     private fun assessment(target: OriginalNameTarget = song) = OriginalNameAssessment(target, english, video,

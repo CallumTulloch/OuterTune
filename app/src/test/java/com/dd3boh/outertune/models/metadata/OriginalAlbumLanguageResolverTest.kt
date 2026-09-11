@@ -132,6 +132,46 @@ class OriginalAlbumLanguageResolverTest {
     }
 
     @Test
+    fun `an individual English score must survive both original and lowercase spelling`() = runBlocking {
+        for (englishOnlyWhenLowercase in listOf(false, true)) {
+            val detector = OriginalTextLanguageDetector { text ->
+                val lowercase = text == text.lowercase(Locale.ROOT)
+                listOf(OriginalTextLanguageScore("en", if (lowercase == englishOnlyWhenLowercase) 0.99f else 0.17f))
+            }
+            val result = OriginalAlbumLanguageResolver(detector).assess(listOf(song(0, "Ambiguous Name", null)), timestamp).single()
+
+            assertEquals(OriginalNameLanguage.UNKNOWN, result.language)
+        }
+    }
+
+    @Test
+    fun `Japanese originals prevent an English majority from promoting ambiguous romanized names`() = runBlocking {
+        val songs = (0..2).map { song(it, "Short $it") }
+        val artist = ArtTrackOriginalName(OriginalNameTarget(OriginalNameKind.ARTIST, "romanized-artist"),
+            "Yoru ni Kakeru", songs.first().sourceVideoId, albumId)
+        val results = OriginalAlbumLanguageResolver(contextDetector).assess(
+            songs + artist + song(3, "夜に駆ける"), timestamp,
+        )
+
+        assertTrue(results.dropLast(1).all { it.language == OriginalNameLanguage.UNKNOWN })
+        assertEquals(OriginalNameLanguage.OTHER, results.last().language)
+    }
+
+    @Test
+    fun `strong non English Latin originals also block majority based context promotion`() = runBlocking {
+        val detector = OriginalTextLanguageDetector { text ->
+            if (text.equals("Alors on danse", ignoreCase = true)) listOf(OriginalTextLanguageScore("fr", 0.99f))
+            else contextDetector.identify(text)
+        }
+        val results = OriginalAlbumLanguageResolver(detector).assess(
+            (0..2).map { song(it, "Short $it") } + song(3, "Alors on danse"), timestamp,
+        )
+
+        assertTrue(results.dropLast(1).all { it.language == OriginalNameLanguage.UNKNOWN })
+        assertEquals(OriginalNameLanguage.OTHER, results.last().language)
+    }
+
+    @Test
     fun `context fingerprint is order independent but changes with the supporting originals`() = runBlocking {
         val source = (0..2).map { song(it, "Short $it") }
         val resolver = OriginalAlbumLanguageResolver(contextDetector)

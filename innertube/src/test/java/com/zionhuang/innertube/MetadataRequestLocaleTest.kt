@@ -17,6 +17,9 @@ import com.zionhuang.innertube.pages.SearchPage
 import com.zionhuang.innertube.pages.SearchSummaryPage
 import com.zionhuang.innertube.utils.completed
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.After
@@ -34,6 +37,26 @@ class MetadataRequestLocaleTest {
     fun restoreGlobals() {
         YouTube.locale = savedLocale
         YouTube.metadataObserver = savedObserver
+    }
+
+    @Test
+    fun `active consumers receive a changed locale after new requests can use it`() = runBlocking {
+        YouTube.locale = requestLocale
+        val capturedRequest = YouTube.locale
+        val observed = mutableListOf<YouTubeLocale>()
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            YouTube.localeUpdates.take(2).collect { locale ->
+                assertEquals(locale, YouTube.locale)
+                observed += locale
+            }
+        }
+
+        val changedLocale = YouTubeLocale("JP", "ja")
+        YouTube.locale = changedLocale
+        collector.join()
+
+        assertEquals(listOf(requestLocale, changedLocale), observed)
+        assertEquals("en", capturedRequest.hl)
     }
 
     @Test

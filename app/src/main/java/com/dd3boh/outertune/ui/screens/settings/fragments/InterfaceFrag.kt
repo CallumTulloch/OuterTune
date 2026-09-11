@@ -73,7 +73,6 @@ import com.dd3boh.outertune.ui.dialog.InfoLabel
 import com.dd3boh.outertune.ui.screens.Screens
 import com.dd3boh.outertune.ui.screens.Screens.LibraryFilter
 import com.dd3boh.outertune.utils.rememberPreference
-import com.zionhuang.innertube.YouTube
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.util.Locale
@@ -458,19 +457,7 @@ fun ColumnScope.LocalizationFrag() {
                 stringResource(R.string.system_default)
             }
         },
-        onValueSelected = { newValue ->
-            val locale = Locale.getDefault()
-            val languageTag = locale.toLanguageTag().replace("-Hant", "")
-
-            YouTube.locale = YouTube.locale.copy(
-                hl = newValue.takeIf { it != SYSTEM_DEFAULT }
-                    ?: locale.language.takeIf { it in LanguageCodeToName }
-                    ?: languageTag.takeIf { it in LanguageCodeToName }
-                    ?: "en"
-            )
-
-            onContentLanguageChange(newValue)
-        }
+        onValueSelected = onContentLanguageChange
     )
     SwitchPreference(
         title = { Text(stringResource(R.string.prefer_english_original)) },
@@ -489,17 +476,7 @@ fun ColumnScope.LocalizationFrag() {
                 stringResource(R.string.system_default)
             }
         },
-        onValueSelected = { newValue ->
-            val locale = Locale.getDefault()
-
-            YouTube.locale = YouTube.locale.copy(
-                gl = newValue.takeIf { it != SYSTEM_DEFAULT }
-                    ?: locale.country.takeIf { it in CountryCodeToName }
-                    ?: "US"
-            )
-
-            onContentCountryChange(newValue)
-        }
+        onValueSelected = onContentCountryChange
     )
 }
 

@@ -98,6 +98,7 @@ import com.dd3boh.outertune.ui.component.PlayingIndicator
 import com.dd3boh.outertune.ui.component.PlayingIndicatorBox
 import com.dd3boh.outertune.utils.LocalArtworkPath
 import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.artistSubtitle
 import com.dd3boh.outertune.ui.utils.rememberResolvedArtistSong
 import com.dd3boh.outertune.ui.utils.rememberResolvedArtistMetadata
 import com.dd3boh.outertune.utils.getDownloadState
@@ -400,6 +401,7 @@ fun QueueListItem(
 fun YouTubeListItem(
     item: YTItem,
     modifier: Modifier = Modifier,
+    omitMissingAlbumArtist: Boolean = false,
     albumIndex: Int? = null,
     isSelected: Boolean = false,
     badges: @Composable RowScope.() -> Unit = {
@@ -435,7 +437,7 @@ fun YouTubeListItem(
         )
 
         is AlbumItem -> joinByBullet(
-            item.artistDisplayText(),
+            item.artistSubtitle(omitMissingAlbumArtist),
             item.year?.toString()
         )
 
@@ -490,6 +492,7 @@ fun YouTubeListItem(
 fun YouTubeGridItem(
     item: YTItem,
     modifier: Modifier = Modifier,
+    omitMissingAlbumArtist: Boolean = false,
     coroutineScope: CoroutineScope? = null,
     badges: @Composable RowScope.() -> Unit = {
         val database = LocalDatabase.current
@@ -535,7 +538,7 @@ fun YouTubeGridItem(
                 makeTimeString(item.duration?.times(1000L))
             )
 
-            is AlbumItem -> joinByBullet(item.artistDisplayText(), item.year?.toString())
+            is AlbumItem -> joinByBullet(item.artistSubtitle(omitMissingAlbumArtist), item.year?.toString())
             is ArtistItem -> null
             is PlaylistItem -> joinByBullet(item.author?.name, item.songCountText)
         }

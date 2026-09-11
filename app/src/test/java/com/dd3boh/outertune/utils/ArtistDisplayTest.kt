@@ -9,6 +9,14 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ArtistDisplayTest {
+    @Test fun `only opted in discography cards omit a missing album artist`() {
+        val album = com.zionhuang.innertube.models.AlbumItem("MPRE-test", null, title = "Album", artists = null, thumbnail = "image")
+        assertEquals(album.artistDisplayText(), album.artistSubtitle())
+        assertNull(album.artistSubtitle(omitMissingArtist = true))
+        val known = album.copy(artists = listOf(Artist("King Gnu", "UC-known")))
+        assertEquals("King Gnu", known.artistSubtitle())
+        assertEquals("King Gnu", known.artistSubtitle(omitMissingArtist = true))
+    }
     @Test
     fun `a partial match does not remove the unresolved remainder`() {
         val credit = ArtistCredit("A & B / C", listOf(Artist("A", "UC-a", "LA-a")), ArtistCreditStatus.PARTIAL)

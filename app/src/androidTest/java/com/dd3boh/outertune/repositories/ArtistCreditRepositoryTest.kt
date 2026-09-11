@@ -9,6 +9,7 @@ import com.dd3boh.outertune.db.InternalDatabase
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.models.toStoredJson
+import com.dd3boh.outertune.utils.artistDisplayText
 import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.ArtistCredit
 import com.zionhuang.innertube.models.ArtistCreditResolution
@@ -16,6 +17,7 @@ import com.zionhuang.innertube.models.Album
 import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.zionhuang.innertube.models.SongItem
 import java.util.UUID
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CompletableDeferred
@@ -205,6 +207,68 @@ class ArtistCreditRepositoryTest {
         } finally {
             fixture.close()
         }
+    }
+
+    @Test
+    fun offlineLanguageRefreshKeepsSavedPeopleAndIdsAcrossPersistentCacheRestart() = runBlocking {
+        val calls = AtomicInteger()
+        val fixture = Fixture { calls.incrementAndGet(); Result.failure(IOException("offline")) }
+        try {
+            fixture.database.insert(song(complete).toMediaMetadata())
+            val saved = fixture.database.song(videoId).first()!!.toMediaMetadata()
+            val storedCredit = fixture.database.artistCredit(videoId).first()
+            val storedIds = fixture.database.artistIdsForSong(videoId)
+            fixture.session.set(Session("test:en:guest", "en"))
+            val repository = fixture.repository()
+            repository.request(saved, priority = true)
+            fixture.awaitIdle()
+            // The new language has no HTTP response; the original identified credit remains a
+            // display fallback so the independent name cache can still resolve these same IDs.
+            val displayed = repository.withCredit(saved)
+            assertEquals(saved.artists, displayed.artists)
+            assertEquals(storedCredit, displayed.artistCredit)
+            assertEquals("Alpha、Beta", artistDisplayText(displayed.artistCredit,
+                displayed.artists.map { it.name }, language = "ja"))
+            assertEquals(storedCredit, fixture.database.artistCredit(videoId).first())
+            assertEquals(storedIds, fixture.database.artistIdsForSong(videoId))
+            assertEquals(1, calls.get())
+
+            // The prior bug also persisted the blank English request state. Reopening it must
+            // preserve the source immediately, without waiting for the retry window or network.
+            val restored = fixture.repository()
+            assertEquals(saved.artists, restored.withCredit(saved).artists)
+            assertEquals(saved.artistCredit, restored.withCredit(saved).artistCredit)
+            restored.request(saved, priority = true)
+            fixture.awaitIdle()
+            assertEquals(1, calls.get())
+            assertEquals(saved.artists, restored.withCredit(saved).artists)
+            assertEquals(storedIds, fixture.database.artistIdsForSong(videoId))
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun persistedEmptyRefreshDoesNotHideLegacyNamesButRealNewBylineStillWins() = runBlocking {
+        val fixture = Fixture { error("A synchronous display must not fetch") }
+        try {
+            fixture.session.set(Session("test:en:guest", "en"))
+            fixture.cache(videoId, ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "context-refresh", "en"))
+            val legacy = song(complete).copy(artistCredit = null)
+            val repository = fixture.repository()
+            assertEquals(legacy.artists, repository.withCredit(legacy).artists)
+            assertNull(repository.withCredit(legacy).artistCredit)
+            val metadata = legacy.toMediaMetadata()
+            assertEquals(metadata.artists, repository.withCredit(metadata).artists)
+            assertNull(repository.withCredit(metadata).artistCredit)
+
+            // A literal byline is actual provider information. Keep it whole and do not borrow
+            // separately identified people from an unrelated language to split or complete it.
+            val literal = ArtistCredit("Another English byline", emptyList(), ArtistCreditStatus.RAW, "search", "en")
+            fixture.cache(videoId, literal)
+            val withLiteral = fixture.repository().withCredit(song(complete).toMediaMetadata())
+            assertEquals(literal, withLiteral.artistCredit)
+            assertTrue(withLiteral.artists.isEmpty())
+            assertEquals("Another English byline", withLiteral.artistDisplayText())
+        } finally { fixture.close() }
     }
 
     private data class Session(val token: String, val language: String)

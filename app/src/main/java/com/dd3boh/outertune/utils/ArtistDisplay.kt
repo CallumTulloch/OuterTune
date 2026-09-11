@@ -63,6 +63,12 @@ fun AlbumWithSongs.artistDisplayText(): String = artistDisplayText(
 
 fun AlbumItem.artistDisplayText(): String = artistDisplayText(artistCredit, artists.orEmpty().map { it.displayName })
 
+/** Artist discography cards intentionally omit bylines. Do not turn that omission into an error label. */
+fun AlbumItem.artistSubtitle(omitMissingArtist: Boolean = false): String? =
+    if (omitMissingArtist && artistCredit?.rawText.isNullOrBlank() &&
+        artistCredit?.artists.isNullOrEmpty() && artists.isNullOrEmpty()
+    ) null else artistDisplayText()
+
 /** A literal/partial byline opens song information; it is not a person's navigation target. */
 fun MediaMetadata.hasCompleteArtistList(): Boolean =
     isLocal || artistCredit == null || artistCredit?.status == ArtistCreditStatus.COMPLETE

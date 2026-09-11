@@ -179,6 +179,7 @@ fun ArtistItemsScreen(
 
                 val content: @Composable () -> Unit = {
                     YouTubeListItem(
+                        omitMissingAlbumArtist = true,
                         item = song,
                         isActive = mediaMetadata?.id == song.id,
                         isPlaying = isPlaying,
@@ -269,6 +270,7 @@ fun ArtistItemsScreen(
             ) { index, item ->
                 itemsPage?.items?.map {it.id}
                 YouTubeGridItem(
+                    omitMissingAlbumArtist = true,
                     item = item,
                     isActive = when (item) {
                         is SongItem -> mediaMetadata?.id == item.id

@@ -6,60 +6,77 @@ import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.MainActivity
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.db.InternalDatabase
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.extensions.div
 import com.dd3boh.outertune.extensions.zipInputStream
-import com.dd3boh.outertune.extensions.zipOutputStream
 import com.dd3boh.outertune.playback.MusicService
 import com.dd3boh.outertune.utils.reportException
+import com.dd3boh.outertune.utils.createDatabaseSnapshot
+import com.dd3boh.outertune.utils.createBackupArchive
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
-import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.zip.Deflater
-import java.util.zip.ZipEntry
+import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 import kotlin.system.exitProcess
 
 @HiltViewModel
 class BackupRestoreViewModel @Inject constructor(
-    // TODO: make these calls non-blocking
     @ApplicationContext val context: Context,
     val database: MusicDatabase,
 ) : ViewModel() {
     val TAG = BackupRestoreViewModel::class.simpleName.toString()
+    val isBackingUp = MutableStateFlow(false)
     fun backup(uri: Uri) {
-        runCatching {
-            context.applicationContext.contentResolver.openOutputStream(uri)?.use {
-                it.buffered().zipOutputStream().use { outputStream ->
-                    outputStream.setLevel(Deflater.BEST_COMPRESSION)
-                    (context.filesDir / "datastore" / SETTINGS_FILENAME).inputStream().buffered().use { inputStream ->
-                        outputStream.putNextEntry(ZipEntry(SETTINGS_FILENAME))
-                        inputStream.copyTo(outputStream)
-                    }
-                    runBlocking(Dispatchers.IO) {
-                        database.checkpoint()
-                    }
-                    FileInputStream(database.openHelper.writableDatabase.path).use { inputStream ->
-                        outputStream.putNextEntry(ZipEntry(InternalDatabase.DB_NAME))
-                        inputStream.copyTo(outputStream)
+        if (isBackingUp.value) return
+        isBackingUp.value = true
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val staging = File(context.cacheDir, "backup-${UUID.randomUUID()}")
+                    check(staging.mkdirs())
+                    try {
+                        val snapshot = File(staging, InternalDatabase.DB_NAME)
+                        createDatabaseSnapshot(checkNotNull(database.openHelper.writableDatabase.path), snapshot)
+                        val archive = File(staging, "complete.backup")
+                        createBackupArchive(context.filesDir / "datastore" / SETTINGS_FILENAME, snapshot, archive)
+                        // Finish and validate privately before touching the user's chosen output.
+                        val output = checkNotNull(context.contentResolver.openOutputStream(uri, "wt")) {
+                            "Could not open backup destination"
+                        }
+                        output.buffered().use { destination ->
+                            val written = archive.inputStream().use { it.copyTo(destination) }
+                            check(written == archive.length()) { "Incomplete backup output" }
+                        }
+                    } finally {
+                        staging.deleteRecursively()
                     }
                 }
+                Toast.makeText(context, R.string.backup_create_success, Toast.LENGTH_SHORT).show()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                reportException(error)
+                Toast.makeText(context, R.string.backup_create_failed, Toast.LENGTH_SHORT).show()
+            } finally {
+                isBackingUp.value = false
             }
-        }.onSuccess {
-            Toast.makeText(context, R.string.backup_create_success, Toast.LENGTH_SHORT).show()
-        }.onFailure {
-            reportException(it)
-            Toast.makeText(context, R.string.backup_create_failed, Toast.LENGTH_SHORT).show()
         }
     }
 
     fun restore(uri: Uri) {
+        if (isBackingUp.value) return
         runCatching {
             context.applicationContext.contentResolver.openInputStream(uri)?.use {
                 it.zipInputStream().use { inputStream ->

@@ -83,6 +83,7 @@ import com.dd3boh.outertune.playback.queues.YouTubeQueue
 import com.dd3boh.outertune.ui.component.ChipsRow
 import com.dd3boh.outertune.ui.component.HideOnScrollFAB
 import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
+import com.dd3boh.outertune.ui.component.LoadError
 import com.dd3boh.outertune.ui.component.NavigationTile
 import com.dd3boh.outertune.ui.component.NavigationTitle
 import com.dd3boh.outertune.ui.component.ScrollToTopManager
@@ -146,10 +147,15 @@ fun HomeScreen(
     val selectedChip by viewModel.selectedChip.collectAsState()
 
     val allLocalItems by viewModel.allLocalItems.collectAsState()
-    val allYtItems by viewModel.allYtItems.collectAsState()
+    val homeYtItems by viewModel.allYtItems.collectAsState()
+    val allYtItems = homeYtItems.filterNot { it is AlbumItem && it.playlistId == null }
 
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val loadingHome by viewModel.isLoadingHome.collectAsState()
+    val loadingMore by viewModel.isLoadingMore.collectAsState()
+    val homeFailed by viewModel.homeLoadFailed.collectAsState()
+    val loadFailed by viewModel.loadFailed.collectAsState()
     val pullRefreshState = rememberPullToRefreshState()
 
     val quickPicksLazyGridState = rememberLazyGridState()
@@ -161,12 +167,13 @@ fun HomeScreen(
     val lazylistState = rememberLazyListState()
 
     LaunchedEffect(Unit) {
-        snapshotFlow { lazylistState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
-            .collect { lastVisibleIndex ->
-                val len = lazylistState.layoutInfo.totalItemsCount
-                if (lastVisibleIndex != null && lastVisibleIndex >= len - 3) {
-                    viewModel.loadMoreYouTubeItems(homePage?.continuation)
-                }
+        snapshotFlow {
+            val layout = lazylistState.layoutInfo
+            val last = layout.visibleItemsInfo.lastOrNull()?.index
+            if (!loadingHome && !loadingMore && !homeFailed && last != null &&
+                last >= layout.totalItemsCount - 3) homePage?.continuation else null
+        }.collect { token ->
+                if (token != null) viewModel.loadMoreYouTubeItems()
             }
     }
 
@@ -544,16 +551,9 @@ fun HomeScreen(
                 }
 
                 item {
-                    val rows = if (keepListening.size > 6) 2 else 1
-                    LazyHorizontalGrid(
-                        state = rememberLazyGridState(),
-                        rows = GridCells.Fixed(rows),
+                    LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height((GridThumbnailHeight + 24.dp + with(LocalDensity.current) {
-                                MaterialTheme.typography.bodyLarge.lineHeight.toDp() * 2 +
-                                        MaterialTheme.typography.bodyMedium.lineHeight.toDp() * 2
-                            }) * rows)
                             .animateItem()
                     ) {
                         items(keepListening) {
@@ -688,7 +688,10 @@ fun HomeScreen(
                 }
             }
 
-            if (homePage?.continuation != null && homePage?.sections?.isNotEmpty() == true) {
+            if (homeFailed) {
+                item { LoadError(onRetry = viewModel::retryHome) }
+            }
+            if (loadingHome || loadingMore) {
                 item {
                     ShimmerHost(
                         modifier = Modifier.animateItem()
@@ -760,6 +763,9 @@ fun HomeScreen(
                     }
                 }
             }
+            if (loadFailed) {
+                item { LoadError(onRetry = viewModel::refresh) }
+            }
         }
         LazyColumnScrollbar(
             state = lazylistState,
@@ -805,10 +811,9 @@ fun HomeScreen(
                             isRadio = true
                         )
 
-                        is AlbumItem -> playerConnection.playQueue(
-                            YouTubeAlbumRadio(luckyItem.playlistId),
-                            isRadio = true
-                        )
+                        is AlbumItem -> luckyItem.playlistId?.let { playlistId ->
+                            playerConnection.playQueue(YouTubeAlbumRadio(playlistId), isRadio = true)
+                        }
 
                         is ArtistItem -> luckyItem.radioEndpoint?.let {
                             playerConnection.playQueue(YouTubeQueue(it), isRadio = true)

@@ -94,12 +94,14 @@ object OriginalNamePolicy {
         }
 
         val confirmed = evidence.filter { it.isConfirmedPrimaryEvidenceFor(target) }
-        val automatic = assessments.filter { it.target == target && it.language != OriginalNameLanguage.UNKNOWN }
+        val automatic = assessments.filter { it.target == target }
         val known = confirmed.filter { it.language != OriginalNameLanguage.UNKNOWN }
         if (known.isEmpty() && automatic.isNotEmpty()) {
-            val languages = automatic.map { it.language }.distinct()
+            val languages = automatic.map { it.language }.filter { it != OriginalNameLanguage.UNKNOWN }.distinct()
             val originals = automatic.map { comparableName(it.originalName) }.distinct()
-            if (languages.size != 1 || originals.size != 1) return useConfigured(OriginalNameSelectionReason.CONFLICTING_EVIDENCE)
+            // An uncertain language is not permission to discard a conflicting original spelling.
+            if (languages.size > 1 || originals.size != 1) return useConfigured(OriginalNameSelectionReason.CONFLICTING_EVIDENCE)
+            if (languages.isEmpty()) return useConfigured(OriginalNameSelectionReason.ORIGINAL_UNCONFIRMED)
             if (languages.single() != OriginalNameLanguage.ENGLISH) return useConfigured(OriginalNameSelectionReason.CONFIGURED_LANGUAGE)
             if (originals.single() != comparableName(english)) return useConfigured(OriginalNameSelectionReason.ENGLISH_NAME_MISMATCH)
             return OriginalNameSelection(english, OriginalNameSelectionReason.AUTOMATIC_ENGLISH_ORIGINAL)

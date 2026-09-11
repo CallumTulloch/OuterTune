@@ -5,11 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.constants.HistorySource
 import com.dd3boh.outertune.db.MusicDatabase
-import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.pages.HistoryPage
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
@@ -55,19 +53,14 @@ class HistoryViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
+    private val remoteHistory = LocalizedPageLoader(viewModelScope,
+        initial = { locale -> YouTube.musicHistory(requestLocale = locale) })
+
     init {
-        fetchRemoteHistory()
+        viewModelScope.launch { remoteHistory.page.collect { historyPage.value = it } }
     }
-    
-    fun fetchRemoteHistory() {
-        viewModelScope.launch(Dispatchers.IO) {
-            YouTube.musicHistory().onSuccess {
-                historyPage.value = it
-            }.onFailure {
-                reportException(it)
-            }
-        }
-    }
+
+    fun fetchRemoteHistory() = remoteHistory.refresh()
 }
 
 sealed class DateAgo {

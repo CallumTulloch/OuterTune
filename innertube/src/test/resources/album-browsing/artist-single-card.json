@@ -1,0 +1,389 @@
+{
+  "thumbnailRenderer": {
+    "musicThumbnailRenderer": {
+      "thumbnail": {
+        "thumbnails": [
+          {
+            "url": "https://yt3.googleusercontent.com/tieqRfNuyMtsCZb2SJarOiz628dOdFxX8DzJ0_AwsF3HUhH_eqyv00PyikY5ouGlqcRlcBVv0DqAWp6_nw=w226-h226-l90-rj",
+            "width": 226,
+            "height": 226
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/tieqRfNuyMtsCZb2SJarOiz628dOdFxX8DzJ0_AwsF3HUhH_eqyv00PyikY5ouGlqcRlcBVv0DqAWp6_nw=w544-h544-l90-rj",
+            "width": 544,
+            "height": 544
+          }
+        ]
+      },
+      "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+      "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+    }
+  },
+  "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE",
+  "title": {
+    "runs": [
+      {
+        "text": "雨燦々",
+        "navigationEndpoint": {
+          "browseEndpoint": {
+            "browseId": "MPREb_fGJhRi6Fukh",
+            "params": "ggMrGilPTEFLNXV5X25sWXdWVXMzdWhNSDZBUFNsNnM1MnZyVWYyTVY2b1N5aw%3D%3D",
+            "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "subtitle": {
+    "runs": [
+      {
+        "text": "シングル"
+      },
+      {
+        "text": " • "
+      },
+      {
+        "text": "2022年"
+      }
+    ]
+  },
+  "navigationEndpoint": {
+    "browseEndpoint": {
+      "browseId": "MPREb_fGJhRi6Fukh",
+      "params": "ggMrGilPTEFLNXV5X25sWXdWVXMzdWhNSDZBUFNsNnM1MnZyVWYyTVY2b1N5aw%3D%3D",
+      "browseEndpointContextSupportedConfigs": {
+        "browseEndpointContextMusicConfig": {
+          "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+        }
+      }
+    }
+  },
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "シャッフル再生"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "MUSIC_SHUFFLE"
+            },
+            "navigationEndpoint": {
+              "watchPlaylistEndpoint": {
+                "playlistId": "OLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk",
+                "params": "wAEB8gECKAE%3D"
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "ミックスリストを開始"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "MIX"
+            },
+            "navigationEndpoint": {
+              "watchPlaylistEndpoint": {
+                "playlistId": "RDAMPLOLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk",
+                "params": "wAEB"
+              }
+            }
+          }
+        },
+        {
+          "menuServiceItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "次に再生"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "QUEUE_PLAY_NEXT"
+            },
+            "serviceEndpoint": {
+              "queueAddEndpoint": {
+                "queueTarget": {
+                  "playlistId": "OLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk",
+                  "onEmptyQueue": {
+                    "watchEndpoint": {
+                      "playlistId": "OLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk"
+                    }
+                  }
+                },
+                "queueInsertPosition": "INSERT_AFTER_CURRENT_VIDEO",
+                "commands": [
+                  {
+                    "addToToastAction": {
+                      "item": {
+                        "notificationTextRenderer": {
+                          "successResponseText": {
+                            "runs": [
+                              {
+                                "text": "次にこのアルバムが再生されます"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "menuServiceItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "キューに追加"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ADD_TO_REMOTE_QUEUE"
+            },
+            "serviceEndpoint": {
+              "queueAddEndpoint": {
+                "queueTarget": {
+                  "playlistId": "OLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk",
+                  "onEmptyQueue": {
+                    "watchEndpoint": {
+                      "playlistId": "OLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk"
+                    }
+                  }
+                },
+                "queueInsertPosition": "INSERT_AT_END",
+                "commands": [
+                  {
+                    "addToToastAction": {
+                      "item": {
+                        "notificationTextRenderer": {
+                          "successResponseText": {
+                            "runs": [
+                              {
+                                "text": "アルバムをキューに追加しました"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "toggleMenuServiceItemRenderer": {
+            "defaultText": {
+              "runs": [
+                {
+                  "text": "ライブラリにアルバムを保存"
+                }
+              ]
+            },
+            "defaultIcon": {
+              "iconType": "BOOKMARK_BORDER"
+            },
+            "defaultServiceEndpoint": {
+              "modalEndpoint": {
+                "modal": {
+                  "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                      "runs": [
+                        {
+                          "text": "後で見るために保存"
+                        }
+                      ]
+                    },
+                    "content": {
+                      "runs": [
+                        {
+                          "text": "ログインすると、お気に入りをライブラリに保存できます"
+                        }
+                      ]
+                    },
+                    "button": {
+                      "buttonRenderer": {
+                        "style": "STYLE_BLUE_TEXT",
+                        "isDisabled": false,
+                        "text": {
+                          "runs": [
+                            {
+                              "text": "ログイン"
+                            }
+                          ]
+                        },
+                        "navigationEndpoint": {
+                          "signInEndpoint": {
+                            "hack": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "toggledText": {
+              "runs": [
+                {
+                  "text": "ライブラリからアルバムを削除"
+                }
+              ]
+            },
+            "toggledIcon": {
+              "iconType": "BOOKMARK"
+            },
+            "toggledServiceEndpoint": {
+              "likeEndpoint": {
+                "status": "INDIFFERENT",
+                "target": {
+                  "playlistId": "OLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk"
+                }
+              }
+            },
+            "isToggled": false
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "再生リストに保存"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "ADD_TO_PLAYLIST"
+            },
+            "navigationEndpoint": {
+              "modalEndpoint": {
+                "modal": {
+                  "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                      "runs": [
+                        {
+                          "text": "後で見るために保存"
+                        }
+                      ]
+                    },
+                    "content": {
+                      "runs": [
+                        {
+                          "text": "ログインすると、プレイリストを作成して共有できます"
+                        }
+                      ]
+                    },
+                    "button": {
+                      "buttonRenderer": {
+                        "style": "STYLE_BLUE_TEXT",
+                        "isDisabled": false,
+                        "text": {
+                          "runs": [
+                            {
+                              "text": "ログイン"
+                            }
+                          ]
+                        },
+                        "navigationEndpoint": {
+                          "signInEndpoint": {
+                            "hack": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "共有"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "SHARE"
+            },
+            "navigationEndpoint": {
+              "shareEntityEndpoint": {
+                "serializedShareEntity": "EilPTEFLNXV5X25sWXdWVXMzdWhNSDZBUFNsNnM1MnZyVWYyTVY2b1N5aw%3D%3D",
+                "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "thumbnailOverlay": {
+    "musicItemThumbnailOverlayRenderer": {
+      "background": {
+        "verticalGradient": {
+          "gradientLayerColors": [
+            "2147483648",
+            "0",
+            "0"
+          ]
+        }
+      },
+      "content": {
+        "musicPlayButtonRenderer": {
+          "playNavigationEndpoint": {
+            "watchPlaylistEndpoint": {
+              "playlistId": "OLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk"
+            }
+          },
+          "playIcon": {
+            "iconType": "PLAY_ARROW"
+          },
+          "pauseIcon": {
+            "iconType": "PAUSE"
+          },
+          "iconColor": 4294967295,
+          "backgroundColor": 2566914048,
+          "activeBackgroundColor": 4278190080,
+          "loadingIndicatorColor": 14745645,
+          "playingIcon": {
+            "iconType": "VOLUME_UP"
+          },
+          "iconLoadingColor": 1308622847,
+          "activeScaleFactor": 1.2,
+          "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_MEDIUM",
+          "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+          "accessibilityPlayData": {},
+          "accessibilityPauseData": {}
+        }
+      },
+      "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_BOTTOM_RIGHT",
+      "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_HOVER"
+    }
+  }
+}

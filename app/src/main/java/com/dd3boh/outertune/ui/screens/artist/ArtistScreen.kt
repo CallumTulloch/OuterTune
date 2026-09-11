@@ -438,6 +438,7 @@ fun ArtistScreen(
                                 snackbarHostState = snackbarHostState
                             ) {
                                 YouTubeListItem(
+                                    omitMissingAlbumArtist = true,
                                     item = song,
                                     isActive = mediaMetadata?.id == song.id,
                                     isPlaying = isPlaying,
@@ -499,6 +500,7 @@ fun ArtistScreen(
                                     key = { it.id }
                                 ) { item ->
                                     YouTubeGridItem(
+                                        omitMissingAlbumArtist = true,
                                         item = item,
                                         isActive = when (item) {
                                             is SongItem -> mediaMetadata?.id == item.id

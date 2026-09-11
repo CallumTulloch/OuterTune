@@ -1,0 +1,299 @@
+{
+  "method": "Anonymous WEB_REMIX 1.20250310.01.00, JP. Live responses checked against current source guards; not an Android or compiled Kotlin execution.",
+  "artistShelves": [
+    {
+      "title": "アルバム",
+      "count": 5,
+      "rows": [
+        {
+          "title": "THE GREATEST UNKNOWN",
+          "browseId": "MPREb_r2SiObOBunG",
+          "subtitle": "2023年",
+          "playlistId": "OLAK5uy_kaiYU1pnGQeY_UvpyVEbsgYQVZyBgjvX8",
+          "dialogPanelId": null
+        },
+        {
+          "title": "CEREMONY",
+          "browseId": "MPREb_JZP7yCkRIkU",
+          "subtitle": "2020年",
+          "playlistId": "OLAK5uy_nWJ0V2FxAzdiLNcpG9ePVsrSOoI8d-re4",
+          "dialogPanelId": null
+        },
+        {
+          "title": "Sympa",
+          "browseId": "MPREb_fhMaTa6yLWE",
+          "subtitle": "2019年",
+          "playlistId": "OLAK5uy_nfQntLDQf9qf88HOcdjkL2c5GwNrYTGwE",
+          "dialogPanelId": null
+        },
+        {
+          "title": "Tokyo Rendez-Vous",
+          "browseId": "MPREb_XIR4oxDGv6g",
+          "subtitle": "2017年",
+          "playlistId": "OLAK5uy_k_tEmUcj85W-fDtqjPbA1Oo7tBTvHAtT4",
+          "dialogPanelId": null
+        },
+        {
+          "title": "King Gnu Dome Tour THE GREATEST UNKNOWN at TOKYO DOME",
+          "browseId": "MPREb_K9BqfPFPPAq",
+          "subtitle": "2024年",
+          "playlistId": "OLAK5uy_kOvCSZBg5-HicvZKFXlJ7aqYrVyDXBBpU",
+          "dialogPanelId": null
+        }
+      ]
+    },
+    {
+      "title": "シングルと EP",
+      "count": 10,
+      "rows": [
+        {
+          "title": "GO GHOST",
+          "browseId": "MPREb_YsgyF4ENtQ5",
+          "subtitle": "シングル • 2026年",
+          "playlistId": "OLAK5uy_nitZ0iK0py8oaDVeLnsr9r8w1ZYA41HgU",
+          "dialogPanelId": null
+        },
+        {
+          "title": "AIZO",
+          "browseId": "MPREb_wU3IITHxJOw",
+          "subtitle": "シングル • 2026年",
+          "playlistId": "OLAK5uy_mIi22B5djRYxXd_HNOcxXdVDJm2Q0f6CY",
+          "dialogPanelId": null
+        },
+        {
+          "title": "SO BAD",
+          "browseId": "MPREb_52gx4dVKwTq",
+          "subtitle": "シングル • 2025年",
+          "playlistId": "OLAK5uy_l5QBjnPfC_hYT1Tqezk01hbc21Lx-Hpw0",
+          "dialogPanelId": null
+        },
+        {
+          "title": "TWILIGHT!!!",
+          "browseId": "MPREb_G8zWewAWcXW",
+          "subtitle": "シングル • 2025年",
+          "playlistId": "OLAK5uy_mHCqRWzDxnJbjuosoDT_0MaJdEYj8wKMc",
+          "dialogPanelId": null
+        },
+        {
+          "title": "ねっこ",
+          "browseId": "MPREb_8VsJEWjYNkS",
+          "subtitle": "シングル • 2024年",
+          "playlistId": "OLAK5uy_moltoRZVpLWBcWMfPclDrWWxVAGINf_cc",
+          "dialogPanelId": null
+        },
+        {
+          "title": "MASCARA",
+          "browseId": "MPREb_n5MyuJxsYl5",
+          "subtitle": "シングル • 2024年",
+          "playlistId": "OLAK5uy_lXi60N2HkYdJDKV-ukaajdvJY3SpJnRZw",
+          "dialogPanelId": null
+        },
+        {
+          "title": "硝子窓",
+          "browseId": "MPREb_5j9QGZxAFfI",
+          "subtitle": "シングル • 2023年",
+          "playlistId": "OLAK5uy_kDMb1oSSYNnsJ04pA6VTbTIyCfSeeOkOQ",
+          "dialogPanelId": null
+        },
+        {
+          "title": "SPECIALZ",
+          "browseId": "MPREb_Mh3SVYbknAz",
+          "subtitle": "シングル • 2023年",
+          "playlistId": "OLAK5uy_kg61Tr_nGsEtZvvIzCJ6qlgvpr-snmTaM",
+          "dialogPanelId": null
+        },
+        {
+          "title": "Stardom",
+          "browseId": "MPREb_zQiObV2P4Tv",
+          "subtitle": "シングル • 2022年",
+          "playlistId": "OLAK5uy_nPag3-701ZtlpUA_ztAvzIORtn7eRo6-c",
+          "dialogPanelId": null
+        },
+        {
+          "title": "雨燦々",
+          "browseId": "MPREb_fGJhRi6Fukh",
+          "subtitle": "シングル • 2022年",
+          "playlistId": "OLAK5uy_nlYwVUs3uhMH6APSl6s52vrUf2MV6oSyk",
+          "dialogPanelId": null
+        }
+      ]
+    }
+  ],
+  "singlesGrid": {
+    "count": 29,
+    "allBylinesContainOnlyReleaseTypeAndYear": true,
+    "examples": [
+      "シングル • 2026年",
+      "シングル • 2026年",
+      "シングル • 2025年"
+    ]
+  },
+  "search": [
+    {
+      "label": "greatest-search-albums-ja",
+      "renderer": "musicResponsiveListItemRenderer",
+      "browseId": "MPREb_r2SiObOBunG",
+      "playlistId": null,
+      "dialogPanelId": "PApremium_upsell",
+      "current_source_result": "returns null because required playback playlistId is missing"
+    },
+    {
+      "label": "greatest-search-all-ja",
+      "renderer": "musicCardShelfRenderer",
+      "browseId": "MPREb_r2SiObOBunG",
+      "playlistId": null,
+      "dialogPanelId": "PApremium_upsell",
+      "current_source_result": "returns null because required playback playlistId is missing"
+    },
+    {
+      "label": "greatest-search-albums-en",
+      "renderer": "musicResponsiveListItemRenderer",
+      "browseId": "MPREb_r2SiObOBunG",
+      "playlistId": null,
+      "dialogPanelId": "PApremium_upsell",
+      "current_source_result": "returns null because required playback playlistId is missing"
+    },
+    {
+      "label": "greatest-search-all-en",
+      "renderer": "musicCardShelfRenderer",
+      "browseId": "MPREb_r2SiObOBunG",
+      "playlistId": null,
+      "dialogPanelId": "PApremium_upsell",
+      "current_source_result": "returns null because required playback playlistId is missing"
+    }
+  ],
+  "album": [
+    {
+      "label": "greatest-album-ja",
+      "title": "THE GREATEST UNKNOWN",
+      "artist": "King Gnu",
+      "canonicalUrl": "https://music.youtube.com/playlist?list=OLAK5uy_kaiYU1pnGQeY_UvpyVEbsgYQVZyBgjvX8",
+      "shelf": "musicShelfRenderer",
+      "trackRows": 21,
+      "greyedRows": 13,
+      "rowsWithoutTypedTitleWatchEndpoint": 13
+    },
+    {
+      "label": "greatest-album-with-params-ja",
+      "title": "THE GREATEST UNKNOWN",
+      "artist": "King Gnu",
+      "canonicalUrl": "https://music.youtube.com/playlist?list=OLAK5uy_kaiYU1pnGQeY_UvpyVEbsgYQVZyBgjvX8",
+      "shelf": "musicShelfRenderer",
+      "trackRows": 21,
+      "greyedRows": 13,
+      "rowsWithoutTypedTitleWatchEndpoint": 13
+    }
+  ],
+  "playlistBrowse": [
+    {
+      "label": "greatest-album-songs-ja",
+      "keys": [
+        "responseContext",
+        "trackingParams",
+        "microformat"
+      ],
+      "hasContents": false,
+      "current_source_result": "required musicPlaylistShelfRenderer chain is null at YouTube.kt:317"
+    },
+    {
+      "label": "ceremony-album-songs-ja",
+      "keys": [
+        "responseContext",
+        "trackingParams",
+        "microformat"
+      ],
+      "hasContents": false,
+      "current_source_result": "required musicPlaylistShelfRenderer chain is null at YouTube.kt:317"
+    }
+  ],
+  "requests": [
+    {
+      "label": "ceremony-album-songs-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:42:51.801428+00:00",
+      "status": 200,
+      "bytes": 834,
+      "sha256": "5b71135388e328677dfd21f647bb93ce2ef4482ec53a6921ea4e906aa8672851"
+    },
+    {
+      "label": "greatest-album-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:40:13.918400+00:00",
+      "status": 200,
+      "bytes": 209223,
+      "sha256": "06b80b3d0fbee158ce072d5a6a8717d8f5bfa2080b19bf72a5271e0df33411e3"
+    },
+    {
+      "label": "greatest-album-songs-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:41:29.645990+00:00",
+      "status": 200,
+      "bytes": 834,
+      "sha256": "1ffc98904027e6dd5aed9557c7e7cdd3c24a618bd49e9708b4b9e81781185273"
+    },
+    {
+      "label": "greatest-album-with-params-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:41:29.642991+00:00",
+      "status": 200,
+      "bytes": 209785,
+      "sha256": "b257d22913a50f9a295381f27a333a3c3ab0c42a7a153fdab07eeec680714ef1"
+    },
+    {
+      "label": "greatest-search-albums-en",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:40:13.919399+00:00",
+      "status": 200,
+      "bytes": 170305,
+      "sha256": "c115c8a2c6007033c95b15c613f58b6bd36ae497c9b867ba1a6df9574e19f081"
+    },
+    {
+      "label": "greatest-search-albums-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:39:24.858279+00:00",
+      "status": 200,
+      "bytes": 176121,
+      "sha256": "13617ac6c695be4394f48cded483dc6fcea3a1806dedfa3c2d1fd823554e01b2"
+    },
+    {
+      "label": "greatest-search-all-en",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:42:51.801428+00:00",
+      "status": 200,
+      "bytes": 214191,
+      "sha256": "fedf98efededa426137638f7894fcf8fb14c088bec11e6eed9a2d0392322f425"
+    },
+    {
+      "label": "greatest-search-all-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:39:24.858279+00:00",
+      "status": 200,
+      "bytes": 217219,
+      "sha256": "38f74d838a6ce2892fe8ed9e3bbfa78ee3ea9be5ed1a0baded79e2348dd82fc7"
+    },
+    {
+      "label": "king-gnu-artist-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:40:13.917401+00:00",
+      "status": 200,
+      "bytes": 483004,
+      "sha256": "5a8fe09d5b8ceb1371e49ed72ad953c2120101ec07522bc590c5d22079bbfdd3"
+    },
+    {
+      "label": "king-gnu-search-artists-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:39:24.857279+00:00",
+      "status": 200,
+      "bytes": 12844,
+      "sha256": "63fafc72508c7a8b2f88587adf955b988ff39533d75ea6a4b0aa619fcca5e69c"
+    },
+    {
+      "label": "king-gnu-singles-grid-ja",
+      "authenticated": false,
+      "requested_at_utc": "2026-09-07T12:41:29.643989+00:00",
+      "status": 200,
+      "bytes": 254307,
+      "sha256": "72c8548a61a9e32af137ee897e0f992099d620e30decf5542a95b27f3e1614f5"
+    }
+  ]
+}

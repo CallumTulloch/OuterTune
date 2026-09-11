@@ -145,6 +145,9 @@ fun ThumbnailPlaybackError(
                     },
             )
         }
+        TextButton(onClick = retry) {
+            Text(text = stringResource(R.string.retry), color = textColor)
+        }
         Spacer(Modifier.height(64.dp))
     }
 }

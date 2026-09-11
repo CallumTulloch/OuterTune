@@ -33,6 +33,7 @@ data class SongItem(
     val setVideoId: String? = null,
     val artistCredit: ArtistCredit? = null,
     val artistBrowseIds: List<String> = emptyList(),
+    val isPlayable: Boolean = true,
 ) : YTItem() {
     override val shareLink: String
         get() = "https://music.youtube.com/watch?v=$id"
@@ -40,7 +41,7 @@ data class SongItem(
 
 data class AlbumItem(
     val browseId: String,
-    val playlistId: String,
+    val playlistId: String?,
     override val id: String = browseId,
     override val title: String,
     val artists: List<Artist>?,
@@ -50,7 +51,8 @@ data class AlbumItem(
     val artistCredit: ArtistCredit? = null,
 ) : YTItem() {
     override val shareLink: String
-        get() = "https://music.youtube.com/playlist?list=$playlistId"
+        get() = playlistId?.let { "https://music.youtube.com/playlist?list=$it" }
+            ?: "https://music.youtube.com/browse/$browseId"
 }
 
 data class PlaylistItem(

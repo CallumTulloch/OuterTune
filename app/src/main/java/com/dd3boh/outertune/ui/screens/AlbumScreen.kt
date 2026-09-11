@@ -108,6 +108,8 @@ import com.dd3boh.outertune.ui.component.LazyColumnScrollbar
 import com.dd3boh.outertune.ui.component.NavigationTitle
 import com.dd3boh.outertune.ui.component.SelectHeader
 import com.dd3boh.outertune.ui.component.button.IconButton
+import com.dd3boh.outertune.ui.component.LoadError
+import com.dd3boh.outertune.ui.component.items.ListItem
 import com.dd3boh.outertune.ui.component.items.SongListItem
 import com.dd3boh.outertune.ui.component.items.YouTubeGridItem
 import com.dd3boh.outertune.ui.component.shimmer.ButtonPlaceholder
@@ -149,6 +151,8 @@ fun AlbumScreen(
     val otherVersions by viewModel.otherVersions.collectAsState()
     val state = rememberLazyListState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val loadFailed by viewModel.loadFailed.collectAsState()
+    val unavailableSongIds by viewModel.unavailableSongIds.collectAsState()
 
     // multiselect
     var inSelectMode by rememberSaveable { mutableStateOf(false) }
@@ -169,6 +173,10 @@ fun AlbumScreen(
     val snackbarHostState = LocalSnackbarHostState.current
 
     val downloadUtil = LocalDownloadUtil.current
+    val downloads by downloadUtil.downloads.collectAsState()
+    val playableSongs = albumWithSongs?.songs.orEmpty().filter {
+        it.id !in unavailableSongIds || it.song.isLocal || getDownloadState(downloads[it.id]) == Download.STATE_COMPLETED
+    }
     var downloadState by remember {
         mutableIntStateOf(Download.STATE_STOPPED)
     }
@@ -188,7 +196,7 @@ fun AlbumScreen(
         modifier = Modifier.padding(bottom = if (inSelectMode) 64.dp else 0.dp)
     ) {
         val albumWithSongsLocal = albumWithSongs
-        if (albumWithSongsLocal != null && albumWithSongsLocal.songs.isNotEmpty()) {
+        if (albumWithSongsLocal != null) {
             item {
                 Column(
                     modifier = Modifier.padding(12.dp)
@@ -354,7 +362,7 @@ fun AlbumScreen(
                                             IconButton(
                                                 onClick = {
                                                     val songs =
-                                                        albumWithSongsLocal.songs.map { it.toMediaMetadata() }
+                                                        playableSongs.map { it.toMediaMetadata() }
                                                     downloadUtil.download(songs)
                                                 }
                                             ) {
@@ -395,12 +403,12 @@ fun AlbumScreen(
 
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
+                            enabled = playableSongs.isNotEmpty(),
                             onClick = {
                                 playerConnection.playQueue(
                                     ListQueue(
                                         title = albumWithSongsLocal.album.displayTitle,
-                                        items = albumWithSongs?.songs?.mapNotNull { it.toMediaMetadata() }?.toList()
-                                            ?: emptyList(),
+                                        items = playableSongs.map { it.toMediaMetadata() },
                                         playlistId = albumWithSongsLocal.album.playlistId
                                     )
                                 )
@@ -420,12 +428,12 @@ fun AlbumScreen(
                         }
 
                         OutlinedButton(
+                            enabled = playableSongs.isNotEmpty(),
                             onClick = {
                                 playerConnection.playQueue(
                                     ListQueue(
                                         title = albumWithSongsLocal.album.displayTitle,
-                                        items = albumWithSongs?.songs?.mapNotNull { it.toMediaMetadata() }?.toList()
-                                            ?: emptyList(),
+                                        items = playableSongs.map { it.toMediaMetadata() },
                                         playlistId = albumWithSongsLocal.album.playlistId,
                                         startShuffled = true,
                                     )
@@ -451,7 +459,14 @@ fun AlbumScreen(
                 items = albumWithSongs!!.songs,
                 key = { _, song -> song.id }
             ) { index, song ->
-                SongListItem(
+                if (playableSongs.none { it.id == song.id }) {
+                    ListItem(
+                        title = song.song.displayTitle,
+                        subtitle = stringResource(R.string.album_track_unavailable),
+                        thumbnailContent = { Text((index + 1).toString(), modifier = Modifier.size(ListThumbnailSize)) },
+                        modifier = Modifier.fillMaxWidth().animateItem(),
+                    )
+                } else SongListItem(
                     song = song,
                     albumIndex = index + 1,
 
@@ -477,8 +492,8 @@ fun AlbumScreen(
                         playerConnection.playQueue(
                             ListQueue(
                                 title = albumWithSongsLocal.album.displayTitle,
-                                items = albumWithSongsLocal.songs.map { it.toMediaMetadata() },
-                                startIndex = index,
+                                items = playableSongs.map { it.toMediaMetadata() },
+                                startIndex = playableSongs.indexOfFirst { it.id == song.id },
                                 playlistId = albumWithSongsLocal.album.playlistId
                             )
                         )
@@ -489,6 +504,9 @@ fun AlbumScreen(
                 )
             }
 
+            if (albumWithSongsLocal.songs.isEmpty() && !isLoading && !loadFailed) {
+                item { LoadError(onRetry = viewModel::retry, message = stringResource(R.string.album_no_tracks)) }
+            }
             if (otherVersions.isNotEmpty()) {
                 item {
                     NavigationTitle(
@@ -566,6 +584,9 @@ fun AlbumScreen(
                 }
             }
         }
+        if (loadFailed) {
+            item { LoadError(onRetry = viewModel::retry) }
+        }
     }
     LazyColumnScrollbar(
         state = state,
@@ -597,12 +618,12 @@ fun AlbumScreen(
                 SelectHeader(
                     navController = navController,
                     selectedItems = selection.mapNotNull { id ->
-                        albumWithSongsLocal.songs.find { it.song.id == id }
+                        playableSongs.find { it.song.id == id }
                     }.map { it.toMediaMetadata() },
-                    totalItemCount = albumWithSongsLocal.songs.size,
+                    totalItemCount = playableSongs.size,
                     onSelectAll = {
                         selection.clear()
-                        selection.addAll(albumWithSongsLocal.songs.map { it.id })
+                        selection.addAll(playableSongs.map { it.id })
                     },
                     onDeselectAll = { selection.clear() },
                     menuState = menuState,

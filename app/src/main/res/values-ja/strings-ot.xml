@@ -288,4 +288,8 @@
     <string name="search_scope_connection_restored">接続が復旧しました。この検索ではローカル検索を続けます。検索を閉じて次に開くと、保存した選択を使用します。</string>
     <string name="prefer_english_original">正式な原表記が英語なら英語を利用</string>
     <string name="prefer_english_original_description">英語の正式名を確認できる曲・アルバム・アーティストは英語で表示します。それ以外はコンテンツ言語を使用します。</string>
+    <string name="content_load_failed">読み込めませんでした。</string>
+    <string name="backup_in_progress">バックアップを作成しています…</string>
+    <string name="album_no_tracks">このアルバムの曲を取得できませんでした。</string>
+    <string name="album_track_unavailable">現在、再生が制限されています。</string>
 </resources>

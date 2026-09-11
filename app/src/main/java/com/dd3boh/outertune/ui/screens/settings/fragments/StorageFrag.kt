@@ -91,6 +91,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun ColumnScope.BackupAndRestoreFrag(viewModel: BackupRestoreViewModel) {
     val context = LocalContext.current
+    val isBackingUp by viewModel.isBackingUp.collectAsState()
 
     val backupLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
@@ -108,7 +109,9 @@ fun ColumnScope.BackupAndRestoreFrag(viewModel: BackupRestoreViewModel) {
         modifier = Modifier.fillMaxWidth()
     ) {
         PreferenceEntry(
-            title = { Text(stringResource(R.string.action_backup)) },
+            title = { Text(stringResource(if (isBackingUp) R.string.backup_in_progress else R.string.action_backup)) },
+            isEnabled = !isBackingUp,
+            trailingContent = { if (isBackingUp) CircularProgressIndicator(Modifier.size(24.dp)) },
             icon = { Icon(Icons.Rounded.Backup, null) },
             onClick = {
                 val formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
@@ -127,6 +130,7 @@ fun ColumnScope.BackupAndRestoreFrag(viewModel: BackupRestoreViewModel) {
     ) {
         PreferenceEntry(
             title = { Text(stringResource(R.string.action_restore)) },
+            isEnabled = !isBackingUp,
             icon = { Icon(Icons.Rounded.Restore, null) },
             onClick = {
                 restoreLauncher.launch(arrayOf("application/octet-stream"))

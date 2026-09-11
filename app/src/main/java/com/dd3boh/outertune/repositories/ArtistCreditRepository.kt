@@ -120,10 +120,15 @@ class ArtistCreditRepository internal constructor(
     }
 
     private fun combinedCredit(videoId: String, source: ArtistCredit?): ArtistCredit? {
-        val cached = observe(videoId).value
+        // Changing language creates an empty RAW request state. It is not evidence that
+        // previously identified people disappeared, including when the new request is offline.
+        val cached = observe(videoId).value?.takeUnless { it.isEmptyByline() }
         val merged = if (cached != null && source != null) cached.merge(source) else cached ?: source
         return merged?.let { ArtistIdentity.withStableRefs(videoId, it, cached) }
     }
+
+    private fun ArtistCredit.isEmptyByline(): Boolean =
+        status == ArtistCreditStatus.RAW && rawText.isBlank() && artists.isEmpty()
 
     fun adopt(metadata: MediaMetadata): MediaMetadata {
         request(metadata, priority = true)
@@ -336,9 +341,9 @@ class ArtistCreditRepository internal constructor(
     }
 
     private fun apply(metadata: MediaMetadata, credit: ArtistCredit) = metadata.copy(
-        artistCredit = credit,
+        artistCredit = credit.takeUnless { it.isEmptyByline() } ?: metadata.artistCredit,
         album = metadata.album ?: observeAlbum(metadata.id).value?.let { MediaMetadata.Album(it.id, it.name) },
-        artists = credit.artists.map {
+        artists = if (credit.isEmptyByline()) metadata.artists else credit.artists.map {
             MediaMetadata.Artist(
                 id = it.ref ?: it.id ?: ArtistIdentity.stableId(metadata.id, it.name),
                 name = it.name,

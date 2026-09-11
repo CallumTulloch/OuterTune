@@ -1,0 +1,221 @@
+{
+  "thumbnailRenderer": {
+    "musicThumbnailRenderer": {
+      "thumbnail": {
+        "thumbnails": [
+          {
+            "url": "https://yt3.googleusercontent.com/7wC2g7heVwtEQpO_GPxLtzBpTXceOqR6-uefTZf2JVdWvA0BQW1ohIFgFU7FyapMieTGjxU-sBnu6eY=w226-h226-l90-rj",
+            "width": 226,
+            "height": 226
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/7wC2g7heVwtEQpO_GPxLtzBpTXceOqR6-uefTZf2JVdWvA0BQW1ohIFgFU7FyapMieTGjxU-sBnu6eY=w544-h544-l90-rj",
+            "width": 544,
+            "height": 544
+          }
+        ]
+      },
+      "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+      "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+    }
+  },
+  "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE",
+  "title": {
+    "runs": [
+      {
+        "text": "THE GREATEST UNKNOWN",
+        "navigationEndpoint": {
+          "browseEndpoint": {
+            "browseId": "MPREb_r2SiObOBunG",
+            "params": "ggMrGilPTEFLNXV5X2thaVlVMXBuR1FlWV9VdnB5VkVic2dZUVZaeUJnanZYOA%3D%3D",
+            "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+                "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "subtitle": {
+    "runs": [
+      {
+        "text": "2023年"
+      }
+    ]
+  },
+  "navigationEndpoint": {
+    "browseEndpoint": {
+      "browseId": "MPREb_r2SiObOBunG",
+      "params": "ggMrGilPTEFLNXV5X2thaVlVMXBuR1FlWV9VdnB5VkVic2dZUVZaeUJnanZYOA%3D%3D",
+      "browseEndpointContextSupportedConfigs": {
+        "browseEndpointContextMusicConfig": {
+          "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+        }
+      }
+    }
+  },
+  "menu": {
+    "menuRenderer": {
+      "items": [
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "ミックスリストを開始"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "MIX"
+            },
+            "navigationEndpoint": {
+              "watchPlaylistEndpoint": {
+                "playlistId": "RDAMPLOLAK5uy_kaiYU1pnGQeY_UvpyVEbsgYQVZyBgjvX8",
+                "params": "wAEB"
+              }
+            }
+          }
+        },
+        {
+          "toggleMenuServiceItemRenderer": {
+            "defaultText": {
+              "runs": [
+                {
+                  "text": "ライブラリにアルバムを保存"
+                }
+              ]
+            },
+            "defaultIcon": {
+              "iconType": "BOOKMARK_BORDER"
+            },
+            "defaultServiceEndpoint": {
+              "modalEndpoint": {
+                "modal": {
+                  "modalWithTitleAndButtonRenderer": {
+                    "title": {
+                      "runs": [
+                        {
+                          "text": "後で見るために保存"
+                        }
+                      ]
+                    },
+                    "content": {
+                      "runs": [
+                        {
+                          "text": "ログインすると、お気に入りをライブラリに保存できます"
+                        }
+                      ]
+                    },
+                    "button": {
+                      "buttonRenderer": {
+                        "style": "STYLE_BLUE_TEXT",
+                        "isDisabled": false,
+                        "text": {
+                          "runs": [
+                            {
+                              "text": "ログイン"
+                            }
+                          ]
+                        },
+                        "navigationEndpoint": {
+                          "signInEndpoint": {
+                            "hack": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "toggledText": {
+              "runs": [
+                {
+                  "text": "ライブラリからアルバムを削除"
+                }
+              ]
+            },
+            "toggledIcon": {
+              "iconType": "BOOKMARK"
+            },
+            "toggledServiceEndpoint": {
+              "likeEndpoint": {
+                "status": "INDIFFERENT",
+                "target": {
+                  "playlistId": "OLAK5uy_kaiYU1pnGQeY_UvpyVEbsgYQVZyBgjvX8"
+                }
+              }
+            },
+            "isToggled": false
+          }
+        },
+        {
+          "menuNavigationItemRenderer": {
+            "text": {
+              "runs": [
+                {
+                  "text": "共有"
+                }
+              ]
+            },
+            "icon": {
+              "iconType": "SHARE"
+            },
+            "navigationEndpoint": {
+              "shareEntityEndpoint": {
+                "serializedShareEntity": "EilPTEFLNXV5X2thaVlVMXBuR1FlWV9VdnB5VkVic2dZUVZaeUJnanZYOA%3D%3D",
+                "sharePanelType": "SHARE_PANEL_TYPE_UNIFIED_SHARE_PANEL"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "thumbnailOverlay": {
+    "musicItemThumbnailOverlayRenderer": {
+      "background": {
+        "verticalGradient": {
+          "gradientLayerColors": [
+            "2147483648",
+            "0",
+            "0"
+          ]
+        }
+      },
+      "content": {
+        "musicPlayButtonRenderer": {
+          "playNavigationEndpoint": {
+            "watchPlaylistEndpoint": {
+              "playlistId": "OLAK5uy_kaiYU1pnGQeY_UvpyVEbsgYQVZyBgjvX8"
+            }
+          },
+          "playIcon": {
+            "iconType": "PLAY_ARROW"
+          },
+          "pauseIcon": {
+            "iconType": "PAUSE"
+          },
+          "iconColor": 4294967295,
+          "backgroundColor": 2566914048,
+          "activeBackgroundColor": 4278190080,
+          "loadingIndicatorColor": 14745645,
+          "playingIcon": {
+            "iconType": "VOLUME_UP"
+          },
+          "iconLoadingColor": 1308622847,
+          "activeScaleFactor": 1.2,
+          "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_MEDIUM",
+          "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF",
+          "accessibilityPlayData": {},
+          "accessibilityPauseData": {}
+        }
+      },
+      "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_BOTTOM_RIGHT",
+      "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_HOVER"
+    }
+  }
+}

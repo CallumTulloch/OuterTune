@@ -76,7 +76,7 @@ data class SearchSummaryPage(
                     AlbumItem(
                         artistCredit = (renderer.subtitle.runs.orEmpty()).toAlbumArtistCredit("SearchSummaryPage", language),
                         browseId = renderer.onTap.browseEndpoint.browseId,
-                        playlistId = renderer.buttons.firstOrNull()?.buttonRenderer?.command?.anyWatchEndpoint?.playlistId ?: return null,
+                        playlistId = renderer.buttons.firstOrNull()?.buttonRenderer?.command?.anyWatchEndpoint?.playlistId,
                         title = renderer.title.runs?.firstOrNull()?.text ?: return null,
                         artists = subtitle?.getOrNull(1)?.artistElements()?.map {
                             Artist(
@@ -173,7 +173,7 @@ data class SearchSummaryPage(
                     AlbumItem(
                         artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()).toAlbumArtistCredit("SearchSummaryPage", language),
                         browseId = renderer.navigationEndpoint?.browseEndpoint?.browseId ?: return null,
-                        playlistId = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchPlaylistEndpoint?.playlistId ?: return null,
+                        playlistId = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.anyWatchEndpoint?.playlistId,
                         title = renderer.flexColumns.firstOrNull()
                             ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
                             ?.firstOrNull()?.text ?: return null,

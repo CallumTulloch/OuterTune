@@ -27,17 +27,12 @@ import coil3.request.crossfade
 import com.dd3boh.outertune.constants.AccountChannelHandleKey
 import com.dd3boh.outertune.constants.AccountEmailKey
 import com.dd3boh.outertune.constants.AccountNameKey
-import com.dd3boh.outertune.constants.ContentCountryKey
-import com.dd3boh.outertune.constants.ContentLanguageKey
-import com.dd3boh.outertune.constants.CountryCodeToName
 import com.dd3boh.outertune.constants.DataSyncIdKey
 import com.dd3boh.outertune.constants.InnerTubeCookieKey
-import com.dd3boh.outertune.constants.LanguageCodeToName
 import com.dd3boh.outertune.constants.MaxImageCacheSizeKey
 import com.dd3boh.outertune.constants.ProxyEnabledKey
 import com.dd3boh.outertune.constants.ProxyTypeKey
 import com.dd3boh.outertune.constants.ProxyUrlKey
-import com.dd3boh.outertune.constants.SYSTEM_DEFAULT
 import com.dd3boh.outertune.constants.UseLoginForBrowse
 import com.dd3boh.outertune.constants.VisitorDataKey
 import com.dd3boh.outertune.extensions.toEnum
@@ -50,9 +45,9 @@ import com.dd3boh.outertune.utils.reportException
 import com.dd3boh.outertune.repositories.MetadataNameRepository
 import com.dd3boh.outertune.repositories.ArtistImageRepository
 import com.dd3boh.outertune.repositories.AlbumMetadataRepository
+import com.dd3boh.outertune.repositories.ContentLocaleRepository
 import javax.inject.Inject
 import com.zionhuang.innertube.YouTube
-import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.kugou.KuGou
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -64,7 +59,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.net.Proxy
-import java.util.Locale
 
 @HiltAndroidApp
 class App : Application(), SingletonImageLoader.Factory {
@@ -72,6 +66,7 @@ class App : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var metadataNames: MetadataNameRepository
     @Inject lateinit var artistImages: ArtistImageRepository
     @Inject lateinit var albumMetadata: AlbumMetadataRepository
+    @Inject lateinit var contentLocale: ContentLocaleRepository
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun onCreate() {
@@ -83,19 +78,10 @@ class App : Application(), SingletonImageLoader.Factory {
 
         instance = this;
 
-        val locale = Locale.getDefault()
-        val languageTag = locale.toLanguageTag().replace("-Hant", "") // replace zh-Hant-* to zh-*
-        YouTube.locale = YouTubeLocale(
-            gl = dataStore[ContentCountryKey]?.takeIf { it != SYSTEM_DEFAULT }
-                ?: locale.country.takeIf { it in CountryCodeToName }
-                ?: "US",
-            hl = dataStore[ContentLanguageKey]?.takeIf { it != SYSTEM_DEFAULT }
-                ?: locale.language.takeIf { it in LanguageCodeToName }
-                ?: languageTag.takeIf { it in LanguageCodeToName }
-                ?: "en"
-        )
-        if (languageTag == "zh-TW") {
-            KuGou.useTraditionalChinese = true
+        contentLocale.start()
+        KuGou.useTraditionalChinese = YouTube.locale.hl == "zh-TW"
+        GlobalScope.launch {
+            YouTube.localeUpdates.collect { KuGou.useTraditionalChinese = it.hl == "zh-TW" }
         }
 
         if (dataStore[ProxyEnabledKey] == true) {

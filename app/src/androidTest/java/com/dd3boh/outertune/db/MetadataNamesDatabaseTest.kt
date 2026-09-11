@@ -74,7 +74,7 @@ class MetadataNamesDatabaseTest {
     }
 
     @Test
-    fun repeatedDetailNamesKeepHighestPriorityLatestObservationAndEvidenceInEitherArrivalOrder() = withDatabase { database ->
+    fun repeatedDetailNamesKeepTheStrongestObservationsTimeAndEvidenceInEitherArrivalOrder() = withDatabase { database ->
         for (batched in listOf(false, true)) {
             for (reversed in listOf(false, true)) {
                 val artistId = "UCpriority-$batched-$reversed"
@@ -85,15 +85,29 @@ class MetadataNamesDatabaseTest {
                 val observations = listOf(detail, laterByline).let { if (reversed) it.reversed() else it }
                 if (batched) database.recordMetadataNames(observations)
                 else observations.forEach { database.recordMetadataNames(listOf(it)) }
-                // A still older response must not lower either independently retained value.
+                // A still older byline must not alter the authoritative observation.
                 database.recordMetadataNames(listOf(detail.copy(sourcePriority = 1, observedAt = 1, originEvidenceJson = null)))
 
                 val stored = database.metadataNames("ARTIST", artistId).single()
                 assertEquals("batch=$batched reversed=$reversed", 100, stored.sourcePriority)
-                assertEquals(20L, stored.observedAt)
+                assertEquals(10L, stored.observedAt)
                 assertEquals(evidence, stored.originEvidenceJson)
             }
         }
+    }
+
+    @Test
+    fun laterEmbeddedSpellingCannotMakeAnOldHeaderWinOverTheLatestLocalizedHeader() = withDatabase { database ->
+        val old = name("ARTIST", "UC-localized", "ja", "Romanized", "detail")
+            .copy(sourcePriority = 100, observedAt = 10)
+        val current = old.copy(name = "日本語の正式名", observedAt = 20)
+        database.recordMetadataNames(listOf(old, current))
+        database.recordMetadataNames(listOf(old.copy(sourcePriority = 20, observedAt = 30)))
+        val rows = database.metadataNames("ARTIST", "UC-localized")
+        assertEquals("日本語の正式名", rows.first().name)
+        assertEquals(setOf("Romanized", "日本語の正式名"), rows.map { it.name }.toSet())
+        database.recordMetadataNames(listOf(old.copy(observedAt = 40)))
+        assertEquals("Romanized", database.metadataNames("ARTIST", "UC-localized").first().name)
     }
 
     @Test

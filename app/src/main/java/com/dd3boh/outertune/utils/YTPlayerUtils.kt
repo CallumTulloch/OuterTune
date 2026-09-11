@@ -84,6 +84,7 @@ object YTPlayerUtils {
         playlistId: String? = null,
         audioQuality: AudioQuality,
         connectivityManager: ConnectivityManager,
+        requiredItag: Int? = null,
     ): Result<PlaybackData> = runCatching {
         Log.d(TAG, "Playback info requested: $videoId")
 
@@ -166,6 +167,7 @@ object YTPlayerUtils {
                         streamPlayerResponse,
                         audioQuality,
                         connectivityManager,
+                        requiredItag,
                     ) ?: continue
                 streamUrl = findUrlOrNull(format, videoId) ?: continue
                 streamExpiresInSeconds =
@@ -235,16 +237,14 @@ object YTPlayerUtils {
         playerResponse: PlayerResponse,
         audioQuality: AudioQuality,
         connectivityManager: ConnectivityManager,
+        requiredItag: Int?,
     ): PlayerResponse.StreamingData.Format? =
-        playerResponse.streamingData?.adaptiveFormats
-            ?.filter { it.isAudio }
-            ?.maxByOrNull {
-                it.bitrate * when (audioQuality) {
-                    AudioQuality.AUTO -> if (connectivityManager.isActiveNetworkMetered) -1 else 1
-                    AudioQuality.HIGH -> 1
-                    AudioQuality.LOW -> -1
-                } + (if (it.mimeType.startsWith("audio/webm")) 10240 else 0) // prefer opus stream
-            }
+        selectPlaybackFormat(
+            playerResponse.streamingData?.adaptiveFormats.orEmpty(),
+            audioQuality,
+            connectivityManager.isActiveNetworkMetered,
+            requiredItag,
+        )
 
     /**
      * Checks if the stream url returns a successful status.
@@ -256,8 +256,9 @@ object YTPlayerUtils {
             val requestBuilder = okhttp3.Request.Builder()
                 .head()
                 .url(url)
-            val response = httpClient.newCall(requestBuilder.build()).execute()
-            return response.isSuccessful
+            return httpClient.newCall(requestBuilder.build()).execute().use { response ->
+                response.isSuccessful
+            }
         } catch (e: Exception) {
             reportException(e)
         }

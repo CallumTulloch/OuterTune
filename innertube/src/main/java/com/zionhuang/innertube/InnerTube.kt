@@ -32,10 +32,7 @@ class InnerTube {
     private val visitorDataByClient = mutableMapOf<String, String>()
 
     @Volatile
-    var locale = YouTubeLocale(
-        gl = Locale.getDefault().country,
-        hl = Locale.getDefault().toLanguageTag()
-    )
+    var locale = YouTubeLocale(gl = "US", hl = "en")
     var visitorData: String? = null
     var dataSyncId: String? = null
     var cookie: String? = null

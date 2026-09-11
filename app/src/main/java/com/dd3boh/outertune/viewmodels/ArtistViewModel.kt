@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -51,9 +54,12 @@ class ArtistViewModel @Inject constructor(
     private var fetchedOnlineId: String? = null
     private var contextJob: Job? = null
     private var observedContextToken: String? = null
+    private var fetchGeneration = 0L
 
     init {
-        refreshArtistContext()
+        viewModelScope.launch {
+            YouTube.localeUpdates.collect { refreshArtistContext() }
+        }
         viewModelScope.launch {
             onlineArtistId.filterNotNull().distinctUntilChanged().collect {
                 fetchArtistsFromYTM()
@@ -67,6 +73,7 @@ class ArtistViewModel @Inject constructor(
         val token = currentContextToken()
         if (observedContextToken == token) return
         observedContextToken = token
+        fetchGeneration++
         contextJob?.cancel()
         fetchJob?.cancel()
         artistPage = null
@@ -82,17 +89,26 @@ class ArtistViewModel @Inject constructor(
         if (fetchJob?.isActive == true && fetchedOnlineId == onlineId) return
         fetchJob?.cancel()
         fetchedOnlineId = onlineId
+        val generation = ++fetchGeneration
+        val requestLocale = YouTube.locale
+        val requestContext = currentContextToken()
         fetchJob = viewModelScope.launch {
             isLoading.value = true
-            YouTube.artist(onlineId)
-                .onSuccess {
-                    artistPage = it
-                    if (it.artist.id == onlineId) database.awaitTransaction { saveArtistProfile(it.artist) }
-                }.onFailure {
-                    reportException(it)
+            try {
+                val page = YouTube.artist(onlineId, requestLocale = requestLocale).getOrThrow()
+                currentCoroutineContext().ensureActive()
+                if (generation != fetchGeneration || requestContext != currentContextToken()) return@launch
+                artistPage = page
+                if (page.artist.id == onlineId) database.awaitTransaction {
+                    if (generation == fetchGeneration && requestContext == currentContextToken()) saveArtistProfile(page.artist)
                 }
-
-            isLoading.value = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (generation == fetchGeneration) reportException(failure)
+            } finally {
+                if (generation == fetchGeneration) isLoading.value = false
+            }
         }
     }
 }

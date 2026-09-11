@@ -19,6 +19,9 @@ import com.dd3boh.outertune.models.metadata.ArtTrackOriginalName
 import com.dd3boh.outertune.models.metadata.ArtTrackOriginalNameCodec
 import com.dd3boh.outertune.utils.MetadataNames
 import com.dd3boh.outertune.utils.dataStore
+import com.dd3boh.outertune.utils.createDatabaseSnapshot
+import com.dd3boh.outertune.utils.createBackupArchive
+import java.io.File
 import dagger.hilt.android.EntryPointAccessors
 import java.time.LocalDateTime
 import kotlinx.coroutines.delay
@@ -107,6 +110,14 @@ class MetadataLanguageIntegrationTest {
         awaitNames(jaTitle, "ニルヴァーナ")
         assertEquals("Smells Like Teen Spirit", database.songForArtistCredit(songId)!!.title)
         assertEquals(2, database.metadataNames("SONG", songId).filter { it.source == "detail" }.size)
+        if (InstrumentationRegistry.getArguments().getString("exportLocaleFixture") == "true") {
+            val snapshot = File(context.cacheDir, "content-locale-fixture.db")
+            createDatabaseSnapshot(requireNotNull(database.openHelper.writableDatabase.path), snapshot)
+            try {
+                createBackupArchive(File(context.filesDir, "datastore/settings.preferences_pb"), snapshot,
+                    File(context.getExternalFilesDir(null), "content-locale-fixture.backup"))
+            } finally { snapshot.delete() }
+        }
         // Keep this record available for the subsequent process-restart/UI check in the isolated emulator.
     }
 }

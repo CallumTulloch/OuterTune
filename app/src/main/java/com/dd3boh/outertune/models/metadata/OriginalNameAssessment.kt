@@ -24,14 +24,14 @@ data class OriginalNameAssessment(
     val method: String,
     val inputFingerprint: String,
     val evaluatedAt: Long,
-    val resolverVersion: Int = 1,
+    val resolverVersion: Int = OriginalNameAssessmentCodec.RESOLVER_VERSION,
     val formatVersion: Int = 1,
 )
 
 /** Explicit JSON avoids relying on a serialization compiler plugin in the app module. */
 object OriginalNameAssessmentCodec {
     const val FORMAT_VERSION = 1
-    const val RESOLVER_VERSION = 1
+    const val RESOLVER_VERSION = 2
     private val videoIdPattern = Regex("[A-Za-z0-9_-]{11}")
 
     /** Invalid generated assessments must be fixed by their producer instead of being persisted. */

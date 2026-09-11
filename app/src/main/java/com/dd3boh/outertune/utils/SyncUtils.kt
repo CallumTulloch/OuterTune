@@ -41,6 +41,7 @@ import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.innertube.utils.completed
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -50,6 +51,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,6 +76,38 @@ internal fun <T> combineCompleteRemoteData(results: List<Result<List<T>>>): Resu
         result.exceptionOrNull()?.let { return Result.failure(it) }
     }
     return Result.success(results.flatMap { it.getOrThrow() })
+}
+
+/** A localized saved label is committed only for the request context still active at the DB boundary. */
+internal suspend fun <T> fetchAndCommitCurrentSyncSnapshot(
+    currentLocale: () -> YouTubeLocale,
+    fetch: suspend (YouTubeLocale) -> T,
+    commit: suspend (YouTubeLocale, T) -> Boolean,
+): Pair<YouTubeLocale, T> {
+    while (true) {
+        currentCoroutineContext().ensureActive()
+        val requestLocale = currentLocale()
+        val value = try {
+            fetch(requestLocale)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (requestLocale != currentLocale()) continue
+            throw error
+        }
+        currentCoroutineContext().ensureActive()
+        if (requestLocale != currentLocale()) continue
+        val committed = try {
+            commit(requestLocale, value)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (requestLocale != currentLocale()) continue
+            throw error
+        }
+        currentCoroutineContext().ensureActive()
+        if (committed && requestLocale == currentLocale()) return requestLocale to value
+    }
 }
 
 internal class LibraryRefreshCoordinator(
@@ -470,13 +505,16 @@ class SyncUtils @Inject constructor(
             Log.i(TAG, "Artist subscriptions synchronization started")
 
             // Get remote artists (from library and uploads)
+            val requestLocale = YouTube.locale
             val likedArtists = getRemoteData<ArtistItem>(
                 "FEmusic_library_corpus_artists",
-                "FEmusic_library_privately_owned_artists"
+                "FEmusic_library_privately_owned_artists",
+                requestLocale,
             ).getOrThrow()
             val trackArtists = getRemoteData<ArtistItem>(
                 "FEmusic_library_corpus_track_artists",
-                "FEmusic_library_privately_owned_artists"
+                "FEmusic_library_privately_owned_artists",
+                requestLocale,
             ).getOrThrow()
             val remoteArtists = mutableListOf<ArtistItem>().apply {
                 addAll(likedArtists)
@@ -555,64 +593,64 @@ class SyncUtils @Inject constructor(
         ) {
             Log.i(TAG, "Library playlist synchronization started")
 
-            // Get remote and local playlists
-            val page = YouTube.library("FEmusic_liked_playlists").completed().getOrThrow()
-            val remotePlaylists = page.items.filterIsInstance<PlaylistItem>()
-                .filterNot { it.id == "LM" || it.id == "SE" }
-                .reversed()
-
-            val localPlaylists = database.playlistInLibraryAsc().first()
-
-            if (checkOverwrite(SyncConflictResolution.OVERWRITE_WITH_REMOTE)) {
-                // Identify playlists to remove
-                val playlistsToRemove = localPlaylists
-                    .filterNot { it.playlist.isLocal }
-                    .filterNot { it.playlist.browseId == null }
-                    .filterNot { localPlaylist -> remotePlaylists.any { it.id == localPlaylist.playlist.browseId } }
-
-                // Remove playlists from the database
-                runBlocking {
-                    playlistsToRemove.forEach { playlist ->
-                        launch(Dispatchers.IO) {
-                            database.update(playlist.playlist.localToggleLike())
+            val (requestLocale, remotePlaylists) = fetchAndCommitCurrentSyncSnapshot(
+                currentLocale = { YouTube.locale },
+                fetch = { locale ->
+                    YouTube.library("FEmusic_liked_playlists", requestLocale = locale).completed().getOrThrow()
+                        .items.filterIsInstance<PlaylistItem>()
+                        .filterNot { it.id == "LM" || it.id == "SE" }
+                        .reversed()
+                },
+                commit = { locale, playlists ->
+                    val localPlaylists = database.playlistInLibraryAsc().first()
+                    var committed = false
+                    database.awaitTransaction {
+                        if (YouTube.locale != locale) return@awaitTransaction
+                        if (checkOverwrite(SyncConflictResolution.OVERWRITE_WITH_REMOTE)) {
+                            localPlaylists
+                                .filterNot { it.playlist.isLocal }
+                                .filterNot { it.playlist.browseId == null }
+                                .filterNot { local -> playlists.any { it.id == local.playlist.browseId } }
+                                .forEach { update(it.playlist.localToggleLike()) }
                         }
+                        playlists.forEach { remotePlaylist ->
+                            val localPlaylist = localPlaylists.find {
+                                remotePlaylist.id == it.playlist.browseId
+                            }?.playlist?.copy(isEditable = remotePlaylist.isEditable)
+                            if (localPlaylist == null) {
+                                insert(PlaylistEntity(
+                                    name = remotePlaylist.title,
+                                    browseId = remotePlaylist.id,
+                                    isEditable = remotePlaylist.isEditable,
+                                    bookmarkedAt = LocalDateTime.now(),
+                                    thumbnailUrl = remotePlaylist.thumbnail,
+                                    remoteSongCount = remotePlaylist.songCountText?.let {
+                                        Regex("""\d+""").find(it)?.value?.toIntOrNull()
+                                    },
+                                    playEndpointParams = remotePlaylist.playEndpoint?.params,
+                                    shuffleEndpointParams = remotePlaylist.shuffleEndpoint?.params,
+                                    radioEndpointParams = remotePlaylist.radioEndpoint?.params,
+                                ))
+                            } else {
+                                update(localPlaylist, remotePlaylist)
+                            }
+                        }
+                        check(YouTube.locale == locale) { "Content locale changed during playlist sync" }
+                        committed = true
                     }
-                }
-            }
+                    committed
+                },
+            )
 
-            // Add or update playlists in the database
             val playlistSyncResults = coroutineScope {
                 remotePlaylists.map { remotePlaylist ->
                     async(Dispatchers.IO) {
-                        // forcefully assign isEditable. These playlists are at mercy of YouTube
-                        var localPlaylist =
-                            localPlaylists.find { remotePlaylist.id == it.playlist.browseId }?.playlist
-                                ?.copy(isEditable = remotePlaylist.isEditable)
-                        if (localPlaylist == null) {
-                            localPlaylist = PlaylistEntity(
-                                name = remotePlaylist.title,
-                                browseId = remotePlaylist.id,
-                                isEditable = remotePlaylist.isEditable,
-                                bookmarkedAt = LocalDateTime.now(),
-                                thumbnailUrl = remotePlaylist.thumbnail,
-                                remoteSongCount = remotePlaylist.songCountText?.let {
-                                    Regex("""\d+""").find(it)?.value?.toIntOrNull()
-                                },
-                                playEndpointParams = remotePlaylist.playEndpoint?.params,
-                                shuffleEndpointParams = remotePlaylist.shuffleEndpoint?.params,
-                                radioEndpointParams = remotePlaylist.radioEndpoint?.params
-                            )
-                            database.insert(localPlaylist)
-                        } else {
-                            database.update(localPlaylist, remotePlaylist)
-                        }
-
                         // Fetch the playlist again after potential insertion/update
                         val updatedPlaylist = database.playlistByBrowseId(remotePlaylist.id).firstOrNull()
                             ?: return@async false
                         val playlistSongMaps = database.songMapsToPlaylist(updatedPlaylist.id)
                         if (updatedPlaylist.playlist.isEditable || playlistSongMaps.isNotEmpty()) {
-                            syncPlaylist(remotePlaylist.id, updatedPlaylist.id)
+                            syncPlaylist(remotePlaylist.id, updatedPlaylist.id, requestLocale)
                         } else {
                             true
                         }
@@ -625,12 +663,12 @@ class SyncUtils @Inject constructor(
         }
     }
 
-    suspend fun syncPlaylist(browseId: String, playlistId: String): Boolean {
+    suspend fun syncPlaylist(browseId: String, playlistId: String, requestLocale: YouTubeLocale = YouTube.locale): Boolean {
         // this is also used for individual playlist sync
         if (!context.isInternetConnected()) return false
 
         return try {
-            val playlistPage = YouTube.playlist(browseId).completed().getOrThrow()
+            val playlistPage = YouTube.playlist(browseId, requestLocale = requestLocale).completed().getOrThrow()
             database.awaitTransaction {
                 clearPlaylist(playlistId)
                 val songEntities = playlistPage.songs
@@ -677,19 +715,30 @@ class SyncUtils @Inject constructor(
             label = "Recent activity",
         ) {
             Log.i(TAG, "Recent activity synchronization started")
-            val page = YouTube.libraryRecentActivity().getOrThrow()
-            val recentActivity = page.items.take(9).drop(1)
-
-            database.awaitTransaction {
-                clearRecentActivity()
-                recentActivity.reversed().forEach { insertRecentActivityItem(it) }
-            }
+            fetchAndCommitCurrentSyncSnapshot(
+                currentLocale = { YouTube.locale },
+                fetch = { locale ->
+                    YouTube.libraryRecentActivity(requestLocale = locale).getOrThrow().items.take(9).drop(1)
+                },
+                commit = { locale, recentActivity ->
+                    var committed = false
+                    database.awaitTransaction {
+                        if (YouTube.locale != locale) return@awaitTransaction
+                        clearRecentActivity()
+                        recentActivity.reversed().forEach { insertRecentActivityItem(it) }
+                        check(YouTube.locale == locale) { "Content locale changed during recent activity sync" }
+                        committed = true
+                    }
+                    committed
+                },
+            )
         }
     }
 
     private suspend inline fun <reified T> getRemoteData(
         libraryId: String,
         uploadsId: String,
+        requestLocale: YouTubeLocale = YouTube.locale,
     ): Result<List<T>> {
         val browseIds = listOf(
             libraryId to 0,
@@ -699,7 +748,7 @@ class SyncUtils @Inject constructor(
         val results = coroutineScope {
             browseIds.map { (browseId, tab) ->
                 async {
-                    YouTube.library(browseId, tab).completed().map { page ->
+                    YouTube.library(browseId, tab, requestLocale = requestLocale).completed().map { page ->
                         page.items.filterIsInstance<T>().reversed()
                     }
                 }

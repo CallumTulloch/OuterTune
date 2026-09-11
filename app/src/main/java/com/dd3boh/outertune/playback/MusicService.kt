@@ -20,6 +20,7 @@ import android.database.SQLException
 import android.media.audiofx.AudioEffect
 import android.net.ConnectivityManager
 import android.os.Binder
+import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.getSystemService
@@ -42,10 +43,11 @@ import androidx.media3.common.Player.STATE_IDLE
 import androidx.media3.common.Timeline
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -131,6 +133,8 @@ import com.zionhuang.innertube.models.WatchEndpoint
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -169,8 +173,8 @@ class MusicService : MediaLibraryService(),
     lateinit var database: MusicDatabase
     @Inject
     lateinit var artistCredits: ArtistCreditRepository
-    private val scope = CoroutineScope(Dispatchers.Main)
-    private val offloadScope = CoroutineScope(playerCoroutine)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val offloadScope = CoroutineScope(SupervisorJob() + playerCoroutine)
 
     // Critical player components
     @Inject
@@ -230,6 +234,8 @@ class MusicService : MediaLibraryService(),
     private var isAudioEffectSessionOpened = false
 
     var consecutivePlaybackErr = 0
+    private val songUrlCache = PlaybackUrlCache(SystemClock::elapsedRealtime)
+    private val streamRefreshRetry = StreamRefreshRetry()
 
     override fun onCreate() {
         Log.i(TAG, "Starting MusicService")
@@ -319,12 +325,28 @@ class MusicService : MediaLibraryService(),
             }
         }
 
+        scope.launch {
+            YouTube.localeUpdates.collect {
+                player.currentMetadata?.let { artistCredits.request(it, priority = true) }
+            }
+        }
+
         // Keep a connected controller so that notification works
         val sessionToken = SessionToken(this, ComponentName(this, MusicService::class.java))
         val controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture.addListener({ controllerFuture.get() }, MoreExecutors.directExecutor())
 
         connectivityManager = getSystemService()!!
+        connectivityObserver = NetworkConnectivityObserver(this)
+        scope.launch {
+            connectivityObserver.networkStatus.collect { isConnected ->
+                isNetworkConnected.value = isConnected
+                if (isConnected && waitingForNetworkConnection.value) {
+                    waitingForNetworkConnection.value = false
+                    player.prepare()
+                }
+            }
+        }
 
         currentSong.collect(scope) {
             updateNotification()
@@ -388,27 +410,6 @@ class MusicService : MediaLibraryService(),
             }
 
 
-            // network connectivity
-            try {
-                connectivityObserver.unregister()
-            } catch (e: UninitializedPropertyAccessException) {
-                // lol
-            }
-            connectivityObserver = NetworkConnectivityObserver(this@MusicService)
-
-            offloadScope.launch {
-                connectivityObserver.networkStatus.collect { isConnected ->
-                    isNetworkConnected.value = isConnected
-
-                    if (isConnected && waitingForNetworkConnection.value) {
-                        waitingForNetworkConnection.value = false
-                        withContext(Dispatchers.Main) {
-                            player.prepare()
-                            player.play()
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -430,9 +431,12 @@ class MusicService : MediaLibraryService(),
             else if (song.song.duration == -1) update(song.song.copy(duration = duration))
         }
         if (!database.hasRelatedSongs(mediaId)) {
-            val relatedEndpoint = YouTube.next(WatchEndpoint(videoId = mediaId)).getOrNull()?.relatedEndpoint ?: return
-            val relatedPage = YouTube.related(relatedEndpoint).getOrNull() ?: return
+            val requestLocale = YouTube.locale
+            val relatedEndpoint = YouTube.next(WatchEndpoint(videoId = mediaId), requestLocale = requestLocale)
+                .getOrNull()?.relatedEndpoint ?: return
+            val relatedPage = YouTube.related(relatedEndpoint, requestLocale = requestLocale).getOrNull() ?: return
             database.query {
+                if (YouTube.locale != requestLocale) return@query
                 relatedPage.songs
                     .map(SongItem::toMediaMetadata)
                     .onEach(::insert)
@@ -645,6 +649,7 @@ class MusicService : MediaLibraryService(),
 
     suspend fun saveQueueToDisk(currentPosition: Long) {
         val data = queueBoard.value.getAllQueues()
+        if (data.isEmpty()) return
         data.last().lastSongPos = currentPosition
         database.updateAllQueues(data)
     }
@@ -675,37 +680,27 @@ class MusicService : MediaLibraryService(),
         )
     }
 
-    private fun createCacheDataSource(): CacheDataSource.Factory {
-        return CacheDataSource.Factory()
-            .setCache(downloadCache)
-            .setUpstreamDataSourceFactory(
-                CacheDataSource.Factory()
-                    .setCache(playerCache)
-                    .setUpstreamDataSourceFactory(
-                        DefaultDataSource.Factory(
-                            this,
-                            OkHttpDataSource.Factory(
-                                OkHttpClient.Builder()
-                                    .proxy(YouTube.proxy)
-                                    .build()
-                            )
-                        )
-                    )
-                    .setCacheWriteDataSinkFactory(
-                        HybridCacheDataSinkFactory(playerCache) { dataSpec ->
-                            val isLocal = queueBoard.value.getCurrentQueue()?.findSong(dataSpec.key ?: "")?.isLocal == true
-                            Log.d(TAG, "SONG CACHE: ${!isLocal}")
-                            !isLocal
-                        }
-                    )
-                    .setFlags(FLAG_IGNORE_CACHE_ON_ERROR)
-            )
-            .setCacheWriteDataSinkFactory(null)
-            .setFlags(FLAG_IGNORE_CACHE_ON_ERROR)
-    }
+    private fun createCacheDataSource(): CacheDataSource.Factory = createPlaybackCacheDataSourceFactory(
+        downloadCache = downloadCache,
+        playerCache = playerCache,
+        upstreamFactory = DefaultDataSource.Factory(
+            this,
+            OkHttpDataSource.Factory(OkHttpClient.Builder().proxy(YouTube.proxy).build())
+        ),
+        resolver = { dataSpec ->
+            if (dataSpec.uri.scheme == "file" || dataSpec.uri.scheme == "content") {
+                dataSpec
+            } else {
+                resolveStreamDataSpec(dataSpec)
+            }
+        },
+        cacheWriteDataSinkFactory = HybridCacheDataSinkFactory(playerCache) { dataSpec ->
+            val isLocal = queueBoard.value.getCurrentQueue()?.findSong(dataSpec.key ?: "")?.isLocal == true
+            !isLocal
+        },
+    )
 
     private fun createDataSourceFactory(): DataSource.Factory {
-        val songUrlCache = HashMap<String, Pair<String, Long>>()
         return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
             val mediaId = dataSpec.key ?: error("No media id")
             Log.d(TAG, "PLAYING: song id = $mediaId")
@@ -737,82 +732,84 @@ class MusicService : MediaLibraryService(),
                 }
             }
 
-            val isDownload =
-                downloadCache.isCached(mediaId, dataSpec.position, if (dataSpec.length >= 0) dataSpec.length else 1)
-            val isCache = playerCache.isCached(mediaId, dataSpec.position, CHUNK_LENGTH)
-            if (isDownload || isCache) {
-                Log.d(TAG, "PLAYING: remote song (cache = ${isCache}, download = ${isDownload})")
-                offloadScope.launch { recoverSong(mediaId) }
-                return@Factory dataSpec
-            }
+            offloadScope.launch { recoverSong(mediaId) }
+            dataSpec
+        }
+    }
 
-            songUrlCache[mediaId]?.takeIf { it.second > System.currentTimeMillis() }?.let {
-                Log.d(TAG, "PLAYING: remote song (temp cache)")
-                offloadScope.launch { recoverSong(mediaId) }
-                return@Factory dataSpec.withUri(it.first.toUri())
-            }
+    private fun resolveStreamDataSpec(dataSpec: DataSpec): DataSpec {
+        val mediaId = dataSpec.key ?: error("No media id")
+        songUrlCache[mediaId]?.let {
+            Log.d(TAG, "PLAYING: remote song (temp cache)")
+            return dataSpec.withUri(it.toUri())
+        }
 
-            Log.d(TAG, "PLAYING: remote song (online fetch)")
+        Log.d(TAG, "PLAYING: remote song (online fetch)")
 
-            val playbackData = runBlocking(Dispatchers.IO) {
-                val audioQuality by enumPreference(this@MusicService, AudioQualityKey, AudioQuality.AUTO)
-                YTPlayerUtils.playerResponseForPlayback(
-                    mediaId,
-                    audioQuality = audioQuality,
-                    connectivityManager = connectivityManager,
-                )
-            }.getOrElse { throwable ->
-                when (throwable) {
-                    is PlaybackException -> throw throwable
+        val playbackData = runBlocking(Dispatchers.IO) {
+            val audioQuality by enumPreference(this@MusicService, AudioQualityKey, AudioQuality.AUTO)
+            val hasExistingBytes = dataSpec.position > 0 || playerCache.getCachedSpans(mediaId).isNotEmpty()
+                || downloadCache.getCachedSpans(mediaId).isNotEmpty()
+            val requiredItag = if (hasExistingBytes) database.format(mediaId).first()?.itag else null
+            YTPlayerUtils.playerResponseForPlayback(
+                mediaId,
+                audioQuality = audioQuality,
+                connectivityManager = connectivityManager,
+                requiredItag = requiredItag,
+            )
+        }.getOrElse { throwable ->
+            when (throwable) {
+                is PlaybackException -> throw throwable
 
-                    is ConnectException, is UnknownHostException -> {
-                        throw PlaybackException(
-                            getString(R.string.error_no_internet),
-                            throwable,
-                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
-                        )
-                    }
-
-                    is SocketTimeoutException -> {
-                        throw PlaybackException(
-                            getString(R.string.error_timeout),
-                            throwable,
-                            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
-                        )
-                    }
-
-                    else -> throw PlaybackException(
-                        getString(R.string.error_unknown),
+                is ConnectException, is UnknownHostException -> {
+                    throw PlaybackException(
+                        getString(R.string.error_no_internet),
                         throwable,
-                        PlaybackException.ERROR_CODE_REMOTE_ERROR
+                        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
                     )
                 }
-            }
-            val format = playbackData.format
 
-            database.query {
-                upsert(
-                    FormatEntity(
-                        id = mediaId,
-                        itag = format.itag,
-                        mimeType = format.mimeType.split(";")[0],
-                        codecs = format.mimeType.split("codecs=")[1].removeSurrounding("\""),
-                        bitrate = format.bitrate,
-                        sampleRate = format.audioSampleRate,
-                        contentLength = format.contentLength!!,
-                        loudnessDb = playbackData.audioConfig?.loudnessDb,
-                        playbackTrackingUrl = playbackData.playbackTracking?.videostatsPlaybackUrl?.baseUrl
+                is SocketTimeoutException -> {
+                    throw PlaybackException(
+                        getString(R.string.error_timeout),
+                        throwable,
+                        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
                     )
+                }
+
+                else -> throw PlaybackException(
+                    getString(R.string.error_unknown),
+                    throwable,
+                    PlaybackException.ERROR_CODE_REMOTE_ERROR
                 )
             }
-            offloadScope.launch { recoverSong(mediaId, playbackData) }
-
-            val streamUrl = playbackData.streamUrl
-
-            songUrlCache[mediaId] =
-                streamUrl to System.currentTimeMillis() + (playbackData.streamExpiresInSeconds * 1000L)
-            dataSpec.withUri(streamUrl.toUri()).subrange(dataSpec.uriPositionOffset, CHUNK_LENGTH)
         }
+        val format = playbackData.format
+
+        // Persist the representation before opening/writing bytes so a later cache hole can
+        // request the same format even after the signed URL expires or the network changes.
+        runBlocking(Dispatchers.IO) {
+            database.upsert(
+                FormatEntity(
+                    id = mediaId,
+                    itag = format.itag,
+                    mimeType = format.mimeType.split(";")[0],
+                    codecs = format.mimeType.substringAfter("codecs=", "").substringBefore(';')
+                        .trim().removeSurrounding("\""),
+                    bitrate = format.bitrate,
+                    sampleRate = format.audioSampleRate,
+                    contentLength = format.contentLength ?: C.LENGTH_UNSET.toLong(),
+                    loudnessDb = playbackData.audioConfig?.loudnessDb,
+                    playbackTrackingUrl = playbackData.playbackTracking?.videostatsPlaybackUrl?.baseUrl
+                )
+            )
+        }
+        offloadScope.launch { recoverSong(mediaId, playbackData) }
+
+        val streamUrl = playbackData.streamUrl
+
+        songUrlCache.put(mediaId, streamUrl, playbackData.streamExpiresInSeconds)
+        return dataSpec.withUri(streamUrl.toUri())
     }
 
     private fun createRenderersFactory(gaplessOffloadAllowed: Boolean): DefaultRenderersFactory {
@@ -926,6 +923,14 @@ class MusicService : MediaLibraryService(),
         Toast.makeText(this@MusicService, getString(R.string.wait_to_reconnect), Toast.LENGTH_LONG).show()
     }
 
+    fun retryPlayback() {
+        player.currentMediaItem?.mediaId?.let(songUrlCache::invalidate)
+        streamRefreshRetry.reset()
+        waitingForNetworkConnection.value = false
+        player.prepare()
+        player.play()
+    }
+
     fun skipOnError() {
         /**
          * Auto skip to the next media item on error.
@@ -961,11 +966,26 @@ class MusicService : MediaLibraryService(),
     override fun onPlayerError(error: PlaybackException) {
         super.onPlayerError(error)
 
-        // wait for reconnection
-        val isConnectionError = (error.cause?.cause is PlaybackException)
-                && (error.cause?.cause as PlaybackException).errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
-        if (!isNetworkConnected.value || isConnectionError) {
+        val hadCachedUrl = player.currentMediaItem?.mediaId?.let(songUrlCache::invalidate) == true
+        // Wait only for an actual disconnected network. A socket error while Android still
+        // reports a connection must remain retryable without waiting for a new network event.
+        val causes = generateSequence<Throwable>(error) { it.cause }.toList()
+        val isNetworkError = causes.any {
+            it is HttpDataSource.HttpDataSourceException || (it is PlaybackException &&
+                it.errorCode in setOf(PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
+        }
+        if (!isNetworkConnected.value && isNetworkError && player.playWhenReady) {
             waitOnNetworkError()
+            return
+        }
+
+        val httpStatus = causes
+            .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+            .firstOrNull()?.responseCode
+        if (streamRefreshRetry.shouldRetry(httpStatus, hadCachedUrl, player.playWhenReady)) {
+            Log.i(TAG, "Refreshing rejected stream for ${player.currentMediaItem?.mediaId} (HTTP $httpStatus)")
+            player.prepare()
             return
         }
 
@@ -993,6 +1013,8 @@ class MusicService : MediaLibraryService(),
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         super.onMediaItemTransition(mediaItem, reason)
+        streamRefreshRetry.reset()
+        waitingForNetworkConnection.value = false
         mediaItem?.metadata?.let { artistCredits.request(it, priority = true) }
         // +2 when and error happens, and -1 when transition. Thus when error, number increments by 1, else doesn't change
         if (consecutivePlaybackErr > 0) {
@@ -1050,6 +1072,7 @@ class MusicService : MediaLibraryService(),
         if (playbackState == STATE_IDLE) {
             queuePlaylistId = null
         }
+        if (playbackState == Player.STATE_READY) waitingForNetworkConnection.value = false
     }
 
     override fun onEvents(player: Player, events: Player.Events) {
@@ -1146,6 +1169,9 @@ class MusicService : MediaLibraryService(),
 
     override fun onDestroy() {
         Log.i(TAG, "Terminating MusicService.")
+        if (::connectivityObserver.isInitialized) connectivityObserver.unregister()
+        scope.cancel()
+        offloadScope.cancel()
         deInitQueue()
 
         mediaSession.player.stop()
@@ -1187,7 +1213,6 @@ class MusicService : MediaLibraryService(),
         const val CHANNEL_NAME = "fgs_workaround"
         const val NOTIFICATION_ID = 888
         const val ERROR_CODE_NO_STREAM = 1000001
-        const val CHUNK_LENGTH = 512 * 1024L
 
         const val COMMAND_GET_BINDER = "GET_BINDER"
     }

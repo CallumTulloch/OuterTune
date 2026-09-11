@@ -14,16 +14,18 @@ import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.MessageDigest
-import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 
 import kotlinx.serialization.json.*
 
@@ -41,6 +43,11 @@ class MetadataNameRepository internal constructor(
 
     internal class Runtime(
         val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        val locale: () -> YouTubeLocale = { YouTube.locale },
+        val localeUpdates: Flow<YouTubeLocale> = YouTube.localeUpdates,
+        val preferences: Flow<Preferences>? = null,
+        val observeMetadata: ((List<YTItem>, YouTubeLocale, String) -> Unit) -> Unit = { YouTube.metadataObserver = it },
+        val publishNames: (Map<OriginalNameTarget, String>, Map<OriginalNameTarget, List<String>>) -> Unit = MetadataNames::publish,
         val now: () -> Long = System::currentTimeMillis,
         val contextKey: (YouTubeLocale) -> String = ::youtubeMetadataContextKey,
         val queue: suspend (List<String>, YouTubeLocale) -> Result<List<SongItem>> = { ids, locale ->
@@ -74,7 +81,7 @@ class MetadataNameRepository internal constructor(
     private val knownArtTracks = ConcurrentHashMap.newKeySet<OriginalNameTarget>()
     private val originalEvaluations = Channel<List<MetadataNameEntity>>(Channel.CONFLATED)
     private val englishSongs = ConcurrentHashMap<String, SongItem>()
-    @Volatile private var currentLocale = YouTube.locale
+    private val currentLocale: YouTubeLocale get() = runtime.locale()
     private var started = false
 
     private data class Packet(val items: List<YTItem>, val locale: YouTubeLocale, val source: String, val contextKey: String)
@@ -84,9 +91,7 @@ class MetadataNameRepository internal constructor(
     fun start() {
         if (started) return
         started = true
-        // Hilt can construct this repository before App has applied its language preferences.
-        currentLocale = YouTube.locale
-        YouTube.metadataObserver = { items, locale, source ->
+        runtime.observeMetadata { items, locale, source ->
             packets.trySend(Packet(items.toList(), locale, source, runtime.contextKey(locale)))
             Unit
         }
@@ -124,35 +129,27 @@ class MetadataNameRepository internal constructor(
             }
         }
         repeat(3) { scope.launch { for (batch in batches) fetchBatch(batch) } }
-        val settings = context.dataStore.data.map { preferences ->
-            Settings(contentMetadataLocale(preferences), preferences[PreferEnglishOriginalKey] ?: false)
-        }.distinctUntilChanged()
+        val preferences = runtime.preferences ?: context.dataStore.data
+        val settings = combine(runtime.localeUpdates, preferences.map { it[PreferEnglishOriginalKey] ?: false }
+            .distinctUntilChanged()) { locale, preferOriginal -> Settings(locale, preferOriginal) }
         scope.launch {
-            settings.collect { value ->
-                currentLocale = value.locale
+            metadataRequestConfiguration(runtime.localeUpdates, preferences).collect {
                 keepCollectorRunning { refreshTargets() }
             }
         }
         scope.launch {
             combine(database.allMetadataNames(), settings) { names, options -> names to options }
-                .collect { (names, options) ->
+                .collectLatest { (names, options) ->
                     val grouped = names.groupBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
                     val assessments = originalAssessmentsByTarget(names)
-                    val selected = grouped.mapValues { (target, candidates) ->
-                        val sorted = candidates.sortedWith(compareByDescending<MetadataNameEntity> { it.sourcePriority }
-                            .thenByDescending { it.observedAt }.thenBy { it.name }.thenBy { it.source })
-                        val manual = sorted.firstOrNull { it.source == "manual" }
-                        manual?.name ?: OriginalNamePolicy.select(target,
-                            configuredName = sorted.firstOrNull { it.language == options.locale.hl }?.name,
-                            englishName = sorted.firstOrNull { it.language == "en" }?.name,
-                            fallbackName = sorted.firstOrNull { it.language == "en" }?.name ?: sorted.first().name,
-                            preferEnglishOriginal = options.preferOriginal,
-                            evidence = emptyList(),
-                            assessments = assessments[target].orEmpty(),
-                        ).name
-                    }
+                    val selected = grouped.mapNotNull { (target, candidates) ->
+                        selectMetadataDisplayName(target, candidates, options.locale.hl,
+                            options.preferOriginal, assessments[target].orEmpty())?.let { target to it }
+                    }.toMap()
                     withContext(Dispatchers.Main) {
-                        MetadataNames.publish(selected, grouped.mapValues { (_, names) -> names.map { it.name }.distinct() })
+                        if (options.locale == currentLocale) {
+                            runtime.publishNames(selected, grouped.mapValues { (_, names) -> names.map { it.name }.distinct() })
+                        }
                     }
                 }
         }
@@ -202,8 +199,9 @@ class MetadataNameRepository internal constructor(
         }
     }
 
-    private fun refreshTargets() {
-        database.allMetadataTargets().forEach { schedule(OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId)) }
+    private suspend fun refreshTargets() {
+        (database.allMetadataTargets() + database.metadataLibraryTargets().first()).distinct()
+            .forEach { schedule(OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId)) }
     }
 
     private fun scheduleItem(item: YTItem) {
@@ -247,8 +245,10 @@ class MetadataNameRepository internal constructor(
         if (scheduled.add(request) && fetches.trySend(request).isFailure) scheduled.remove(request)
     }
 
-    private fun isCurrent(request: MetadataFetchRequest): Boolean =
-        isMetadataFetchCurrent(request, currentLocale, runtime.contextKey(currentLocale))
+    private fun isCurrent(request: MetadataFetchRequest): Boolean {
+        val locale = currentLocale
+        return isMetadataFetchCurrent(request, locale, runtime.contextKey(locale))
+    }
 
     private fun requeueIfObsolete(request: MetadataFetchRequest): Boolean {
         if (isCurrent(request)) return false
@@ -325,6 +325,11 @@ class MetadataNameRepository internal constructor(
             runtime.acceptAlbumHeader(item, request.locale, request.contextKey)
         }
         nextAttempt[request] = now + metadataRetryDelay(status)
+        // Embedded names also need both locales and their own authoritative header. A detail
+        // fetch never expands artist sections or album tracks, so this remains bounded by IDs
+        // actually returned; TTL and scheduled keys share repeated requests.
+        names.map { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
+            .distinct().forEach(::schedule)
         if (isArtTrack && request.locale.hl == "en") {
             if (englishSongs.size > 1024) englishSongs.clear()
             englishSongs[runtime.contextKey(request.locale) + ":" + request.target.id] = song!!
@@ -404,6 +409,29 @@ class MetadataNameRepository internal constructor(
     }
 }
 
+/** Missing configured names leave the per-item provider text intact until acquisition succeeds. */
+internal fun selectMetadataDisplayName(
+    target: OriginalNameTarget,
+    candidates: List<MetadataNameEntity>,
+    language: String,
+    preferOriginal: Boolean,
+    assessments: List<OriginalNameAssessment> = emptyList(),
+): String? {
+    val sorted = candidates.filter { it.kind == target.kind.name && it.targetId == target.id && it.name.isNotBlank() }
+        .sortedWith(compareByDescending<MetadataNameEntity> { it.sourcePriority }
+            .thenByDescending { it.observedAt }.thenBy { it.name }.thenBy { it.source })
+    sorted.firstOrNull { it.source == "manual" }?.let { return it.name }
+    val selection = OriginalNamePolicy.select(target,
+        configuredName = sorted.firstOrNull { it.language == language }?.name,
+        englishName = sorted.firstOrNull { it.language == "en" }?.name,
+        fallbackName = "",
+        preferEnglishOriginal = preferOriginal,
+        evidence = emptyList(),
+        assessments = assessments,
+    )
+    return selection.name.takeUnless { selection.reason == OriginalNameSelectionReason.AVAILABLE_NAME_FALLBACK }
+}
+
 internal data class MetadataFetchRequest(
     val target: OriginalNameTarget,
     val locale: YouTubeLocale,
@@ -422,7 +450,8 @@ internal fun metadataFetchContextKey(locale: YouTubeLocale, useLogin: Boolean, c
     val auth = MessageDigest.getInstance("SHA-256")
         .digest("$useLogin:${cookie.orEmpty().length}:${cookie.orEmpty()}:${dataSyncId.orEmpty().length}:${dataSyncId.orEmpty()}".toByteArray())
         .joinToString("") { "%02x".format(it) }
-    return "${locale.gl}:$auth"
+    // Re-fetch authoritative names after correcting the old priority/timestamp merge policy.
+    return "${locale.gl}:$auth:names-v2"
 }
 
 internal fun isMetadataFetchCurrent(request: MetadataFetchRequest, locale: YouTubeLocale, contextKey: String): Boolean =
@@ -436,7 +465,7 @@ internal fun isMetadataFetchCurrent(request: MetadataFetchRequest, locale: YouTu
         request.contextKey == contextKey && request.locale.hl in setOf("en", locale.hl)
     }
 
-internal fun originalMetadataContextKey(locale: YouTubeLocale) = "main:${locale.gl}:v2"
+internal fun originalMetadataContextKey(locale: YouTubeLocale) = "main:${locale.gl}:v3"
 internal fun albumOriginalContextKey(contextKey: String) = "album-original-context:$contextKey"
 internal const val ORIGINAL_NAME_SOURCE_PREFIX = "art-track-original:"
 
@@ -523,18 +552,6 @@ internal fun metadataRetryDelay(status: String): Long = when (status) {
     MetadataFetchEntity.SUCCESS -> 7 * 24 * 60 * 60_000L
     MetadataFetchEntity.EMPTY -> 24 * 60 * 60_000L
     else -> 5 * 60_000L
-}
-
-internal fun contentMetadataLocale(preferences: Preferences): YouTubeLocale {
-    val locale = Locale.getDefault()
-    val tag = locale.toLanguageTag().replace("-Hant", "")
-    return YouTubeLocale(
-        gl = preferences[ContentCountryKey]?.takeIf { it != SYSTEM_DEFAULT }
-            ?: locale.country.takeIf { it in CountryCodeToName } ?: "US",
-        hl = preferences[ContentLanguageKey]?.takeIf { it != SYSTEM_DEFAULT }
-            ?: locale.language.takeIf { it in LanguageCodeToName }
-            ?: tag.takeIf { it in LanguageCodeToName } ?: "en",
-    )
 }
 
 /** Capture only names linked to stable IDs. Never split a literal credit or infer another identity. */

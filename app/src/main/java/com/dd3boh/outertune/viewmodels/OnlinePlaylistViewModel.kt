@@ -4,16 +4,14 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.db.MusicDatabase
-import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
-import com.zionhuang.innertube.models.PlaylistItem
-import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.pages.PlaylistPage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -23,55 +21,27 @@ class OnlinePlaylistViewModel @Inject constructor(
 ) : ViewModel() {
     private val playlistId = savedStateHandle.get<String>("playlistId")!!
 
-    val playlist = MutableStateFlow<PlaylistItem?>(null)
-    val playlistSongs = MutableStateFlow<List<SongItem>>(emptyList())
-    var continuation: String? = null
+    private val loader: LocalizedPageLoader<PlaylistPage> = LocalizedPageLoader(viewModelScope,
+        initial = { locale -> withContext(Dispatchers.IO) { YouTube.playlist(playlistId, requestLocale = locale) } },
+        continuation = { it.songsContinuation },
+        append = { previous, token, locale ->
+            withContext(Dispatchers.IO) { YouTube.playlistContinuation(token, requestLocale = locale) }.map { next ->
+                previous.copy(songs = previous.songs + next.songs, songsContinuation = next.continuation)
+            }
+        },
+        stopPagination = { it.copy(songsContinuation = null) },
+    )
+    val playlist = loader.page.map { it?.playlist }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val playlistSongs = loader.page.map { it?.songs.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val continuation: String? get() = loader.page.value?.songsContinuation
     val dbPlaylist = database.playlistByBrowseId(playlistId)
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
-    val isLoading = MutableStateFlow(false)
+    val isLoading = loader.loading
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
-            isLoading.value = true
-            YouTube.playlist(playlistId)
-                .onSuccess { playlistPage ->
-                    playlist.value = playlistPage.playlist
-                    playlistSongs.value = playlistPage.songs
-                    continuation = playlistPage.songsContinuation
-                }.onFailure {
-                    reportException(it)
-                }
-            isLoading.value = false
-        }
-    }
+    fun loadMoreSongs() = loader.loadMore()
 
-    fun loadMoreSongs() {
-        continuation?.let {
-            isLoading.value = true
-            viewModelScope.launch(Dispatchers.IO) {
-                getContinuation(it)
-            }
-            isLoading.value = false
-        }
-    }
-
-    fun loadRemainingSongs() {
-        viewModelScope.launch(Dispatchers.IO) {
-            isLoading.value = true
-            while (continuation != null) {
-                getContinuation(continuation!!)
-            }
-            isLoading.value = false
-        }
-    }
-
-    suspend fun getContinuation(continuation: String) {
-        val continuationPage = YouTube.playlistContinuation(continuation).getOrElse { e ->
-            reportException(e)
-            return
-        }
-        playlistSongs.value = playlistSongs.value + continuationPage.songs
-        this.continuation = continuationPage.continuation
-    }
+    fun loadRemainingSongs() = loader.loadMore(remaining = true)
 }

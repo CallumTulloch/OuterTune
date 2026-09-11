@@ -134,12 +134,11 @@ fun YouTubeAlbumMenu(
             bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         )
     ) {
-        GridMenuItem(
-            icon = Icons.Rounded.Radio,
-            title = R.string.start_radio
-        ) {
-            playerConnection.playQueue(YouTubeAlbumRadio(albumItem.playlistId))
-            onDismiss()
+        (albumItem.playlistId ?: album?.album?.playlistId)?.let { playlistId ->
+            GridMenuItem(icon = Icons.Rounded.Radio, title = R.string.start_radio) {
+                playerConnection.playQueue(YouTubeAlbumRadio(playlistId))
+                onDismiss()
+            }
         }
         GridMenuItem(
             icon = Icons.AutoMirrored.Rounded.PlaylistPlay,

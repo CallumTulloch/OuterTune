@@ -1,6 +1,7 @@
 package com.dd3boh.outertune.repositories
 
 import android.content.Context
+import androidx.datastore.preferences.core.Preferences
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.DataSyncIdKey
 import com.dd3boh.outertune.constants.InnerTubeCookieKey
@@ -28,10 +29,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -48,7 +49,7 @@ import kotlinx.serialization.json.put
 class BilingualSearch internal constructor(private val runtime: Runtime) {
     @Inject
     constructor(@ApplicationContext context: Context) : this(Runtime(
-        requestLocale = { contentMetadataLocale(context.dataStore.data.first()) },
+        requestLocale = { YouTube.locale },
         sectionTitle = { kind -> context.getString(when (kind) {
             SearchCategory.SONG -> R.string.filter_songs
             SearchCategory.VIDEO -> R.string.filter_videos
@@ -56,13 +57,7 @@ class BilingualSearch internal constructor(private val runtime: Runtime) {
             SearchCategory.ARTIST -> R.string.filter_artists
             SearchCategory.PLAYLIST -> R.string.filter_playlists
         }) },
-        configurationChanges = context.dataStore.data.map { preferences ->
-            val locale = contentMetadataLocale(preferences)
-            "${locale.gl}/${locale.hl}/" + searchAuthenticationContextKey(
-                preferences[UseLoginForBrowse] != false, preferences[InnerTubeCookieKey],
-                preferences[VisitorDataKey], preferences[DataSyncIdKey],
-            )
-        }.distinctUntilChanged().drop(1).map { Unit },
+        configurationChanges = bilingualSearchConfigurationChanges(YouTube.localeUpdates, context.dataStore.data),
     ))
 
     internal class Runtime(
@@ -300,6 +295,17 @@ class BilingualSearch internal constructor(private val runtime: Runtime) {
 
     }
 }
+
+/** System-locale changes can publish a new request locale without changing saved preferences. */
+internal fun bilingualSearchConfigurationChanges(
+    locales: Flow<YouTubeLocale>,
+    preferences: Flow<Preferences>,
+): Flow<Unit> = combine(locales, preferences) { locale, settings ->
+    locale to searchAuthenticationContextKey(
+        settings[UseLoginForBrowse] != false, settings[InnerTubeCookieKey],
+        settings[VisitorDataKey], settings[DataSyncIdKey],
+    )
+}.distinctUntilChanged().drop(1).map { Unit }
 
 /** Account/visitor identifiers are never stored in continuation state, only their combined digest. */
 internal fun searchAuthenticationContextKey(useLogin: Boolean, cookie: String?, visitorData: String?, dataSyncId: String?): String {

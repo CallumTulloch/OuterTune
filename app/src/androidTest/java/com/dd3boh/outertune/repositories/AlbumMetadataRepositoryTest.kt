@@ -27,8 +27,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
@@ -176,6 +176,59 @@ class AlbumMetadataRepositoryTest {
         } finally { fixture.close() }
     }
 
+    @Test fun publishedLocaleRejectsSharedHeaderBeforeConfigurationCollectorRuns() = runBlocking {
+        val fixture = Fixture { _, _ -> error("Only shared headers are used") }
+        try {
+            val saved = AlbumEntity(albumId, title = "Saved", songCount = 1, duration = 100)
+            fixture.database.insert(saved)
+            val repository = fixture.repository(start = false)
+            // Model the interval after central publication and before the refresh observer runs.
+            val french = locale.copy(hl = "fr")
+            fixture.currentLocale.set(french)
+            assertFalse(repository.acceptHeader(header(), locale, fixture.contextKey.get()))
+            assertEquals(saved, fixture.database.albumById(albumId))
+            assertNull(fixture.database.artistByOnlineId(artistId))
+            val newCredit = ArtistCredit("Artiste", listOf(Artist("Artiste", artistId)),
+                ArtistCreditStatus.COMPLETE, "AlbumPage", "fr")
+            assertTrue(repository.acceptHeader(header(credit = newCredit), french, fixture.contextKey.get()))
+            assertEquals("fr", fixture.database.albumById(albumId)!!.artistCredit!!.language)
+        } finally { fixture.close() }
+    }
+
+    @Test fun localeNotificationRefreshesSavedAlbumAndRejectsOutstandingOldHeader() = runBlocking {
+        val firstStarted = CompletableDeferred<Unit>()
+        val secondStarted = CompletableDeferred<Unit>()
+        val firstReply = CompletableDeferred<Result<AlbumItem>>()
+        val secondReply = CompletableDeferred<Result<AlbumItem>>()
+        val french = locale.copy(hl = "fr")
+        val calls = AtomicInteger()
+        val fixture = Fixture { _, requested ->
+            calls.incrementAndGet()
+            if (requested.hl == "ja") { firstStarted.complete(Unit); firstReply.await() }
+            else { assertEquals(french, requested); secondStarted.complete(Unit); secondReply.await() }
+        }
+        try {
+            fixture.database.insert(AlbumEntity(albumId, title = "Saved", songCount = 1, duration = 100))
+            val repository = fixture.repository()
+            withTimeout(15_000) { firstStarted.await() }
+            fixture.currentLocale.set(french)
+            fixture.configuration.value = french
+            // The locale signal must schedule its replacement without waiting for the old HTTP reply.
+            withTimeout(15_000) { secondStarted.await() }
+            firstReply.complete(Result.success(header()))
+            withTimeout(15_000) { while (repository.pendingRequestCount != 1) delay(10) }
+            assertNull(fixture.database.albumById(albumId)!!.artistCredit)
+            assertNull(fixture.database.artistByOnlineId(artistId))
+            assertNull(fixture.state(albumId))
+            val newCredit = ArtistCredit("Artiste", listOf(Artist("Artiste", artistId)),
+                ArtistCreditStatus.COMPLETE, "AlbumPage", "fr")
+            secondReply.complete(Result.success(header(credit = newCredit)))
+            fixture.awaitIdle(repository)
+            assertEquals("fr", fixture.database.albumById(albumId)!!.artistCredit!!.language)
+            assertEquals(2, calls.get())
+        } finally { fixture.close() }
+    }
+
     @Test fun wrongAlbumIdResponseDoesNotCreateRelationships() = runBlocking {
         val fixture = Fixture { _, _ -> Result.success(header(id = "MPRE-unrelated")) }
         try {
@@ -218,15 +271,16 @@ class AlbumMetadataRepositoryTest {
         val database = MusicDatabase(internal)
         val now = AtomicLong(1_789_000_000_000L)
         val contextKey = AtomicReference("JP:test")
+        val currentLocale = AtomicReference(YouTubeLocale(gl = "JP", hl = "ja"))
+        val configuration = MutableStateFlow(currentLocale.get())
         private var job: Job? = null
 
         suspend fun repository(start: Boolean = true): AlbumMetadataRepository {
             job?.cancelAndJoin()
             val newJob = SupervisorJob().also { job = it }
-            val locale = YouTubeLocale(gl = "JP", hl = "ja")
             return AlbumMetadataRepository(database, context, AlbumMetadataRepository.Runtime(
                 scope = CoroutineScope(newJob + Dispatchers.IO), now = now::get,
-                locale = { locale }, configuration = flowOf(locale),
+                locale = currentLocale::get, configuration = configuration,
                 contextKey = { contextKey.get() }, fetch = fetch,
             )).also { if (start) it.start() }
         }

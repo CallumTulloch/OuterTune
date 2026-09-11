@@ -4,6 +4,8 @@ import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.pages.LibraryPage
 import com.zionhuang.innertube.pages.PlaylistPage
 import java.security.MessageDigest
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 @JvmName("completedLibrary")
 suspend fun Result<PlaylistPage>.completed(): Result<PlaylistPage> = runCatching {
@@ -11,7 +13,10 @@ suspend fun Result<PlaylistPage>.completed(): Result<PlaylistPage> = runCatching
     val requestLocale = page.requestLocale ?: YouTube.locale
     val songs = page.songs.toMutableList()
     var continuation = page.songsContinuation
+    val visited = mutableSetOf<String>()
     while (continuation != null) {
+        currentCoroutineContext().ensureActive()
+        check(visited.add(continuation)) { "Playlist continuation did not advance" }
         val continuationPage = YouTube.playlistContinuation(continuation, requestLocale = requestLocale).getOrThrow()
         songs += continuationPage.songs
         continuation = continuationPage.continuation
@@ -31,14 +36,17 @@ suspend fun Result<LibraryPage>.completed(): Result<LibraryPage> = runCatching {
     val requestLocale = page.requestLocale ?: YouTube.locale
     val items = page.items.toMutableList()
     var continuation = page.continuation
+    val visited = mutableSetOf<String>()
     while (continuation != null) {
+        currentCoroutineContext().ensureActive()
+        check(visited.add(continuation)) { "Library continuation did not advance" }
         val continuationPage = YouTube.libraryContinuation(continuation, requestLocale = requestLocale).getOrThrow()
         items += continuationPage.items
         continuation = continuationPage.continuation
     }
     LibraryPage(
         items = items,
-        continuation = page.continuation,
+        continuation = null,
         requestLocale = requestLocale,
     )
 }

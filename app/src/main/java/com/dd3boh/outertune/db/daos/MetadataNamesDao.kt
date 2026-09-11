@@ -67,10 +67,15 @@ interface MetadataNamesDao {
     @Query("""
         UPDATE metadata_name
         SET sourcePriority = MAX(sourcePriority, :sourcePriority),
-            observedAt = MAX(observedAt, :observedAt),
+            observedAt = CASE
+                WHEN :sourcePriority > sourcePriority THEN :observedAt
+                WHEN :sourcePriority = sourcePriority THEN MAX(observedAt, :observedAt)
+                ELSE observedAt
+            END,
             originEvidenceJson = CASE
                 WHEN :originEvidenceJson IS NULL THEN originEvidenceJson
-                WHEN originEvidenceJson IS NULL OR :observedAt >= observedAt THEN :originEvidenceJson
+                WHEN originEvidenceJson IS NULL OR :sourcePriority > sourcePriority
+                    OR (:sourcePriority = sourcePriority AND :observedAt >= observedAt) THEN :originEvidenceJson
                 ELSE originEvidenceJson
             END
         WHERE kind = :kind AND targetId = :targetId AND language = :language AND name = :name AND source = :source
@@ -80,7 +85,7 @@ interface MetadataNamesDao {
         sourcePriority: Int, observedAt: Long, originEvidenceJson: String?,
     )
 
-    /** A thin byline and an artist detail can share a source: preserve the strongest observation. */
+    /** Keep the timestamp of the strongest observation; a later byline cannot rejuvenate an old header. */
     @Transaction
     fun upsertMetadataNames(names: List<MetadataNameEntity>) {
         names.forEach { candidate ->

@@ -17,12 +17,20 @@ import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.WatchEndpoint
 import com.zionhuang.innertube.models.YTItem
+import com.zionhuang.innertube.models.YouTubeLocale
 import com.zionhuang.innertube.pages.ExplorePage
 import com.zionhuang.innertube.pages.HomePage
 import com.zionhuang.innertube.utils.completed
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
@@ -44,9 +52,19 @@ class HomeViewModel @Inject constructor(
     val keepListening = MutableStateFlow<List<LocalItem>?>(null)
     val similarRecommendations = MutableStateFlow<List<SimilarRecommendation>?>(null)
     val accountPlaylists = MutableStateFlow<List<PlaylistItem>?>(null)
-    val homePage = MutableStateFlow<HomePage?>(null)
-    val selectedChip = MutableStateFlow<HomePage.Chip?>(null)
-    private val previousHomePage = MutableStateFlow<HomePage?>(null)
+    private var contentLocale = YouTube.locale
+    private var refreshJob: Job? = null
+    private var refreshGeneration = 0L
+    private val feed = HomeFeedLoader(viewModelScope, { token, params ->
+        val requestLocale = contentLocale
+        withContext(Dispatchers.IO) { YouTube.home(token, params, requestLocale = requestLocale) }
+    })
+    val homePage = feed.page
+    val selectedChip = feed.selectedChip
+    val isLoadingHome = feed.loading
+    val isLoadingMore = feed.loadingMore
+    val homeLoadFailed = feed.failed
+    val loadFailed = MutableStateFlow(false)
     val explorePage = MutableStateFlow<ExplorePage?>(null)
     val playlists = database.playlists(PlaylistFilter.LIBRARY, PlaylistSortType.NAME, true)
         .stateIn(viewModelScope, SharingStarted.Lazily, null)
@@ -56,7 +74,7 @@ class HomeViewModel @Inject constructor(
     val allLocalItems = MutableStateFlow<List<LocalItem>>(emptyList())
     val allYtItems = MutableStateFlow<List<YTItem>>(emptyList())
 
-    private suspend fun load() {
+    private suspend fun load(requestLocale: YouTubeLocale) {
         isLoading.value = true
 
         quickPicks.value = database.quickPicks()
@@ -81,7 +99,8 @@ class HomeViewModel @Inject constructor(
         if (YouTube.cookie != null) { // if logged in
             // InnerTune way is YouTube.likedPlaylists().onSuccess { ... }
             // OuterTune uses YouTube.library("FEmusic_liked_playlists").completedL().onSuccess { ... }
-            YouTube.library("FEmusic_liked_playlists").completed().onSuccess {
+            YouTube.library("FEmusic_liked_playlists", requestLocale = requestLocale).completed().onSuccess {
+                currentCoroutineContext().ensureActive()
                 accountPlaylists.value = it.items.filterIsInstance<PlaylistItem>()
             }.onFailure {
                 reportException(it)
@@ -96,7 +115,8 @@ class HomeViewModel @Inject constructor(
                 .mapNotNull {
                     val items = mutableListOf<YTItem>()
                     val onlineId = it.artist.onlineArtistId ?: return@mapNotNull null
-                    YouTube.artist(onlineId).onSuccess { page ->
+                    YouTube.artist(onlineId, requestLocale = requestLocale).onSuccess { page ->
+                        currentCoroutineContext().ensureActive()
                         if (page.artist.id == onlineId) database.awaitTransaction { saveArtistProfile(page.artist) }
                         items += page.sections.getOrNull(page.sections.size - 2)?.items.orEmpty()
                         items += page.sections.lastOrNull()?.items.orEmpty()
@@ -114,9 +134,10 @@ class HomeViewModel @Inject constructor(
                 .filter { it.album != null }
                 .shuffled().take(2)
                 .mapNotNull { song ->
-                    val endpoint = YouTube.next(WatchEndpoint(videoId = song.id)).getOrNull()?.relatedEndpoint
+                    val endpoint = YouTube.next(WatchEndpoint(videoId = song.id), requestLocale = requestLocale).getOrNull()?.relatedEndpoint
                         ?: return@mapNotNull null
-                    val page = YouTube.related(endpoint).getOrNull() ?: return@mapNotNull null
+                    val page = YouTube.related(endpoint, requestLocale = requestLocale).getOrNull() ?: return@mapNotNull null
+                    currentCoroutineContext().ensureActive()
                     SimilarRecommendation(
                         title = song,
                         items = (page.songs.shuffled().take(8) +
@@ -127,21 +148,18 @@ class HomeViewModel @Inject constructor(
                             .ifEmpty { return@mapNotNull null }
                     )
                 }
+        currentCoroutineContext().ensureActive()
         similarRecommendations.value = (artistRecommendations + songRecommendations).shuffled()
 
-        YouTube.home().onSuccess { page ->
-            homePage.value = page
-        }.onFailure {
-            reportException(it)
-        }
-
-        YouTube.explore().onSuccess { page ->
+        YouTube.explore(requestLocale = requestLocale).onSuccess { page ->
+            currentCoroutineContext().ensureActive()
             explorePage.value = page
         }.onFailure {
             reportException(it)
         }
 
         syncUtils.syncRecentActivity()
+        currentCoroutineContext().ensureActive()
 
         allYtItems.value = similarRecommendations.value?.flatMap { it.items }.orEmpty() +
                 homePage.value?.sections?.flatMap { it.items }.orEmpty()
@@ -149,58 +167,59 @@ class HomeViewModel @Inject constructor(
         isLoading.value = false
     }
 
-    private val _isLoadingMore = MutableStateFlow(false)
-    fun loadMoreYouTubeItems(continuation: String?) {
-        if (continuation == null || _isLoadingMore.value) return
-
-        viewModelScope.launch(Dispatchers.IO) {
-            _isLoadingMore.value = true
-            val nextSections = YouTube.home(continuation).getOrNull() ?: run {
-                _isLoadingMore.value = false
-                return@launch
-            }
-            homePage.value = nextSections.copy(
-                chips = homePage.value?.chips,
-                sections = homePage.value?.sections.orEmpty() + nextSections.sections
-            )
-            _isLoadingMore.value = false
-        }
-    }
-
-    fun toggleChip(chip: HomePage.Chip?) {
-        if (chip == null || chip == selectedChip.value && previousHomePage.value != null) {
-            homePage.value = previousHomePage.value
-            previousHomePage.value = null
-            selectedChip.value = null
-            return
-        }
-
-        if (selectedChip.value == null) {
-            // store the actual homepage for deselecting chips
-            previousHomePage.value = homePage.value
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            val nextSections = YouTube.home(params = chip?.endpoint?.params).getOrNull() ?: return@launch
-            homePage.value = nextSections.copy(
-                chips = homePage.value?.chips,
-                sections = nextSections.sections,
-                continuation = nextSections.continuation
-            )
-            selectedChip.value = chip
-        }
-    }
+    fun loadMoreYouTubeItems() = feed.loadMore()
+    fun toggleChip(chip: HomePage.Chip?) = feed.toggleChip(chip)
+    fun retryHome() = feed.retry()
 
     fun refresh() {
         if (isRefreshing.value) return
-        viewModelScope.launch(syncCoroutine) {
-            isRefreshing.value = true
-            load()
-            isRefreshing.value = false
+        refresh(contentLocale, languageChanged = false)
+    }
+
+    private fun refresh(requestLocale: YouTubeLocale, languageChanged: Boolean) {
+        val expected = ++refreshGeneration
+        refreshJob?.cancel()
+        contentLocale = requestLocale
+        if (languageChanged) {
+            similarRecommendations.value = null
+            accountPlaylists.value = null
+            explorePage.value = null
+            allYtItems.value = emptyList()
+        }
+        isRefreshing.value = true
+        loadFailed.value = false
+        feed.refresh(clearExisting = languageChanged) // Recommendations must not hold up the home feed.
+        refreshJob = viewModelScope.launch(syncCoroutine) {
+            try {
+                withTimeout(60_000) { load(requestLocale) }
+            } catch (_: TimeoutCancellationException) {
+                if (expected == refreshGeneration) loadFailed.value = true
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (expected == refreshGeneration) {
+                    loadFailed.value = true
+                    reportException(error)
+                }
+            } finally {
+                if (expected == refreshGeneration) {
+                    isLoading.value = false
+                    isRefreshing.value = false
+                }
+            }
         }
     }
 
     init {
-        refresh()
+        viewModelScope.launch {
+            YouTube.localeUpdates.collect { locale -> refresh(locale, languageChanged = locale != contentLocale) }
+        }
+        viewModelScope.launch {
+            homePage.collect { page ->
+                allYtItems.value = similarRecommendations.value?.flatMap { it.items }.orEmpty() +
+                    page?.sections?.flatMap { it.items }.orEmpty()
+            }
+        }
         viewModelScope.launch(syncCoroutine) {
             syncUtils.tryAutoSync()
         }
