@@ -85,6 +85,7 @@ import com.dd3boh.outertune.utils.makeTimeString
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -309,7 +310,7 @@ fun SongMenu(
         }
 
         if (playlistSong != null && (playlist?.playlist?.isLocal == true
-                    || (playlistSong.song.song.isLocal || syncMode == SyncMode.RW))
+                    || (playlistSong.song.song.isLocal || !YouTubeSyncPolicy.ENABLED || syncMode == SyncMode.RW))
         ) {
             GridMenuItem(
                 icon = Icons.Rounded.PlaylistRemove,

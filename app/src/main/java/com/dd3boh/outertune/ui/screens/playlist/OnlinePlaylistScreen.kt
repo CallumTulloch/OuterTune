@@ -89,7 +89,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
@@ -100,7 +99,6 @@ import com.dd3boh.outertune.LocalMenuState
 import com.dd3boh.outertune.LocalPlayerAwareWindowInsets
 import com.dd3boh.outertune.LocalPlayerConnection
 import com.dd3boh.outertune.LocalSnackbarHostState
-import com.dd3boh.outertune.LocalSyncUtils
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.AlbumThumbnailSize
 import com.dd3boh.outertune.constants.SwipeToQueueKey
@@ -133,8 +131,8 @@ import com.dd3boh.outertune.ui.utils.backToMain
 import com.dd3boh.outertune.utils.getDownloadState
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.viewmodels.OnlinePlaylistViewModel
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import com.zionhuang.innertube.models.SongItem
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
@@ -232,8 +230,6 @@ fun OnlinePlaylistScreen(
         mutableStateOf(Download.STATE_STOPPED)
     }
 
-    val syncUtils = LocalSyncUtils.current
-
     LaunchedEffect(songs) {
         mutableSongs.apply {
             clear()
@@ -269,8 +265,11 @@ fun OnlinePlaylistScreen(
                 TextButton(
                     onClick = {
                         showRemoveDownloadDialog = false
-                        database.transaction {
-                            dbPlaylist?.id?.let { clearPlaylist(it) }
+                        // Without synchronization, retain the saved list when removing audio.
+                        if (YouTubeSyncPolicy.ENABLED) {
+                            database.transaction {
+                                dbPlaylist?.id?.let { clearPlaylist(it) }
+                            }
                         }
 
                         songs.forEach { song ->
@@ -450,12 +449,7 @@ fun OnlinePlaylistScreen(
                                                     else -> {
                                                         IconButton(
                                                             onClick = {
-                                                                viewModel.viewModelScope.launch(Dispatchers.IO) {
-                                                                    syncUtils.syncPlaylist(
-                                                                        playlist.id,
-                                                                        dbPlaylist!!.id
-                                                                    )
-                                                                }
+                                                                // Download preparation saves the songs already loaded here.
                                                                 val _songs = songs.map { it.toMediaMetadata() }
                                                                 downloadUtil.download(_songs)
                                                             }

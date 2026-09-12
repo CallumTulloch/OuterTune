@@ -6,6 +6,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -48,6 +49,7 @@ data class PlaylistEntity(
     )
 
     fun toggleLike() = localToggleLike().also {
+        if (!YouTubeSyncPolicy.ENABLED) return@also
         CoroutineScope(syncCoroutine).launch {
             if (browseId != null)
                 YouTube.likePlaylist(browseId, bookmarkedAt == null)

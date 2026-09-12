@@ -10,6 +10,7 @@ import com.dd3boh.outertune.models.artistCreditFromJson
 import com.zionhuang.innertube.models.ArtistCredit
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -46,6 +47,7 @@ data class AlbumEntity(
     )
 
     fun toggleLike() = localToggleLike().also {
+        if (!YouTubeSyncPolicy.ENABLED) return@also
         CoroutineScope(syncCoroutine).launch {
             if (playlistId != null)
                 YouTube.likePlaylist(playlistId, bookmarkedAt == null)

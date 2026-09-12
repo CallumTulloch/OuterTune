@@ -35,6 +35,7 @@ import com.dd3boh.outertune.R
 import com.dd3boh.outertune.db.entities.PlaylistEntity
 import com.dd3boh.outertune.extensions.isUserLoggedIn
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -57,7 +58,8 @@ fun CreatePlaylistDialog(
         onDismiss = onDismiss,
         onDone = { playlistName ->
             coroutineScope.launch(Dispatchers.IO) {
-                val browseId = if (syncedPlaylist)
+                val shouldSync = YouTubeSyncPolicy.ENABLED && allowSyncing && syncedPlaylist && context.isUserLoggedIn()
+                val browseId = if (shouldSync)
                     YouTube.createPlaylist(playlistName)
                 else null
 
@@ -68,7 +70,7 @@ fun CreatePlaylistDialog(
                             browseId = browseId,
                             bookmarkedAt = LocalDateTime.now(),
                             isEditable = true,
-                            isLocal = !syncedPlaylist // && check that all songs are non-local
+                            isLocal = !shouldSync
                         )
                     )
                 }
@@ -96,10 +98,11 @@ fun CreatePlaylistDialog(
                         horizontalArrangement = Arrangement.End
                     ) {
                         Switch(
-                            checked = syncedPlaylist,
+                            checked = YouTubeSyncPolicy.ENABLED && syncedPlaylist,
                             onCheckedChange = {
-                                syncedPlaylist = !syncedPlaylist
+                                syncedPlaylist = YouTubeSyncPolicy.ENABLED && it
                             },
+                            enabled = YouTubeSyncPolicy.ENABLED,
                         )
                     }
                 }

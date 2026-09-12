@@ -139,6 +139,7 @@ import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.dd3boh.outertune.viewmodels.LocalPlaylistViewModel
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collectLatest
@@ -229,7 +230,8 @@ fun LocalPlaylistScreen(
     }
 
     val editable: Boolean =
-        playlistWithSongs.first?.playlist?.isLocal == true || (playlistWithSongs.first?.playlist?.isEditable == true && syncMode == SyncMode.RW)
+        playlistWithSongs.first?.playlist?.isLocal == true ||
+            (playlistWithSongs.first?.playlist?.isEditable == true && (!YouTubeSyncPolicy.ENABLED || syncMode == SyncMode.RW))
 
     LaunchedEffect(playlistWithSongs.second, isSearching) {
         if (!isSearching) {
@@ -288,7 +290,8 @@ fun LocalPlaylistScreen(
                 TextButton(
                     onClick = {
                         showRemoveDownloadDialog = false
-                        if (!editable) {
+                        // Without synchronization, retain the saved list when removing audio.
+                        if (YouTubeSyncPolicy.ENABLED && !editable) {
                             database.transaction {
                                 playlistWithSongs.first?.id?.let { clearPlaylist(it) }
                             }
@@ -763,15 +766,16 @@ fun LocalPlaylistHeader(
                     if (playlist.playlist.browseId != null) {
                         IconButton(
                             onClick = {
-                                scope.launch {
-                                    syncUtils.syncPlaylist(playlist.playlist.browseId, playlist.id)
-                                    snackbarHostState.showSnackbar(
-                                        message = context.getString(R.string.playlist_synced),
-                                        withDismissAction = true
-                                    )
+                                if (YouTubeSyncPolicy.ENABLED) scope.launch {
+                                    if (syncUtils.syncPlaylist(playlist.playlist.browseId, playlist.id)) {
+                                        snackbarHostState.showSnackbar(
+                                            message = context.getString(R.string.playlist_synced),
+                                            withDismissAction = true
+                                        )
+                                    }
                                 }
                             },
-                            enabled = isNetworkConnected
+                            enabled = YouTubeSyncPolicy.ENABLED && isNetworkConnected
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Sync,

@@ -199,9 +199,6 @@ fun LibraryPlaylistsScreen(
                             updatedFilter != PlaylistFilter.FOLDER
                         ) viewModel.syncPlaylists()
                     },
-                    isLoading = { filter ->
-                        filter == PlaylistFilter.LIBRARY && isSyncingRemotePlaylists
-                    }
                 )
             }
         }

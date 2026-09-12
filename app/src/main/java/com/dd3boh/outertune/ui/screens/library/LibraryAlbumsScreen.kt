@@ -183,10 +183,6 @@ fun LibraryAlbumsScreen(
                         ) viewModel.syncAlbums()
                     },
                     modifier = Modifier.weight(1f),
-                    isLoading = { chipFilter ->
-                        (chipFilter == AlbumFilter.LIKED || chipFilter == AlbumFilter.LIBRARY) &&
-                            isSyncingLibraryAlbums
-                    }
                 )
 
                 IconButton(

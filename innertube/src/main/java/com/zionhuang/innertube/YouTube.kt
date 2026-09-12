@@ -768,6 +768,7 @@ object YouTube {
     }
 
     suspend fun likeVideo(videoId: String, like: Boolean) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         if (like)
             innerTube.likeVideo(WEB_REMIX, videoId)
         else
@@ -775,6 +776,7 @@ object YouTube {
     }
 
     suspend fun likePlaylist(playlistId: String, like: Boolean) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         if (like)
             innerTube.likePlaylist(WEB_REMIX, playlistId)
         else
@@ -782,6 +784,7 @@ object YouTube {
     }
 
     suspend fun subscribeChannel(channelId: String, subscribe: Boolean) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         if (subscribe)
             innerTube.subscribeChannel(WEB_REMIX, channelId)
         else
@@ -796,30 +799,39 @@ object YouTube {
     }
 
     suspend fun addToPlaylist(playlistId: String, videoId: String) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         innerTube.addToPlaylist(WEB_REMIX, playlistId, videoId)
     }
 
     suspend fun addPlaylistToPlaylist(playlistId: String, addPlaylistId: String) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         innerTube.addPlaylistToPlaylist(WEB_REMIX, playlistId, addPlaylistId)
     }
 
     suspend fun removeFromPlaylist(playlistId: String, videoId: String, setVideoId: String) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         innerTube.removeFromPlaylist(WEB_REMIX, playlistId, videoId, setVideoId)
     }
 
     suspend fun moveSongPlaylist(playlistId: String, setVideoId: String, successorSetVideoId: String) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         innerTube.moveSongPlaylist(WEB_REMIX, playlistId, setVideoId, successorSetVideoId)
     }
 
-    fun createPlaylist(title: String) = runBlocking {
-        innerTube.createPlaylist(WEB_REMIX, title).body<CreatePlaylistResponse>().playlistId
+    fun createPlaylist(title: String): String {
+        YouTubeSyncPolicy.requireEnabled()
+        return runBlocking {
+            innerTube.createPlaylist(WEB_REMIX, title).body<CreatePlaylistResponse>().playlistId
+        }
     }
 
     suspend fun renamePlaylist(playlistId: String, name: String) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         innerTube.renamePlaylist(WEB_REMIX, playlistId, name)
     }
 
     suspend fun deletePlaylist(playlistId: String) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         innerTube.deletePlaylist(WEB_REMIX, playlistId)
     }
 
@@ -841,6 +853,7 @@ object YouTube {
     }
 
     suspend fun registerPlayback(playlistId: String? = null, playbackTracking: String) = runCatching {
+        YouTubeSyncPolicy.requireEnabled()
         val cpn = (1..16).map {
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"[Random.Default.nextInt(
                 0,

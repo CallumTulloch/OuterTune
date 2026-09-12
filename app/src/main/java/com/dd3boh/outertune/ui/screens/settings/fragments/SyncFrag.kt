@@ -57,6 +57,7 @@ import com.dd3boh.outertune.ui.component.SwitchPreference
 import com.dd3boh.outertune.utils.SyncUtils
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import com.zionhuang.innertube.utils.parseCookieString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -73,9 +74,9 @@ fun ColumnScope.SyncAutoFrag() {
     SwitchPreference(
         title = { Text(stringResource(R.string.ytm_sync)) },
         icon = { Icon(Icons.Rounded.Sync, null) },
-        checked = ytmSync,
-        onCheckedChange = onYtmSyncChange,
-        isEnabled = isLoggedIn
+        checked = YouTubeSyncPolicy.ENABLED && ytmSync,
+        onCheckedChange = { if (YouTubeSyncPolicy.ENABLED) onYtmSyncChange(it) },
+        isEnabled = YouTubeSyncPolicy.ENABLED && isLoggedIn
     )
 }
 
@@ -108,22 +109,23 @@ fun ColumnScope.SyncManualFrag() {
         title = { Text(stringResource(R.string.scanner_manual_btn)) },
         icon = { Icon(Icons.Rounded.Sync, null) },
         onClick = {
-            coroutineScope.launch(Dispatchers.Main) {
+            if (YouTubeSyncPolicy.ENABLED) coroutineScope.launch(Dispatchers.Main) {
                 snackbarHostState.showSnackbar(
                     message = context.getString(R.string.sync_progress_active),
                     withDismissAction = true,
                     duration = SnackbarDuration.Short
                 )
 
-                syncUtils.tryAutoSync(true)
-                snackbarHostState.showSnackbar(
-                    message = context.getString(R.string.sync_progress_success),
-                    withDismissAction = true,
-                    duration = SnackbarDuration.Short
-                )
+                if (syncUtils.tryAutoSync(true)) {
+                    snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.sync_progress_success),
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Short
+                    )
+                }
             }
         },
-        isEnabled = isLoggedIn && isNetworkConnected
+        isEnabled = YouTubeSyncPolicy.ENABLED && isLoggedIn && isNetworkConnected
     )
 
     val enabledContent = decodeSyncString(syncContent).sortedBy { it.name }
@@ -153,7 +155,7 @@ fun ColumnScope.SyncManualFrag() {
                 else -> false
             }
 
-            if (syncProgressIndicator) {
+            if (YouTubeSyncPolicy.ENABLED && syncProgressIndicator) {
                 Row(
                     modifier = Modifier.padding(14.dp)
                 ) {
@@ -161,7 +163,7 @@ fun ColumnScope.SyncManualFrag() {
                 }
             } else {
                 Checkbox(
-                    checked = enabledContent.contains(item),
+                    checked = YouTubeSyncPolicy.ENABLED && enabledContent.contains(item),
                     onCheckedChange = { checked ->
                         val updated = enabledContent.toMutableList()
                         if (checked) {
@@ -171,7 +173,7 @@ fun ColumnScope.SyncManualFrag() {
                         }
                         onSyncContentChange(encodeSyncString(updated))
                     },
-                    enabled = isLoggedIn
+                    enabled = YouTubeSyncPolicy.ENABLED && isLoggedIn
                 )
             }
             Text(
@@ -195,6 +197,7 @@ fun ColumnScope.SyncParamsFrag() {
         icon = { Icon(Icons.Rounded.SyncLock, null) },
         selectedValue = syncMode,
         onValueSelected = onSyncModeChange,
+        isEnabled = YouTubeSyncPolicy.ENABLED,
         valueText = {
             when (it) {
                 SyncMode.RO -> stringResource(R.string.sync_mode_ro)
@@ -207,6 +210,7 @@ fun ColumnScope.SyncParamsFrag() {
         icon = { Icon(Icons.Rounded.SyncProblem, null) },
         selectedValue = syncConflict,
         onValueSelected = onSyncConflictChange,
+        isEnabled = YouTubeSyncPolicy.ENABLED,
         valueText = {
             when (it) {
                 SyncConflictResolution.ADD_ONLY -> stringResource(R.string.sync_conflict_add_only)
@@ -232,9 +236,9 @@ fun ColumnScope.SyncExtrasFrag() {
     SwitchPreference(
         title = { Text(stringResource(R.string.pause_remote_listen_history)) },
         icon = { Icon(Icons.Rounded.History, null) },
-        checked = pauseRemoteListenHistory,
-        onCheckedChange = onPauseRemoteListenHistoryChange,
-        isEnabled = !pauseListenHistory && isLoggedIn
+        checked = !YouTubeSyncPolicy.ENABLED || pauseRemoteListenHistory,
+        onCheckedChange = { if (YouTubeSyncPolicy.ENABLED) onPauseRemoteListenHistoryChange(it) },
+        isEnabled = YouTubeSyncPolicy.ENABLED && !pauseListenHistory && isLoggedIn
     )
 }
 

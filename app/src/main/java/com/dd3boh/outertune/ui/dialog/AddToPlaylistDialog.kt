@@ -47,6 +47,7 @@ import com.dd3boh.outertune.ui.component.items.PlaylistListItem
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -91,7 +92,7 @@ fun AddToPlaylistDialog(
     }
 
     LaunchedEffect(Unit) {
-        if (syncMode == SyncMode.RO) {
+        if (YouTubeSyncPolicy.ENABLED && syncMode == SyncMode.RO) {
             database.playlists(PlaylistFilter.LIBRARY, sortType, sortDescending, 1).collect {
                 playlists = it
             }
@@ -130,11 +131,13 @@ fun AddToPlaylistDialog(
             )
         }
 
-        item {
-            InfoLabel(
-                text = stringResource(R.string.playlist_add_local_to_synced_note),
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
+        if (YouTubeSyncPolicy.ENABLED) {
+            item {
+                InfoLabel(
+                    text = stringResource(R.string.playlist_add_local_to_synced_note),
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+            }
         }
 
         item {
@@ -207,7 +210,7 @@ fun AddToPlaylistDialog(
             )
         }
 
-        if (syncMode == SyncMode.RO) {
+        if (YouTubeSyncPolicy.ENABLED && syncMode == SyncMode.RO) {
             item {
                 TextButton(
                     onClick = {

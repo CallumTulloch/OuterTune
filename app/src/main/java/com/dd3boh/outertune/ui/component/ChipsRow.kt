@@ -23,10 +23,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -53,7 +51,6 @@ fun <E> ChipsRow(
     modifier: Modifier = Modifier,
     selected: ((E) -> Boolean)? = null,
     separatorAfterIndex: Int? = null,
-    isLoading: (E) -> Boolean = { false }
 ) {
     Row(
         modifier = modifier
@@ -69,14 +66,6 @@ fun <E> ChipsRow(
                 selected = selected?.invoke(value) ?: (currentValue == value),
                 colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
                 onClick = { onValueUpdate(value) },
-                trailingIcon = {
-                    if (isLoading(value)) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                    }
-                }
             )
 
             Spacer(Modifier.width(8.dp))
@@ -102,7 +91,6 @@ fun <E> ChipsLazyRow(
     visible: (E) -> Boolean = { true },
     itemKey: (E) -> Any = { it.toString() },
     separatorAfterIndex: Int? = null,
-    isLoading: (E) -> Boolean = { false },
     visibilityTransitionKey: Any? = null,
     onVisibilityTransitionFinished: (() -> Unit)? = null,
 ) {
@@ -156,14 +144,6 @@ fun <E> ChipsLazyRow(
                                 onValueUpdate(value)
                                 haptic.performHapticFeedback(HapticFeedbackType.ContextClick)
                             },
-                            trailingIcon = {
-                                if (isLoading(value)) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                }
-                            }
                         )
 
                         Spacer(Modifier.width(8.dp))

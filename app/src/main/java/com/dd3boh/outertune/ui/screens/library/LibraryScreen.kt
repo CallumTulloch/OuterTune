@@ -405,20 +405,6 @@ fun LibraryScreen(
                     itemKey = { chip ->
                         "${chip.category.name}:${chip.contentFilter?.name ?: "CATEGORY"}"
                     },
-                    isLoading = { chip ->
-                        val isCategorySyncing = when (chip.category) {
-                            LibraryFilter.PLAYLISTS -> isSyncingRemotePlaylists
-                            LibraryFilter.ALBUMS -> isSyncingRemoteAlbums
-                            LibraryFilter.ARTISTS -> isSyncingRemoteArtists
-                            LibraryFilter.SONGS -> isSyncingRemoteSongs || isSyncingRemoteLikedSongs
-                            else -> false
-                        }
-                        if (filter == LibraryFilter.ALL) {
-                            chip.contentFilter == null && isCategorySyncing
-                        } else {
-                            chip.contentFilter == LibraryContentFilter.LIBRARY && isCategorySyncing
-                        }
-                    },
                     separatorAfterIndex = chipValues.indexOf(LibraryChip(filter)).takeIf {
                         categoryTransitionTarget == null &&
                                 filter in libraryCategoriesWithContentFilter

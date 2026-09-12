@@ -346,10 +346,6 @@ fun LibrarySongsScreen(
                 }
             },
             separatorAfterIndex = 0,
-            isLoading = { filter ->
-                (filter == SongFilter.LIKED && likedOnly && isSyncingRemoteLikedSongs) ||
-                        (filter == SongFilter.LIBRARY && isSyncingRemoteSongs)
-            }
         )
     }
 

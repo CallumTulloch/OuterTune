@@ -37,6 +37,7 @@ import com.dd3boh.outertune.extensions.toEnum
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.DownloadUtil
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.PlaylistItem
@@ -132,11 +133,15 @@ internal class LibraryRefreshCoordinator(
  * Singleton class for syncing local data from remote YouTube Music
  */
 @Singleton
-class SyncUtils @Inject constructor(
+class SyncUtils internal constructor(
     val database: MusicDatabase,
-    private val downloadUtil: DownloadUtil,
-    @ApplicationContext private val context: Context
+    refreshDownloads: suspend () -> Boolean,
+    private val context: Context,
 ) {
+    @Inject
+    constructor(database: MusicDatabase, downloadUtil: DownloadUtil, @ApplicationContext context: Context) :
+        this(database, downloadUtil::reconcileDownloadIndex, context)
+
     private val TAG = "SyncUtils"
 
     private val scope =  CoroutineScope(syncCoroutine)
@@ -147,7 +152,7 @@ class SyncUtils @Inject constructor(
     private val _isSyncingRemoteArtists = MutableStateFlow(false)
     private val _isSyncingRemotePlaylists = MutableStateFlow(false)
     private val _isSyncingRecentActivity = MutableStateFlow(false)
-    private val libraryRefreshCoordinator = LibraryRefreshCoordinator(downloadUtil::reconcileDownloadIndex)
+    private val libraryRefreshCoordinator = LibraryRefreshCoordinator(refreshDownloads)
 
     val isSyncingRemoteLikedSongs: StateFlow<Boolean> = _isSyncingRemoteLikedSongs.asStateFlow()
     val isSyncingRemoteSongs: StateFlow<Boolean> = _isSyncingRemoteSongs.asStateFlow()
@@ -168,9 +173,12 @@ class SyncUtils @Inject constructor(
     }
 
     suspend fun refreshLibrary(refreshRemote: suspend () -> Boolean = { true }): Boolean =
-        libraryRefreshCoordinator.refresh(refreshRemote)
+        libraryRefreshCoordinator.refresh {
+            if (YouTubeSyncPolicy.ENABLED) refreshRemote() else true
+        }
 
     suspend fun tryAutoSync(force: Boolean = false): Boolean {
+        if (!YouTubeSyncPolicy.ENABLED) return false
         if (force) {
             // A user-requested sync must not depend on the automatic-sync preference.
             if (!context.isUserLoggedIn()) return false
@@ -232,6 +240,7 @@ class SyncUtils @Inject constructor(
         force: Boolean,
         label: String,
     ): SyncStartResult {
+        if (!YouTubeSyncPolicy.ENABLED) return SyncStartResult.BLOCKED
         if (!checkEnabled(content)) return SyncStartResult.NOT_REQUIRED
         if (!context.isUserLoggedIn() || !context.isInternetConnected()) return SyncStartResult.BLOCKED
         if (!force && (!context.isAutoSyncEnabled() || !checkSyncEligibility(lastSyncKey))) {
@@ -273,6 +282,7 @@ class SyncUtils @Inject constructor(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun likeSong(s: SongEntity) {
+        if (!YouTubeSyncPolicy.ENABLED) return
         scope.launch {
             YouTube.likeVideo(s.id, s.liked)
         }
@@ -283,6 +293,7 @@ class SyncUtils @Inject constructor(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun changeInLibrary(s: SongEntity) {
+        if (!YouTubeSyncPolicy.ENABLED) return
         scope.launch {
             // OuterTune has no stable endpoint for syncing per-song library membership to YTM yet.
             Log.d(TAG, "changeInLibrary: local-only for now, songId=${s.id}, inLibrary=${s.inLibrary != null}")
@@ -664,6 +675,7 @@ class SyncUtils @Inject constructor(
     }
 
     suspend fun syncPlaylist(browseId: String, playlistId: String, requestLocale: YouTubeLocale = YouTube.locale): Boolean {
+        if (!YouTubeSyncPolicy.ENABLED) return false
         // this is also used for individual playlist sync
         if (!context.isInternetConnected()) return false
 

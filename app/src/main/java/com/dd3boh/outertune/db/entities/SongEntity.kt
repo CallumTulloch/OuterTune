@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 import com.dd3boh.outertune.utils.LocalArtworkPath
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -63,6 +64,7 @@ data class SongEntity(
         likedDate = if (!liked) LocalDateTime.now() else null,
         inLibrary = if (!liked) inLibrary ?: LocalDateTime.now() else inLibrary
     ).also {
+        if (!YouTubeSyncPolicy.ENABLED) return@also
         CoroutineScope(syncCoroutine).launch {
             YouTube.likeVideo(id, !liked)
             this.cancel()

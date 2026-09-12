@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
 import com.dd3boh.outertune.utils.syncCoroutine
 import com.dd3boh.outertune.models.ArtistIdentity
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -41,6 +42,7 @@ data class ArtistEntity(
     )
 
     fun toggleLike() = localToggleLike().also {
+        if (!YouTubeSyncPolicy.ENABLED) return@also
         val remoteId = onlineArtistId ?: return@also
         CoroutineScope(syncCoroutine).launch {
             if (channelId == null)

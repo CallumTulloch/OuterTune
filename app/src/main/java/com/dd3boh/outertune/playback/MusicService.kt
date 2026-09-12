@@ -129,6 +129,7 @@ import com.dd3boh.outertune.utils.playerCoroutine
 import com.dd3boh.outertune.utils.reportException
 import com.google.common.util.concurrent.MoreExecutors
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import com.zionhuang.innertube.AuthenticationChangedException
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.WatchEndpoint
@@ -1140,7 +1141,8 @@ class MusicService : MediaLibraryService(),
                 }
 
                 // TODO: support playlist id
-                val ytHist = mediaItem.metadata?.isLocal != true && !dataStore.get(PauseRemoteListenHistoryKey, false)
+                val ytHist = YouTubeSyncPolicy.ENABLED && mediaItem.metadata?.isLocal != true &&
+                    !dataStore.get(PauseRemoteListenHistoryKey, false)
                 Log.d(TAG, "Trying to register remote history: $ytHist")
                 if (ytHist) {
                     val playbackUrl = YTPlayerUtils.playerResponseForMetadata(mediaItem.mediaId, null)

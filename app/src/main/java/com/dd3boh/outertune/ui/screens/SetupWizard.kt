@@ -57,7 +57,6 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.SdCard
 import androidx.compose.material.icons.rounded.Sync
@@ -104,10 +103,8 @@ import com.dd3boh.outertune.LocalDownloadUtil
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.AutomaticScannerKey
 import com.dd3boh.outertune.constants.DownloadPathKey
-import com.dd3boh.outertune.constants.InnerTubeCookieKey
 import com.dd3boh.outertune.constants.LibraryFilterKey
 import com.dd3boh.outertune.constants.LocalLibraryEnableKey
-import com.dd3boh.outertune.constants.LyricTrimKey
 import com.dd3boh.outertune.constants.MaxSongCacheSizeKey
 import com.dd3boh.outertune.constants.NavigationBarHeight
 import com.dd3boh.outertune.constants.OOBE_VERSION
@@ -125,6 +122,7 @@ import com.dd3boh.outertune.ui.screens.Screens.LibraryFilter
 import com.dd3boh.outertune.ui.screens.settings.fragments.AccountFrag
 import com.dd3boh.outertune.ui.screens.settings.fragments.LocalScannerFrag
 import com.dd3boh.outertune.ui.screens.settings.fragments.LocalizationFrag
+import com.dd3boh.outertune.ui.screens.settings.fragments.SyncAutoFrag
 import com.dd3boh.outertune.ui.screens.settings.fragments.ThemeAppFrag
 import com.dd3boh.outertune.utils.dlCoroutine
 import com.dd3boh.outertune.utils.formatFileSize
@@ -132,7 +130,7 @@ import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
 import com.dd3boh.outertune.utils.scanners.stringFromUriList
 import com.dd3boh.outertune.utils.scanners.uriListFromString
-import com.zionhuang.innertube.utils.parseCookieString
+import com.zionhuang.innertube.YouTubeSyncPolicy
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -152,12 +150,6 @@ fun SetupWizard(
     // content prefs
     var filter by rememberEnumPreference(LibraryFilterKey, LibraryFilter.ALL)
 
-
-    val innerTubeCookie by rememberPreference(InnerTubeCookieKey, "")
-    val isLoggedIn = remember(innerTubeCookie) {
-        "SAPISID" in parseCookieString(innerTubeCookie)
-    }
-    val (ytmSync, onYtmSyncChange) = rememberPreference(LyricTrimKey, defaultValue = true)
 
     // local media prefs
     val (localLibEnable, onLocalLibEnableChange) = rememberPreference(LocalLibraryEnableKey, defaultValue = true)
@@ -325,12 +317,14 @@ fun SetupWizard(
                                 icon = Icons.Rounded.Block,
                                 Color.Red
                             )
-                            OobeFeatureRow(
-                                title = stringResource(R.string.oobe_cross_platform_sync),
-                                description = stringResource(R.string.oobe_cross_platform_sync_description),
-                                icon = Icons.Rounded.Sync,
-                                MaterialTheme.colorScheme.tertiary
-                            )
+                            if (YouTubeSyncPolicy.ENABLED) {
+                                OobeFeatureRow(
+                                    title = stringResource(R.string.oobe_cross_platform_sync),
+                                    description = stringResource(R.string.oobe_cross_platform_sync_description),
+                                    icon = Icons.Rounded.Sync,
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                            }
                             OobeFeatureRow(
                                 title = stringResource(R.string.oobe_local_music_support),
                                 description = stringResource(R.string.oobe_local_music_support_description),
@@ -440,13 +434,15 @@ fun SetupWizard(
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                         )
 
-                        Text(
-                            text = stringResource(R.string.oobe_ytm_logon_subtitle),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 32.dp)
-                        )
+                        if (YouTubeSyncPolicy.ENABLED) {
+                            Text(
+                                text = stringResource(R.string.oobe_ytm_logon_subtitle),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 32.dp)
+                            )
+                        }
 
 
                         ElevatedCard(
@@ -455,18 +451,14 @@ fun SetupWizard(
                             AccountFrag(navController)
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        if (YouTubeSyncPolicy.ENABLED) {
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            SwitchPreference(
-                                title = { Text(stringResource(R.string.ytm_sync)) },
-                                icon = { Icon(Icons.Rounded.Lyrics, null) },
-                                checked = ytmSync,
-                                onCheckedChange = onYtmSyncChange,
-                                isEnabled = isLoggedIn
-                            )
+                            ElevatedCard(
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                SyncAutoFrag()
+                            }
                         }
                     }
 
