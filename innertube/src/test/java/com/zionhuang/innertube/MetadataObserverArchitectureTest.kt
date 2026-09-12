@@ -28,7 +28,7 @@ class MetadataObserverArchitectureTest {
         }.toList()
         assertEquals(2, notificationLines.size) // The declaration and the single guarded call.
         assertTrue(notificationLines.any { it.trim().startsWith("internal fun notifyMetadata(") })
-        assertTrue(notificationLines.any { it.contains("if (revision == metadataAuthRevision) notifyMetadata(") })
+        assertTrue(notificationLines.any { it.contains("if (revision == authRevision) notifyMetadata(") })
         assertEquals(1, Regex("""metadataObserver\?\.invoke\(""").findAll(source).count())
     }
 

@@ -36,7 +36,8 @@ fun rememberArtistCreditRepository(): ArtistCreditRepository {
 fun rememberResolvedArtistSong(song: SongItem, priority: Boolean = false): SongItem {
     val repository = rememberArtistCreditRepository()
     val requestLocale by YouTube.localeUpdates.collectAsState()
-    val contextToken = repository.contextToken()
+    val authRevision by YouTube.authUpdates.collectAsState()
+    val contextToken = remember(repository, requestLocale, authRevision) { repository.contextToken() }
     val credit by remember(repository, requestLocale, contextToken, song.id) { repository.observe(song.id) }.collectAsState()
     val album by remember(repository, requestLocale, contextToken, song.id) { repository.observeAlbum(song.id) }.collectAsState()
     val latestSong by rememberUpdatedState(song)
@@ -57,7 +58,8 @@ fun rememberResolvedArtistMetadata(
     if (metadata.isLocal) return metadata
     val repository = rememberArtistCreditRepository()
     val requestLocale by YouTube.localeUpdates.collectAsState()
-    val contextToken = repository.contextToken()
+    val authRevision by YouTube.authUpdates.collectAsState()
+    val contextToken = remember(repository, requestLocale, authRevision) { repository.contextToken() }
     val credit by remember(repository, requestLocale, contextToken, metadata.id) { repository.observe(metadata.id) }.collectAsState()
     val album by remember(repository, requestLocale, contextToken, metadata.id) { repository.observeAlbum(metadata.id) }.collectAsState()
     val latestMetadata by rememberUpdatedState(metadata)

@@ -12,6 +12,7 @@ import com.zionhuang.innertube.models.ArtistCredit
 import com.zionhuang.innertube.models.ArtistCreditResolution
 import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.isEmptyByline
 import com.zionhuang.innertube.models.merge
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.MessageDigest
@@ -51,6 +52,7 @@ class ArtistCreditRepository internal constructor(
         val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
         val fetch: suspend (SongItem) -> Result<ArtistCreditResolution> = { YouTube.resolveTrackArtistCredit(it) },
         val contextToken: () -> String = ::youtubeArtistContextToken,
+        val authRevision: () -> Long = { YouTube.authRevision },
         val language: () -> String = { YouTube.locale.hl },
         val now: () -> Long = System::currentTimeMillis,
     )
@@ -80,25 +82,46 @@ class ArtistCreditRepository internal constructor(
     private val mutableUpdates = MutableSharedFlow<Pair<String, ArtistCredit>>(extraBufferCapacity = 128)
     val updates: SharedFlow<Pair<String, ArtistCredit>> = mutableUpdates.asSharedFlow()
 
-    private fun contextKey(): String = runtime.contextToken()
+    private fun contextKey(): String {
+        // Authentication can change back to the same credentials while an earlier request is
+        // suspended. Keep the generation in memory, and read the token within that generation.
+        while (true) {
+            val revision = runtime.authRevision()
+            val token = runtime.contextToken()
+            if (revision == runtime.authRevision()) return "$revision:$token"
+        }
+    }
 
     fun contextToken(): String = contextKey()
 
     private fun key(videoId: String, context: String = contextKey()) = "$context:$videoId"
+
+    // A successful credit/album remains useful after a process restart. Retry delays and jobs
+    // belong to one authentication generation, while their content uses the stable auth token.
+    private fun storedKey(cacheKey: String): String = cacheKey.substringAfter(':')
 
     fun observe(videoId: String): StateFlow<ArtistCredit?> {
         val cacheKey = key(videoId)
         return states.getOrPut(cacheKey) { MutableStateFlow(readCache(cacheKey)) }
     }
 
-    private fun readCache(cacheKey: String): ArtistCredit? = runCatching {
-        preferences.getString(cacheKey, null)?.let { json.decodeFromString<ArtistCredit>(it) }
-    }.getOrNull()
+    private fun readCache(cacheKey: String, requestLanguage: String = runtime.language()): ArtistCredit? {
+        val credit = runCatching {
+            preferences.getString(storedKey(cacheKey), null)?.let { json.decodeFromString<ArtistCredit>(it) }
+        }.getOrNull() ?: return null
+        if (credit.language.isNotEmpty() && credit.language != requestLanguage) {
+            // Older entries could be filed under a different request language. Neither their
+            // byline nor their retry delay is valid evidence for this language's next request.
+            preferences.edit().remove(storedKey(cacheKey)).remove("retry:$cacheKey").apply()
+            return null
+        }
+        return credit
+    }
 
     fun observeAlbum(videoId: String): StateFlow<Album?> {
         val cacheKey = key(videoId)
         return albums.getOrPut(cacheKey) { MutableStateFlow(runCatching {
-            preferences.getString("album:$cacheKey", null)?.let { json.decodeFromString<Album>(it) }
+            preferences.getString("album:${storedKey(cacheKey)}", null)?.let { json.decodeFromString<Album>(it) }
         }.getOrNull()) }
     }
 
@@ -127,9 +150,6 @@ class ArtistCreditRepository internal constructor(
         return merged?.let { ArtistIdentity.withStableRefs(videoId, it, cached) }
     }
 
-    private fun ArtistCredit.isEmptyByline(): Boolean =
-        status == ArtistCreditStatus.RAW && rawText.isBlank() && artists.isEmpty()
-
     fun adopt(metadata: MediaMetadata): MediaMetadata {
         request(metadata, priority = true)
         return withCredit(metadata)
@@ -155,10 +175,11 @@ class ArtistCreditRepository internal constructor(
     fun request(song: SongItem, priority: Boolean = false) {
         val requestContext = contextKey()
         val cacheKey = key(song.id, requestContext)
+        val requestLanguage = runtime.language()
         sourceSongs.putIfAbsent(cacheKey, song.toMediaMetadata())
         val initial = (song.artistCredit ?: legacyCredit(song)).let {
-            if (it.language.isNotEmpty() && it.language != runtime.language())
-                ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "context-refresh", runtime.language())
+            if (it.language.isNotEmpty() && it.language != requestLanguage)
+                ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "context-refresh", requestLanguage)
             else it
         }
         publish(song.id, cacheKey, initial, persist = false)
@@ -175,7 +196,7 @@ class ArtistCreditRepository internal constructor(
                 try {
                     if (cacheKey !in loaded) {
                         if (requestContext != contextKey()) return@launch
-                        readCache(cacheKey)?.let {
+                        readCache(cacheKey, requestLanguage)?.let {
                             publish(song.id, cacheKey, it, persist = false, preferStoredRefs = true)
                         }
                         val stored = database.artistCredit(song.id).first()
@@ -192,9 +213,9 @@ class ArtistCreditRepository internal constructor(
                     }
                     if (requestContext != contextKey()) return@launch
                     var current = states[cacheKey]?.value ?: initial
-                    preferences.edit().putString(cacheKey, json.encodeToString(current)).apply()
+                    preferences.edit().putString(storedKey(cacheKey), json.encodeToString(current)).apply()
                     // Also apply a warm-cache result when the song was saved after it was resolved.
-                    database.applyArtistCredit(song.id, current)
+                    applyCredit(song.id, cacheKey, current)
                     applyKnownAlbum(song.id, cacheKey)
                     if (requestContext != contextKey()) return@launch
                     val saved = database.artistCredit(song.id).first()
@@ -216,7 +237,7 @@ class ArtistCreditRepository internal constructor(
                                 resolution.album?.let { publishAlbum(song.id, cacheKey, it) }
                                 val incoming = resolution.credit
                                 val accepted = publish(song.id, cacheKey, incoming, persist = true)
-                                database.applyArtistCredit(song.id, accepted)
+                                applyCredit(song.id, cacheKey, accepted)
                                 applyKnownAlbum(song.id, cacheKey)
                                 // The database may have resolved an existing online identity or an alias.
                                 val stored = database.artistCredit(song.id).first()
@@ -274,10 +295,17 @@ class ArtistCreditRepository internal constructor(
         val state = albums.getOrPut(cacheKey) { MutableStateFlow(null) }
         if (state.value != null) return@synchronized
         state.value = album
-        preferences.edit().putString("album:$cacheKey", json.encodeToString(album)).apply()
+        preferences.edit().putString("album:${storedKey(cacheKey)}", json.encodeToString(album)).apply()
         states[cacheKey]?.value?.let { credit ->
             publish(videoId, cacheKey, credit, persist = false)
             mutableUpdates.tryEmit(videoId to credit)
+        }
+    }
+
+    private suspend fun applyCredit(videoId: String, cacheKey: String, credit: ArtistCredit) {
+        database.awaitTransaction {
+            // A Room transaction can wait behind another writer while the account changes.
+            if (cacheKey == key(videoId)) applyArtistCredit(videoId, credit)
         }
     }
 
@@ -303,6 +331,7 @@ class ArtistCreditRepository internal constructor(
     ): ArtistCredit = synchronized(lock) {
         val state = states.getOrPut(cacheKey) { MutableStateFlow(null) }
         val old = state.value
+        if (cacheKey != key(videoId)) return@synchronized old ?: incoming
         val merged = old?.merge(incoming) ?: incoming
         fun findArtist(artists: List<Artist>, artist: Artist): Artist? =
             artist.id?.let { id -> artists.singleOrNull { it.id == id } }
@@ -336,7 +365,7 @@ class ArtistCreditRepository internal constructor(
                 }
             }
         }
-        if (persist) preferences.edit().putString(cacheKey, json.encodeToString(accepted)).apply()
+        if (persist) preferences.edit().putString(storedKey(cacheKey), json.encodeToString(accepted)).apply()
         accepted
     }
 
@@ -356,8 +385,18 @@ class ArtistCreditRepository internal constructor(
 }
 
 private fun youtubeArtistContextToken(): String {
-    val auth = MessageDigest.getInstance("SHA-256")
-        .digest(YouTube.cookie.orEmpty().toByteArray())
+    val authentication = YouTube.authentication
+    val locale = YouTube.locale
+    val auth = artistCreditAuthenticationToken(authentication.cookie, authentication.visitorData,
+        authentication.dataSyncId, authentication.useLoginForBrowse)
+    return "WEB_REMIX:${locale.gl}:${locale.hl}:$auth"
+}
+
+/** Stable across process/auth generations, but separate for every request credential setting. */
+internal fun artistCreditAuthenticationToken(cookie: String?, visitorData: String?, dataSyncId: String?, useLoginForBrowse: Boolean): String {
+    val credentials = listOf(cookie.orEmpty(), visitorData.orEmpty(),
+        dataSyncId.orEmpty(), useLoginForBrowse.toString()).joinToString("\u0000")
+    return MessageDigest.getInstance("SHA-256")
+        .digest(credentials.toByteArray())
         .take(8).joinToString("") { "%02x".format(it) }
-    return "WEB_REMIX:${YouTube.locale.gl}:${YouTube.locale.hl}:$auth"
 }

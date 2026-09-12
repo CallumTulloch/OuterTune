@@ -12,6 +12,7 @@ import com.dd3boh.outertune.models.artistCreditFromJson
 import com.dd3boh.outertune.models.toStoredJson
 import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.ArtistCredit
+import com.zionhuang.innertube.models.isEmptyByline
 import com.zionhuang.innertube.models.merge
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -38,6 +39,8 @@ interface ArtistCreditDao : ArtistsDao {
 
     @Transaction
     fun applyArtistCredit(videoId: String, credit: ArtistCredit) {
+        // A pending/failed lookup contains no evidence that stored people disappeared.
+        if (credit.isEmptyByline()) return
         val song = songForArtistCredit(videoId)?.takeUnless { it.isLocal } ?: return
         val previous = artistCreditFromJson(song.artistCreditJson)
         val adopted = ArtistIdentity.withStableRefs(videoId, previous?.merge(credit) ?: credit, previous)

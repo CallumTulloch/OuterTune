@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.dd3boh.outertune.App.Companion.forgetAccount
+import com.dd3boh.outertune.App
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.constants.AccountChannelHandleKey
 import com.dd3boh.outertune.constants.AccountEmailKey
@@ -44,20 +46,24 @@ import com.dd3boh.outertune.ui.component.SwitchPreference
 import com.dd3boh.outertune.ui.dialog.InfoLabel
 import com.dd3boh.outertune.ui.dialog.TextFieldDialog
 import com.dd3boh.outertune.utils.rememberPreference
-import com.zionhuang.innertube.YouTube
+import com.dd3boh.outertune.utils.reportException
+import com.zionhuang.innertube.models.AccountInfo
 import com.zionhuang.innertube.utils.parseCookieString
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ColumnScope.AccountFrag(navController: NavController) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    val (accountName, onAccountNameChange) = rememberPreference(AccountNameKey, "")
-    val (accountEmail, onAccountEmailChange) = rememberPreference(AccountEmailKey, "")
-    val (accountChannelHandle, onAccountChannelHandleChange) = rememberPreference(AccountChannelHandleKey, "")
-    val (innerTubeCookie, onInnerTubeCookieChange) = rememberPreference(InnerTubeCookieKey, "")
-    val (visitorData, onVisitorDataChange) = rememberPreference(VisitorDataKey, "")
-    val (dataSyncId, onDataSyncIdChange) = rememberPreference(DataSyncIdKey, "")
+    val accountName by rememberPreference(AccountNameKey, "")
+    val accountEmail by rememberPreference(AccountEmailKey, "")
+    val accountChannelHandle by rememberPreference(AccountChannelHandleKey, "")
+    val innerTubeCookie by rememberPreference(InnerTubeCookieKey, "")
+    val visitorData by rememberPreference(VisitorDataKey, "")
+    val dataSyncId by rememberPreference(DataSyncIdKey, "")
     val isLoggedIn = remember(innerTubeCookie) {
         "SAPISID" in parseCookieString(innerTubeCookie)
     }
@@ -131,19 +137,23 @@ fun ColumnScope.AccountFrag(navController: NavController) {
             modifier = Modifier,
             initialTextFieldValue = TextFieldValue(text),
             onDone = { data ->
-                data.split("\n").forEach {
-                    if (it.startsWith("***INNERTUBE COOKIE*** =")) {
-                        onInnerTubeCookieChange(it.substringAfter("***INNERTUBE COOKIE*** ="))
-                    } else if (it.startsWith("***VISITOR DATA*** =")) {
-                        onVisitorDataChange(it.substringAfter("***VISITOR DATA*** ="))
-                    } else if (it.startsWith("***DATASYNC ID*** =")) {
-                        onDataSyncIdChange(it.substringAfter("***DATASYNC ID*** ="))
-                    } else if (it.startsWith("***ACCOUNT NAME*** =")) {
-                        onAccountNameChange(it.substringAfter("***ACCOUNT NAME*** ="))
-                    } else if (it.startsWith("***ACCOUNT EMAIL*** =")) {
-                        onAccountEmailChange(it.substringAfter("***ACCOUNT EMAIL*** ="))
-                    } else if (it.startsWith("***ACCOUNT CHANNEL HANDLE*** =")) {
-                        onAccountChannelHandleChange(it.substringAfter("***ACCOUNT CHANNEL HANDLE*** ="))
+                fun field(label: String, fallback: String): String {
+                    val prefix = "***$label*** ="
+                    return data.lineSequence().lastOrNull { it.startsWith(prefix) }?.substringAfter(prefix) ?: fallback
+                }
+                scope.launch {
+                    try {
+                        App.instance.authentication.saveEditedAccount(
+                            field("INNERTUBE COOKIE", innerTubeCookie),
+                            field("VISITOR DATA", visitorData),
+                            field("DATASYNC ID", dataSyncId),
+                            AccountInfo(field("ACCOUNT NAME", accountName), field("ACCOUNT EMAIL", accountEmail),
+                                field("ACCOUNT CHANNEL HANDLE", accountChannelHandle)),
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        reportException(error)
                     }
                 }
             },
@@ -176,7 +186,6 @@ fun ColumnScope.AccountExtrasFrag() {
         icon = { Icon(Icons.Rounded.Person, null) },
         checked = useLoginForBrowse,
         onCheckedChange = {
-            YouTube.useLoginForBrowse = it
             onUseLoginForBrowseChange(it)
         }
     )

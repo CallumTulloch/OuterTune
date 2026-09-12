@@ -4,14 +4,15 @@ package com.dd3boh.outertune.playback
 internal class PlaybackUrlCache(
     private val nowMs: () -> Long,
     private val maxEntries: Int = 64,
+    private val authRevision: () -> Long = { 0L },
 ) {
-    private data class Entry(val url: String, val expiresAtMs: Long)
+    private data class Entry(val url: String, val expiresAtMs: Long, val authRevision: Long)
     private val entries = LinkedHashMap<String, Entry>()
 
     @Synchronized
     operator fun get(mediaId: String): String? {
         val entry = entries[mediaId] ?: return null
-        if (entry.expiresAtMs <= nowMs()) {
+        if (entry.expiresAtMs <= nowMs() || entry.authRevision != authRevision()) {
             entries.remove(mediaId)
             return null
         }
@@ -19,12 +20,14 @@ internal class PlaybackUrlCache(
     }
 
     @Synchronized
-    fun put(mediaId: String, url: String, expiresInSeconds: Int) {
+    fun put(mediaId: String, url: String, expiresInSeconds: Int, requestAuthRevision: Long = authRevision()) {
+        // A response that finishes after login/logout must not replace a current session's URL.
+        if (requestAuthRevision != authRevision()) return
         // Leave time for opening the URL and starting the request before its server deadline.
         val lifetimeMs = (expiresInSeconds * 1_000L - 30_000L).coerceAtLeast(0L)
         entries.remove(mediaId)
         if (lifetimeMs == 0L) return
-        entries[mediaId] = Entry(url, nowMs() + lifetimeMs)
+        entries[mediaId] = Entry(url, nowMs() + lifetimeMs, requestAuthRevision)
         while (entries.size > maxEntries) entries.remove(entries.keys.first())
     }
 

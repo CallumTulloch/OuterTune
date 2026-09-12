@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import com.dd3boh.outertune.constants.DataSyncIdKey
 import com.dd3boh.outertune.constants.InnerTubeCookieKey
 import com.dd3boh.outertune.constants.UseLoginForBrowse
+import com.dd3boh.outertune.constants.VisitorDataKey
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.MetadataFetchEntity
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -49,13 +51,15 @@ class AlbumMetadataRepository internal constructor(
         val now: () -> Long = System::currentTimeMillis,
         val locale: () -> YouTubeLocale = { YouTube.locale },
         val configuration: Flow<YouTubeLocale>? = null,
+        val authRevision: () -> Long = { YouTube.authRevision },
+        val authUpdates: Flow<Long> = YouTube.authUpdates,
         val contextKey: (YouTubeLocale) -> String = ::youtubeMetadataContextKey,
         val fetch: suspend (String, YouTubeLocale) -> Result<AlbumItem> = { id, locale ->
             YouTube.album(id, withSongs = false, requestLocale = locale, notifyMetadata = false).map { it.album }
         },
     )
 
-    private data class Request(val albumId: String, val locale: YouTubeLocale, val contextKey: String) {
+    private data class Request(val albumId: String, val locale: YouTubeLocale, val contextKey: String, val authRevision: Long) {
         val stateContext: String get() = "album-credit:$contextKey"
         fun state(status: String, now: Long) = MetadataFetchEntity(
             "ALBUM", albumId, locale.hl, status, now, stateContext,
@@ -66,6 +70,7 @@ class AlbumMetadataRepository internal constructor(
     private val pending = ConcurrentHashMap.newKeySet<Request>()
     private val requests = Channel<Request>(Channel.UNLIMITED)
     private val nextAttempt = ConcurrentHashMap<Request, Long>()
+    private var initialAuthRevision = 0L
     private var started = false
     internal val pendingRequestCount: Int get() = pending.size
 
@@ -73,13 +78,14 @@ class AlbumMetadataRepository internal constructor(
     fun start() {
         if (started) return
         started = true
+        initialAuthRevision = runtime.authRevision()
         scope.launch {
             database.remoteAlbumsForMetadata().collect { albums -> safely { albums.forEach(::schedule) } }
         }
         scope.launch {
             val configuration = runtime.configuration
                 ?: metadataRequestConfiguration(YouTube.localeUpdates, context.dataStore.data)
-            configuration.collect {
+            combine(configuration, runtime.authUpdates) { locale, revision -> locale to revision }.collect {
                 safely { refreshSavedAlbums() }
             }
         }
@@ -95,8 +101,9 @@ class AlbumMetadataRepository internal constructor(
     internal suspend fun refreshSavedAlbums() = database.remoteAlbumsForMetadata().first().forEach(::schedule)
 
     /** Share a header already fetched for names, using the original request's locale/auth snapshot. */
-    suspend fun acceptHeader(header: AlbumItem, requestLocale: YouTubeLocale, requestContextKey: String): Boolean {
-        val request = Request(header.browseId, requestLocale, requestContextKey)
+    suspend fun acceptHeader(header: AlbumItem, requestLocale: YouTubeLocale, requestContextKey: String,
+        requestAuthRevision: Long = runtime.authRevision()): Boolean {
+        val request = Request(header.browseId, requestLocale, requestContextKey, requestAuthRevision)
         if (!current(request)) return false
         val now = runtime.now()
         var accepted = false
@@ -115,7 +122,8 @@ class AlbumMetadataRepository internal constructor(
     private fun schedule(album: AlbumEntity) {
         if (!albumCreditNeedsRefresh(album)) return
         val locale = runtime.locale()
-        val request = Request(album.id, locale, runtime.contextKey(locale))
+        val revision = runtime.authRevision()
+        val request = Request(album.id, locale, runtime.contextKey(locale), revision)
         if ((nextAttempt[request] ?: 0) > runtime.now()) return
         if (pending.add(request) && requests.trySend(request).isFailure) pending.remove(request)
     }
@@ -123,7 +131,7 @@ class AlbumMetadataRepository internal constructor(
     private fun current(request: Request): Boolean {
         // Consult the published locale directly: the refresh collector may still be queued.
         val locale = runtime.locale()
-        return request.locale == locale && request.contextKey == runtime.contextKey(locale)
+        return request.authRevision == runtime.authRevision() && request.locale == locale && request.contextKey == runtime.contextKey(locale)
     }
 
     private suspend fun fetch(request: Request) {
@@ -133,13 +141,14 @@ class AlbumMetadataRepository internal constructor(
             val album = database.albumById(request.albumId) ?: return
             if (!albumCreditNeedsRefresh(album)) return
             val previous = database.metadataFetch("ALBUM", request.albumId, request.locale.hl, request.stateContext)
-            val retryAt = previous?.let { it.updatedAt + albumCreditRetryDelay(it.status) } ?: 0L
+            val retryAt = previous?.takeIf { request.authRevision == initialAuthRevision }
+                ?.let { it.updatedAt + albumCreditRetryDelay(it.status) } ?: 0L
             if (retryAt > runtime.now()) { nextAttempt[request] = retryAt; return }
             val header = runtime.fetch(request.albumId, request.locale).getOrThrow()
             currentCoroutineContext().ensureActive()
             require(header.browseId == request.albumId) { "Album header belongs to another ID" }
             if (!current(request)) { retryInNewContext = true; return }
-            acceptHeader(header, request.locale, request.contextKey)
+            acceptHeader(header, request.locale, request.contextKey, request.authRevision)
             if (!current(request)) retryInNewContext = true
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -174,9 +183,10 @@ class AlbumMetadataRepository internal constructor(
 internal fun metadataRequestConfiguration(
     locales: Flow<YouTubeLocale>,
     preferences: Flow<Preferences>,
-): Flow<YouTubeLocale> = combine(locales, preferences) { locale, settings ->
-    locale to metadataFetchContextKey(locale, settings[UseLoginForBrowse] != false,
-        settings[InnerTubeCookieKey], settings[DataSyncIdKey])
+    authUpdates: Flow<Long> = flowOf(0L),
+): Flow<YouTubeLocale> = combine(locales, preferences, authUpdates) { locale, settings, revision ->
+    Triple(locale, metadataFetchContextKey(locale, settings[UseLoginForBrowse] != false,
+        settings[InnerTubeCookieKey], settings[DataSyncIdKey], settings[VisitorDataKey]), revision)
 }.distinctUntilChanged().map { it.first }
 
 internal fun albumCreditNeedsRefresh(album: AlbumEntity): Boolean {

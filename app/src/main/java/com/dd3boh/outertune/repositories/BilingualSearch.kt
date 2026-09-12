@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -57,13 +58,15 @@ class BilingualSearch internal constructor(private val runtime: Runtime) {
             SearchCategory.ARTIST -> R.string.filter_artists
             SearchCategory.PLAYLIST -> R.string.filter_playlists
         }) },
-        configurationChanges = bilingualSearchConfigurationChanges(YouTube.localeUpdates, context.dataStore.data),
+        configurationChanges = bilingualSearchConfigurationChanges(YouTube.localeUpdates, context.dataStore.data, YouTube.authUpdates),
     ))
 
     internal class Runtime(
         val requestLocale: suspend () -> YouTubeLocale = { YouTube.locale },
         val contextKey: () -> String = {
-            searchAuthenticationContextKey(YouTube.useLoginForBrowse, YouTube.cookie, YouTube.visitorData, YouTube.dataSyncId)
+            val auth = YouTube.authentication
+            "${auth.revision}:" + searchAuthenticationContextKey(
+                auth.useLoginForBrowse, auth.cookie, auth.visitorData, auth.dataSyncId)
         },
         val searchSummary: suspend (String, YouTubeLocale) -> Result<SearchSummaryPage> = YouTube::searchSummary,
         val search: suspend (String, YouTube.SearchFilter, YouTubeLocale) -> Result<SearchResult> = YouTube::search,
@@ -300,11 +303,12 @@ class BilingualSearch internal constructor(private val runtime: Runtime) {
 internal fun bilingualSearchConfigurationChanges(
     locales: Flow<YouTubeLocale>,
     preferences: Flow<Preferences>,
-): Flow<Unit> = combine(locales, preferences) { locale, settings ->
-    locale to searchAuthenticationContextKey(
+    authUpdates: Flow<Long> = flowOf(0L),
+): Flow<Unit> = combine(locales, preferences, authUpdates) { locale, settings, revision ->
+    Triple(locale, revision, searchAuthenticationContextKey(
         settings[UseLoginForBrowse] != false, settings[InnerTubeCookieKey],
         settings[VisitorDataKey], settings[DataSyncIdKey],
-    )
+    ))
 }.distinctUntilChanged().drop(1).map { Unit }
 
 /** Account/visitor identifiers are never stored in continuation state, only their combined digest. */

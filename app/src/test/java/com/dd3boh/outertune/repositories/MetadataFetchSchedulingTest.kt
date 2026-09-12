@@ -80,8 +80,22 @@ class MetadataFetchSchedulingTest {
         assertNotEquals(initial, metadataFetchContextKey(ja, true, "other-cookie", "sync1"))
         assertNotEquals(initial, metadataFetchContextKey(ja, false, "private-cookie", "sync1"))
         assertNotEquals(initial, metadataFetchContextKey(ja.copy(gl = "US"), true, "private-cookie", "sync1"))
+        assertNotEquals(initial, metadataFetchContextKey(ja, true, "private-cookie", "sync1", "visitor"))
         assertFalse(initial.contains("private-cookie"))
         assertFalse(initial.contains("sync1"))
+    }
+
+    @Test fun `same account authentication generations cannot share a batch or accept an old response`() {
+        val before = request("before", en).copy(authRevision = 1)
+        val after = request("after", en).copy(authRevision = 3)
+        assertFalse(isMetadataFetchCurrent(before, ja, before.contextKey, 3))
+        assertTrue(isMetadataFetchCurrent(after, ja, after.contextKey, 3))
+        assertEquals(listOf(listOf(before), listOf(after)), groupMetadataFetchRequests(listOf(before, after)))
+        assertEquals(before.state(MetadataFetchEntity.SUCCESS, 1000).contextKey,
+            after.state(MetadataFetchEntity.SUCCESS, 1000).contextKey)
+        val albumBefore = before.copy(target = OriginalNameTarget(OriginalNameKind.ALBUM, "album"),
+            original = true, contextKey = albumOriginalContextKey(before.contextKey))
+        assertFalse(isMetadataFetchCurrent(albumBefore, ja, before.contextKey, 3))
     }
 
     @Test fun `reordered and missing queue results match exact kind and ID`() {

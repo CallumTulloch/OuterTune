@@ -8,6 +8,7 @@ import com.dd3boh.outertune.utils.displayName
 import com.dd3boh.outertune.utils.displayTitle
 import com.dd3boh.outertune.utils.matchesMetadataQuery
 import com.zionhuang.innertube.models.Album
+import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.ArtistCredit
 import com.zionhuang.innertube.models.ArtistCreditStatus
@@ -46,7 +47,7 @@ class MetadataNameCandidatesTest {
         val song = SongItem("track", "Song", listOf(Artist("ニルヴァーナ", "UCartist")), thumbnail = "")
         val header = ArtistItem("UCartist", "Nirvana", null, shuffleEndpoint = null, radioEndpoint = null)
         val fromSong = metadataNameCandidates(listOf(song), "ja", "queue", 1).single { it.kind == "ARTIST" }
-        val fromHeader = metadataNameCandidates(listOf(header), "ja", "artist", 2).single()
+        val fromHeader = metadataNameCandidates(listOf(header), "ja", "detail", 2).single()
         assertEquals(fromSong.targetId, fromHeader.targetId)
         assertNotEquals(fromSong.name, fromHeader.name)
         assertTrue(fromHeader.sourcePriority > fromSong.sourcePriority)
@@ -55,8 +56,23 @@ class MetadataNameCandidatesTest {
     @Test fun `a single response retains the strongest occurrence regardless of order`() {
         val song = SongItem("track", "Song", listOf(Artist("Nirvana", "UCartist")), thumbnail = "")
         val header = ArtistItem("UCartist", "Nirvana", null, shuffleEndpoint = null, radioEndpoint = null)
+        val cardPriority = metadataNameCandidates(listOf(header), "en", "searchSummary").single().sourcePriority
         for (items in listOf(listOf(song, header), listOf(header, song))) {
-            assertEquals(100, metadataNameCandidates(items, "en", "searchSummary").single { it.kind == "ARTIST" }.sourcePriority)
+            assertEquals(cardPriority, metadataNameCandidates(items, "en", "searchSummary").single { it.kind == "ARTIST" }.sourcePriority)
+        }
+    }
+
+    @Test fun `artist and album cards carry less authority than their dedicated detail replies`() {
+        val items = listOf(
+            ArtistItem("UCartist", "Artist name", null, shuffleEndpoint = null, radioEndpoint = null),
+            AlbumItem("MPREalbum", "playlist", title = "Album name", artists = emptyList(), thumbnail = ""),
+        )
+        for (item in items) {
+            val detail = metadataNameCandidates(listOf(item), "ja", "detail", 1).single()
+            for (source in listOf("library", "home", "searchSummary", "artist", "album", "related")) {
+                val card = metadataNameCandidates(listOf(item), "ja", source, 2).single()
+                assertTrue("${detail.kind}/$source", detail.sourcePriority > card.sourcePriority)
+            }
         }
     }
 

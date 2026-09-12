@@ -43,6 +43,7 @@ import com.dd3boh.outertune.models.toLocalAlbumCandidates
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.ArtistItem
+import com.zionhuang.innertube.models.isEmptyByline
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.YTItem
@@ -70,8 +71,11 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
             return
         }
         val stored = songForArtistCredit(song.id)
-        updateSongEntity(song.copy(artistCreditJson = stored?.artistCreditJson ?: song.artistCreditJson))
-        artistCreditFromJson(song.artistCreditJson)?.let { applyArtistCredit(song.id, it) }
+        val incoming = artistCreditFromJson(song.artistCreditJson)
+        val storedJson = if (stored != null && incoming?.isEmptyByline() == true) stored.artistCreditJson
+            else stored?.artistCreditJson ?: song.artistCreditJson
+        updateSongEntity(song.copy(artistCreditJson = storedJson))
+        incoming?.let { applyArtistCredit(song.id, it) }
     }
 
     @Transaction

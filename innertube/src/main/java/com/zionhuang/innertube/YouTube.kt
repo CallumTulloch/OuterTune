@@ -157,8 +157,13 @@ internal fun parseArtTrackOriginalMetadata(response: JsonElement, expectedVideoI
  */
 object YouTube {
     private val innerTube = InnerTube()
-    private val metadataAuthLock = Any()
-    private var metadataAuthRevision = 0L
+    private val metadataAuthLock get() = innerTube.authenticationLock
+    val authentication: YouTubeAuthentication get() = innerTube.authentication
+    val authRevision: Long get() = authentication.revision
+    val authUpdates = innerTube.authUpdates
+
+    fun setAuthentication(cookie: String?, visitorData: String?, dataSyncId: String?, useLoginForBrowse: Boolean) =
+        innerTube.setAuthentication(cookie, visitorData, dataSyncId, useLoginForBrowse)
     private val mutableLocaleUpdates = MutableStateFlow(innerTube.locale)
     /** The active request language must also invalidate already visible metadata consumers. */
     val localeUpdates = mutableLocaleUpdates.asStateFlow()
@@ -175,12 +180,12 @@ object YouTube {
         items: (T) -> List<YTItem>,
         request: suspend () -> T,
     ): Result<T> {
-        val revision = synchronized(metadataAuthLock) { metadataAuthRevision }
+        val revision = synchronized(metadataAuthLock) { authRevision }
         return runCatching { request() }.onSuccess { page ->
             if (enabled) synchronized(metadataAuthLock) {
                 // The observer stamps its packet using current auth. Exclude older responses
                 // before invoking it, including an account A -> B -> A round trip.
-                if (revision == metadataAuthRevision) notifyMetadata(items(page), requestLocale, source)
+                if (revision == authRevision) notifyMetadata(items(page), requestLocale, source)
             }
         }
     }
@@ -204,34 +209,13 @@ object YouTube {
         }
     var visitorData: String?
         get() = innerTube.visitorData
-        set(value) {
-            synchronized(metadataAuthLock) {
-                if (innerTube.visitorData != value) {
-                    innerTube.visitorData = value
-                    metadataAuthRevision++
-                }
-            }
-        }
+        set(value) { innerTube.visitorData = value }
     var dataSyncId: String?
         get() = innerTube.dataSyncId
-        set(value) {
-            synchronized(metadataAuthLock) {
-                if (innerTube.dataSyncId != value) {
-                    innerTube.dataSyncId = value
-                    metadataAuthRevision++
-                }
-            }
-        }
+        set(value) { innerTube.dataSyncId = value }
     var cookie: String?
         get() = innerTube.cookie
-        set(value) {
-            synchronized(metadataAuthLock) {
-                if (innerTube.cookie != value) {
-                    innerTube.cookie = value
-                    metadataAuthRevision++
-                }
-            }
-        }
+        set(value) { innerTube.cookie = value }
     var proxy: Proxy?
         get() = innerTube.proxy
         set(value) {
@@ -239,14 +223,7 @@ object YouTube {
         }
     var useLoginForBrowse: Boolean
         get() = innerTube.useLoginForBrowse
-        set(value) {
-            synchronized(metadataAuthLock) {
-                if (innerTube.useLoginForBrowse != value) {
-                    innerTube.useLoginForBrowse = value
-                    metadataAuthRevision++
-                }
-            }
-        }
+        set(value) { innerTube.useLoginForBrowse = value }
 
     private suspend fun fetchMissingArtists(items: List<YTItem>, requestLocale: YouTubeLocale = locale): List<SongItem> {
         val missingArtistIds = items
@@ -845,8 +822,10 @@ object YouTube {
         innerTube.deletePlaylist(WEB_REMIX, playlistId)
     }
 
-    suspend fun player(videoId: String, playlistId: String? = null, client: YouTubeClient, signatureTimestamp: Int? = null, webPlayerPot: String? = null, requestLocale: YouTubeLocale = locale): Result<PlayerResponse> = runCatching {
-        innerTube.player(client, videoId, playlistId, signatureTimestamp, webPlayerPot, requestLocale = requestLocale).body<PlayerResponse>()
+    suspend fun player(videoId: String, playlistId: String? = null, client: YouTubeClient, signatureTimestamp: Int? = null, webPlayerPot: String? = null, requestLocale: YouTubeLocale = locale, requestAuthentication: YouTubeAuthentication = authentication): Result<PlayerResponse> = runCatching {
+        innerTube.player(client, videoId, playlistId, signatureTimestamp, webPlayerPot,
+            requestLocale = requestLocale, requestAuthentication = requestAuthentication).body<PlayerResponse>()
+            .also { innerTube.ensureAuthenticationCurrent(requestAuthentication) }
     }
 
     /** Caller must first verify MUSIC_VIDEO_TYPE_ATV. Returned names remain unclassified candidates. */

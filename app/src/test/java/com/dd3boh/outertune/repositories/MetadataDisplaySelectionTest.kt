@@ -56,4 +56,43 @@ class MetadataDisplaySelectionTest {
         val names = listOf(name("en", "English"), name("ja", "手動", "manual", priority = 0))
         for (enabled in listOf(false, true)) assertEquals("手動", selectMetadataDisplayName(target, names, "fr", enabled))
     }
+
+    @Test fun `legacy priority hundred artist and album cards cannot overtake an earlier detail name`() {
+        val cardSources = listOf("library", "libraryContinuation", "libraryRecentActivity", "home",
+            "homeContinuation", "searchSuggestions", "searchSummary", "search", "searchContinuation",
+            "artist", "artistItems", "artistItemsContinuation", "album", "browse", "related")
+        for (kind in listOf(OriginalNameKind.ARTIST, OriginalNameKind.ALBUM)) {
+            val namedTarget = OriginalNameTarget(kind, "identity")
+            val japanese = MetadataNameEntity(kind.name, namedTarget.id, "ja", "日本語の詳細名", "detail", 100, 1)
+            val english = japanese.copy(language = "en", name = "English detail")
+            for (source in cardSources) {
+                // These rows already exist in installations made before the priority fix.
+                val laterCard = japanese.copy(name = "English list spelling", source = source, observedAt = 86_400_001)
+                for (enabled in listOf(false, true)) {
+                    assertEquals("$kind/$source/enabled=$enabled", japanese.name,
+                        selectMetadataDisplayName(namedTarget, listOf(japanese, english, laterCard), "ja", enabled))
+                }
+            }
+        }
+    }
+
+    @Test fun `an English list response cannot replace the selected Japanese detail`() {
+        val namedTarget = OriginalNameTarget(OriginalNameKind.ARTIST, "UC-artist")
+        val japanese = MetadataNameEntity("ARTIST", namedTarget.id, "ja", "椎名林檎", "detail", 100, 1)
+        val english = japanese.copy(language = "en", name = "Sheena Ringo")
+        val englishCard = english.copy(name = "Ringo Sheena", source = "library", observedAt = 86_400_001)
+        for (enabled in listOf(false, true)) {
+            assertEquals(japanese.name,
+                selectMetadataDisplayName(namedTarget, listOf(japanese, english, englishCard), "ja", enabled))
+        }
+        assertEquals(english.name,
+            selectMetadataDisplayName(namedTarget, listOf(japanese, english, englishCard), "en", false))
+    }
+
+    @Test fun `a newer authoritative detail can still replace an earlier detail spelling`() {
+        val namedTarget = OriginalNameTarget(OriginalNameKind.ARTIST, "UC-artist")
+        val previous = MetadataNameEntity("ARTIST", namedTarget.id, "ja", "以前の詳細名", "detail", 100, 1)
+        val current = previous.copy(name = "現在の詳細名", observedAt = 2)
+        assertEquals(current.name, selectMetadataDisplayName(namedTarget, listOf(previous, current), "ja", false))
+    }
 }

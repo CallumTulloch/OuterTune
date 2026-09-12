@@ -6,6 +6,7 @@ import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.AlbumArtistMap
 import com.dd3boh.outertune.db.entities.SongArtistMap
+import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.models.ArtistIdentity
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.artistCreditFromJson
@@ -62,6 +63,109 @@ class ArtistCreditDatabaseTest {
         id = songId, title = "Credit transaction test", artists = emptyList(), duration = 180,
         genre = null, album = MediaMetadata.Album("MPRE-test", "Original album"),
     ).withArtistCredit(credit)
+
+    @Test
+    fun emptyPlaceholderPreservesLegacySongRelationsAndUnparsedCredit() = runBlocking {
+        val internal = Room.inMemoryDatabaseBuilder(context, InternalDatabase::class.java).build()
+        try {
+            val database = MusicDatabase(internal)
+            val artistId = "UCcreditJapaneseLegacy"
+            database.insert(ArtistEntity(artistId, "椎名林檎", onlineId = artistId))
+            val placeholder = ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "context-refresh", "en")
+            listOf(null, "{unparsed-credit").forEachIndexed { index, storedJson ->
+                val id = "legacy-credit-$index"
+                val saved = SongEntity(id, "Legacy track", 180, liked = true, localPath = null,
+                    inLibrary = LocalDateTime.of(2026, 9, 12, 12, 0), artistCreditJson = storedJson)
+                database.insert(saved)
+                database.insert(SongArtistMap(id, artistId, 3))
+
+                // A background resolver can publish an empty request state before any reply.
+                database.applyArtistCredit(id, placeholder)
+                assertEquals(saved, database.songForArtistCredit(id))
+                assertEquals(listOf(artistId), database.artistIdsForSong(id))
+
+                // Playlist sync re-inserts existing tracks through the production metadata path.
+                database.insert(metadata(placeholder.copy(language = "ja", rawText = "  ")).copy(id = id, album = null))
+                assertEquals(saved, database.songForArtistCredit(id))
+                assertEquals(listOf("椎名林檎"), database.song(id).first()!!.artists.map { it.name })
+                database.openHelper.readableDatabase.query(
+                    "SELECT position FROM song_artist_map WHERE songId = ?", arrayOf(id),
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(3, cursor.getInt(0))
+                    assertFalse(cursor.moveToNext())
+                }
+                // Favourite snapshots must also keep a legacy null credit rather than install a placeholder.
+                database.update(saved.copy(liked = false, artistCreditJson = placeholder.toStoredJson()))
+                assertEquals(saved.copy(liked = false), database.songForArtistCredit(id))
+                assertEquals(listOf(artistId), database.artistIdsForSong(id))
+            }
+        } finally {
+            internal.close()
+        }
+    }
+
+    @Test
+    fun emptyPlaceholderPreservesLegacyAlbumRelationsAndUnparsedCredit() = runBlocking {
+        val internal = Room.inMemoryDatabaseBuilder(context, InternalDatabase::class.java).build()
+        try {
+            val database = MusicDatabase(internal)
+            val artistId = "UCcreditJapaneseAlbumLegacy"
+            database.insert(ArtistEntity(artistId, "椎名林檎", onlineId = artistId))
+            listOf(null, "{unparsed-credit").forEachIndexed { index, storedJson ->
+                val id = "MPRE-legacy-credit-$index"
+                val saved = AlbumEntity(id, title = "Legacy album", songCount = 1, duration = 180,
+                    bookmarkedAt = LocalDateTime.of(2026, 9, 12, 12, 0), artistCreditJson = storedJson)
+                database.insert(saved)
+                database.insert(AlbumArtistMap(id, artistId, 4))
+
+                database.applyAlbumArtistCredit(id,
+                    ArtistCredit("  ", emptyList(), ArtistCreditStatus.RAW, "context-refresh", "en"))
+
+                assertEquals(saved, database.albumById(id))
+                assertEquals(listOf(artistId), database.albumArtistIdsForAlbum(id))
+                assertEquals("椎名林檎", database.artistById(artistId)!!.name)
+                database.openHelper.readableDatabase.query(
+                    "SELECT `order` FROM album_artist_map WHERE albumId = ?", arrayOf(id),
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(4, cursor.getInt(0))
+                    assertFalse(cursor.moveToNext())
+                }
+                database.update(saved.copy(bookmarkedAt = null, artistCreditJson =
+                    ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "context-refresh", "en").toStoredJson()))
+                assertEquals(saved.copy(bookmarkedAt = null), database.albumById(id))
+                assertEquals(listOf(artistId), database.albumArtistIdsForAlbum(id))
+            }
+        } finally {
+            internal.close()
+        }
+    }
+
+    @Test
+    fun japaneseCompleteCreditSurvivesThinPlaylistReinsertion() = runBlocking {
+        val internal = Room.inMemoryDatabaseBuilder(context, InternalDatabase::class.java).build()
+        try {
+            val database = MusicDatabase(internal)
+            val credit = ArtistCredit("椎名林檎", listOf(Artist("椎名林檎", "UCcreditJapaneseComplete")),
+                ArtistCreditStatus.COMPLETE, "playlist", "ja")
+            database.insert(metadata(credit))
+            val saved = database.songForArtistCredit(songId)!!
+            val artistIds = database.artistIdsForSong(songId)
+            listOf(
+                ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "context-refresh", "ja"),
+                ArtistCredit("椎名林檎", emptyList(), ArtistCreditStatus.RAW, "playlist", "ja"),
+                ArtistCredit("Sheena Ringo", emptyList(), ArtistCreditStatus.RAW, "playlist", "en"),
+            ).forEach { thin ->
+                database.insert(metadata(thin))
+                assertEquals(saved, database.songForArtistCredit(songId))
+                assertEquals(artistIds, database.artistIdsForSong(songId))
+                assertEquals(listOf("椎名林檎"), database.song(songId).first()!!.artists.map { it.name })
+            }
+        } finally {
+            internal.close()
+        }
+    }
 
     @Test
     fun partialCompleteAndLateIdPreserveTrackAndMergeExistingIdentity() = runBlocking {

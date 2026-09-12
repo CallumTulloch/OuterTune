@@ -33,6 +33,50 @@ class BilingualSearchTest {
     private val japanese = YouTubeLocale("JP", "ja")
 
     @Test
+    fun `same account login round trip rejects old results suggestions and continuation`() = runBlocking {
+        val saved = YouTube.authentication
+        fun login() = YouTube.setAuthentication("SAPISID=fixture", "visitor", "account", true)
+        fun roundTrip() {
+            YouTube.setAuthentication(null, null, null, true)
+            login()
+        }
+        try {
+            login()
+            var changeDuringReply = false
+            var continuations = 0
+            val search = BilingualSearch(BilingualSearch.Runtime(
+                requestLocale = { japanese },
+                search = { _, _, locale ->
+                    if (changeDuringReply && locale.hl == "en") roundTrip()
+                    Result.success(SearchResult(listOf(song(locale.hl)), "next-${locale.hl}"))
+                },
+                searchContinuation = { _, _ ->
+                    continuations++
+                    Result.success(SearchResult(emptyList()))
+                },
+                searchSuggestions = { _, locale ->
+                    if (locale.hl == "en") roundTrip()
+                    Result.success(SearchSuggestions(listOf("old suggestion"), emptyList()))
+                },
+                searchSummary = { _, locale ->
+                    if (locale.hl == "en") roundTrip()
+                    Result.success(SearchSummaryPage(emptyList()))
+                },
+            ))
+            val cursor = requireNotNull(search.search("query", YouTube.SearchFilter.FILTER_SONG).getOrThrow().continuation)
+            roundTrip()
+            assertTrue(search.searchContinuation(cursor).isFailure)
+            assertEquals(0, continuations)
+            changeDuringReply = true
+            assertTrue(search.search("query", YouTube.SearchFilter.FILTER_SONG).isFailure)
+            assertTrue(search.searchSuggestions("query").isFailure)
+            assertTrue(search.searchSummary("query").isFailure)
+        } finally {
+            YouTube.setAuthentication(saved.cookie, saved.visitorData, saved.dataSyncId, saved.useLoginForBrowse)
+        }
+    }
+
+    @Test
     fun `summary retains configured groups and ordering while matching by kind and id`() = runBlocking {
         val requested = mutableListOf<YouTubeLocale>()
         val search = service(summary = { _, locale ->

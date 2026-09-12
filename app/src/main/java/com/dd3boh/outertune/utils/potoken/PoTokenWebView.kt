@@ -1,6 +1,8 @@
 package com.dd3boh.outertune.utils.potoken
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
@@ -35,7 +37,10 @@ class PoTokenWebView private constructor(
     private val continuation: Continuation<PoTokenWebView>,
 ) {
     private val webView = WebView(context)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = MainScope()
+    private var closed = false
+    private var initializationCompleted = false
     private val poTokenContinuations =
         Collections.synchronizedMap(ArrayMap<String, Continuation<String>>())
     private val exceptionHandler = CoroutineExceptionHandler { _, t ->
@@ -71,7 +76,6 @@ class PoTokenWebView private constructor(
                     Log.e(TAG, "This WebView implementation is broken: $fmt")
 
                     onInitializationErrorCloseAndCancel(exception)
-                    popAllPoTokenContinuations().forEach { (_, cont) -> cont.resumeWithException(exception) }
                 }
                 return super.onConsoleMessage(m)
             }
@@ -145,12 +149,10 @@ class PoTokenWebView private constructor(
      */
     @JavascriptInterface
     fun onRunBotguardResult(botguardResponse: String) {
-        Log.d(TAG, "botguardResponse: $botguardResponse")
         makeBotguardServiceRequest(
             "https://www.youtube.com/api/jnn/v1/GenerateIT",
             "[ \"$REQUEST_KEY\", \"$botguardResponse\" ]",
         ) { responseBody ->
-            Log.d(TAG, "GenerateIT response: $responseBody")
             val (integrityToken, expirationTimeInSeconds) = parseIntegrityTokenData(responseBody)
 
             // leave 10 minutes of margin just to be sure
@@ -158,7 +160,7 @@ class PoTokenWebView private constructor(
 
             webView.evaluateJavascript("this.integrityToken = $integrityToken") {
                 Log.d(TAG, "initialization finished, expiration=${expirationTimeInSeconds}s")
-                continuation.resume(this)
+                completeInitialization()
             }
         }
     }
@@ -167,9 +169,15 @@ class PoTokenWebView private constructor(
     //region Obtaining poTokens
     suspend fun generatePoToken(identifier: String): String {
         return withContext(Dispatchers.Main) {
+            check(!closed) { "PoToken generator is closed" }
             suspendCancellableCoroutine { cont ->
-                Log.d(TAG, "generatePoToken() called with identifier $identifier")
+                Log.d(TAG, "generatePoToken() called")
                 addPoTokenEmitter(identifier, cont)
+                cont.invokeOnCancellation {
+                    synchronized(poTokenContinuations) {
+                        if (poTokenContinuations[identifier] === cont) poTokenContinuations.remove(identifier)
+                    }
+                }
                 webView.evaluateJavascript(
                     """try {
                         identifier = "$identifier"
@@ -204,7 +212,6 @@ class PoTokenWebView private constructor(
      */
     @JavascriptInterface
     fun onObtainPoTokenResult(identifier: String, poTokenU8: String) {
-        Log.d(TAG, "Generated poToken (before decoding): identifier=$identifier poTokenU8=$poTokenU8")
         val poToken = try {
             u8ToBase64(poTokenU8)
         } catch (t: Throwable) {
@@ -212,7 +219,6 @@ class PoTokenWebView private constructor(
             return
         }
 
-        Log.d(TAG, "Generated poToken: identifier=$identifier poToken=$poToken")
         popPoTokenContinuation(identifier)?.resume(poToken)
     }
 
@@ -243,10 +249,10 @@ class PoTokenWebView private constructor(
      * Clears [poTokenContinuations] and returns its previous contents. The continuations are supposed
      * to be used immediately after to either signal a success or an error.
      */
-    private fun popAllPoTokenContinuations(): Map<String, Continuation<String>> {
+    private fun popAllPoTokenContinuations(): Map<String, Continuation<String>> = synchronized(poTokenContinuations) {
         val result = poTokenContinuations.toMap()
         poTokenContinuations.clear()
-        return result
+        result
     }
     //endregion
 
@@ -295,27 +301,42 @@ class PoTokenWebView private constructor(
      * to [continuation].
      */
     private fun onInitializationErrorCloseAndCancel(error: Throwable) {
-        close()
-        continuation.resumeWithException(error)
+        runCatching { closeWithError(error) }
+    }
+
+    private fun completeInitialization(error: Throwable? = null) = synchronized(continuation) {
+        if (initializationCompleted) return@synchronized
+        initializationCompleted = true
+        if (error == null) continuation.resume(this) else continuation.resumeWithException(error)
     }
 
     /**
      * Releases all [webView] resources.
      */
     @MainThread
-    fun close() {
+    fun close() = closeWithError(PoTokenException("PoToken generator is closed"))
+
+    private fun closeWithError(error: Throwable) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { runCatching { closeWithError(error) } }
+            return
+        }
+        if (closed) return
+        closed = true
+        completeInitialization(error)
+        popAllPoTokenContinuations().forEach { (_, cont) -> cont.resumeWithException(error) }
         scope.cancel()
 
-        webView.clearHistory()
-        // clears RAM cache and disk cache (globally for all WebViews)
-        webView.clearCache(true)
-
-        // ensures that the WebView isn't doing anything when destroying it
-        webView.loadUrl("about:blank")
-
-        webView.onPause()
-        webView.removeAllViews()
-        webView.destroy()
+        try {
+            webView.clearHistory()
+            // clears RAM cache and disk cache (globally for all WebViews)
+            webView.clearCache(true)
+            webView.loadUrl("about:blank")
+            webView.onPause()
+            webView.removeAllViews()
+        } finally {
+            webView.destroy()
+        }
     }
     //endregion
 
@@ -335,6 +356,7 @@ class PoTokenWebView private constructor(
             return withContext(Dispatchers.Main) {
                 suspendCancellableCoroutine { cont ->
                     val potWv = PoTokenWebView(context, cont)
+                    cont.invokeOnCancellation { potWv.mainHandler.post { runCatching { potWv.close() } } }
                     potWv.loadHtmlAndObtainBotguard()
                 }
             }

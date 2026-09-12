@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -97,6 +98,52 @@ class ArtistImageRepositoryTest {
         } finally { fixture.close() }
     }
 
+    @Test fun sameAccountLoginRoundTripRejectsOldImageAndStartsNewRequest() = runBlocking {
+        val firstStarted = CompletableDeferred<Unit>()
+        val secondStarted = CompletableDeferred<Unit>()
+        val firstReply = CompletableDeferred<Result<ArtistItem>>()
+        val secondReply = CompletableDeferred<Result<ArtistItem>>()
+        val calls = AtomicInteger()
+        val fixture = Fixture { _, _ ->
+            if (calls.incrementAndGet() == 1) { firstStarted.complete(Unit); firstReply.await() }
+            else { secondStarted.complete(Unit); secondReply.await() }
+        }
+        try {
+            fixture.database.insert(ArtistEntity(id, "Saved"))
+            val repository = fixture.repository()
+            withTimeout(15_000) { firstStarted.await() }
+            fixture.authUpdates.value = 2L
+            withTimeout(15_000) { secondStarted.await() }
+            firstReply.complete(Result.success(profile("https://example.invalid/obsolete")))
+            withTimeout(15_000) { while (repository.pendingRequestCount != 1) delay(10) }
+            assertNull(fixture.database.artistById(id)!!.thumbnailUrl)
+            secondReply.complete(Result.success(profile()))
+            fixture.awaitIdle(repository)
+            assertEquals(image, fixture.database.artistById(id)!!.thumbnailUrl)
+            assertEquals(2, calls.get())
+        } finally { fixture.close() }
+    }
+
+    @Test fun newLoginCanRetryPreviousImageFailureWithoutWaitingFiveMinutes() = runBlocking {
+        val calls = AtomicInteger()
+        val fixture = Fixture { _, _ ->
+            if (calls.incrementAndGet() == 1) Result.failure(IOException("previous login failed"))
+            else Result.success(profile())
+        }
+        try {
+            fixture.database.insert(ArtistEntity(id, "Saved"))
+            val repository = fixture.repository()
+            repository.refreshSavedArtists()
+            fixture.awaitIdle(repository)
+            assertEquals(1, calls.get())
+            fixture.authUpdates.value = 2L
+            withTimeout(15_000) { while (fixture.database.artistById(id)!!.thumbnailUrl == null) delay(10) }
+            fixture.awaitIdle(repository)
+            assertEquals(2, calls.get())
+            assertEquals(image, fixture.database.artistById(id)!!.thumbnailUrl)
+        } finally { fixture.close() }
+    }
+
     @Test fun obsoleteAccountReplyIsDiscardedBeforeTheNewContextIsFetched() = runBlocking {
         val firstStarted = CompletableDeferred<Unit>()
         val secondStarted = CompletableDeferred<Unit>()
@@ -145,6 +192,7 @@ class ArtistImageRepositoryTest {
         val database = MusicDatabase(internal)
         val now = AtomicLong(1_789_000_000_000L)
         val contextKey = AtomicReference("JP:test")
+        val authUpdates = MutableStateFlow(0L)
         private var job: Job? = null
 
         suspend fun repository(): ArtistImageRepository {
@@ -153,6 +201,7 @@ class ArtistImageRepositoryTest {
             return ArtistImageRepository(database, isolatedContext, ArtistImageRepository.Runtime(
                 scope = CoroutineScope(newJob + Dispatchers.IO), now = now::get,
                 locale = { YouTubeLocale(gl = "JP", hl = "en") },
+                authRevision = { authUpdates.value }, authUpdates = authUpdates,
                 contextKey = { contextKey.get() }, fetch = fetch,
             )).also { it.start() }
         }

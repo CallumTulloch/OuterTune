@@ -175,6 +175,30 @@ class ArtistCreditTest {
         assertEquals(before, before.merge(before.copy(language = "en", artists = candidates("Wrong"))))
     }
 
+    @Test fun `empty old language placeholder cannot reject a newly identified artist`() {
+        val recovered = ArtistCredit("椎名林檎", listOf(Artist("椎名林檎", "UCbrWU0y_rLsEOYgaTX5Y74A", "LA-kept")),
+            ArtistCreditStatus.COMPLETE, "structured-byline", "ja")
+        for (emptyText in listOf("", " \t\n")) {
+            val placeholder = ArtistCredit(emptyText, emptyList(), ArtistCreditStatus.RAW, "context-refresh", "en")
+            assertEquals(recovered, placeholder.merge(recovered))
+            assertEquals(recovered, recovered.merge(placeholder))
+        }
+    }
+
+    @Test fun `repairing an empty placeholder does not permit merging real credits across languages`() {
+        val english = ArtistCredit("Sheena Ringo", listOf(Artist("Sheena Ringo", "UCbrWU0y_rLsEOYgaTX5Y74A", "LA-kept")),
+            ArtistCreditStatus.COMPLETE, "structured-byline", "en")
+        val japanese = english.copy(rawText = "椎名林檎", language = "ja",
+            artists = listOf(english.artists.single().copy(name = "椎名林檎")))
+        assertEquals(english, english.merge(japanese))
+        assertEquals(japanese, japanese.merge(english))
+        val literal = english.copy(artists = emptyList(), status = ArtistCreditStatus.RAW)
+        assertEquals(literal, literal.merge(japanese))
+        // Blank literal text does not make an already adopted artist list a placeholder.
+        val adoptedWithoutLiteral = english.copy(rawText = "")
+        assertEquals(adoptedWithoutLiteral, adoptedWithoutLiteral.merge(japanese))
+    }
+
     @Test fun `credit and references survive json and java queue serialization`() {
         val original = raw("A").copy(status = ArtistCreditStatus.COMPLETE, artists = listOf(Artist("A", "id-a", "ref-a")))
         assertEquals(original, json.decodeFromString<ArtistCredit>(json.encodeToString(original)))

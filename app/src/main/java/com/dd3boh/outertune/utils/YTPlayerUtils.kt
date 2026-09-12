@@ -19,6 +19,7 @@ import com.dd3boh.outertune.utils.potoken.PoTokenGenerator
 import com.dd3boh.outertune.utils.potoken.PoTokenResult
 import com.zionhuang.innertube.NewPipeUtils
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.YouTubeAuthentication
 import com.zionhuang.innertube.models.YouTubeClient
 import com.zionhuang.innertube.models.YouTubeClient.Companion.ANDROID
 import com.zionhuang.innertube.models.YouTubeClient.Companion.ANDROID_VR_NO_AUTH
@@ -29,6 +30,9 @@ import com.zionhuang.innertube.models.YouTubeClient.Companion.VISIONOS
 import com.zionhuang.innertube.models.YouTubeClient.Companion.WEB_REMIX
 import com.zionhuang.innertube.models.response.PlayerResponse
 import okhttp3.OkHttpClient
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 object YTPlayerUtils {
 
@@ -72,6 +76,7 @@ object YTPlayerUtils {
         val format: PlayerResponse.StreamingData.Format,
         val streamUrl: String,
         val streamExpiresInSeconds: Int,
+        val authRevision: Long,
     )
 
     /**
@@ -85,7 +90,24 @@ object YTPlayerUtils {
         audioQuality: AudioQuality,
         connectivityManager: ConnectivityManager,
         requiredItag: Int? = null,
-    ): Result<PlaybackData> = runCatching {
+    ): Result<PlaybackData> = try {
+        Result.success(withStablePlaybackSession({ YouTube.authentication }) { authentication ->
+            resolvePlayback(videoId, playlistId, audioQuality, connectivityManager, requiredItag, authentication)
+        })
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (failure: Exception) {
+        Result.failure(failure)
+    }
+
+    private suspend fun resolvePlayback(
+        videoId: String,
+        playlistId: String?,
+        audioQuality: AudioQuality,
+        connectivityManager: ConnectivityManager,
+        requiredItag: Int?,
+        authentication: YouTubeAuthentication,
+    ): PlaybackData {
         Log.d(TAG, "Playback info requested: $videoId")
 
         /**
@@ -96,26 +118,42 @@ object YTPlayerUtils {
          */
         val signatureTimestamp = getSignatureTimestampOrNull(videoId)
 
-        val isLoggedIn = YouTube.cookie != null
+        val isLoggedIn = !authentication.cookie.isNullOrBlank()
         val sessionId =
             if (isLoggedIn) {
                 // signed in sessions use dataSyncId as identifier
-                YouTube.dataSyncId
+                authentication.dataSyncId
             } else {
                 // signed out sessions use visitorData as identifier
-                YouTube.visitorData
+                authentication.visitorData
             }
+
+        val diagnostics = PlaybackDiagnostics(
+            cookiePresent = isLoggedIn,
+            visitorPresent = !authentication.visitorData.isNullOrBlank(),
+            sessionPresent = !sessionId.isNullOrBlank(),
+            authRevision = authentication.revision,
+            requiredItag = requiredItag,
+            authorizationAvailable = authentication.authorizationAvailable,
+        ).apply { signatureTimestampAvailable = signatureTimestamp != null }
 
         Log.d(TAG, "[$videoId] signatureTimestamp: $signatureTimestamp, isLoggedIn: $isLoggedIn")
 
-        val (webPlayerPot, webStreamingPot) = getWebClientPoTokenOrNull(videoId, sessionId)?.let {
+        val (webPlayerPot, webStreamingPot) = getWebClientPoTokenOrNull(videoId, sessionId, authentication.revision)?.let {
             Pair(it.playerRequestPoToken, it.streamingDataPoToken)
         } ?: Pair(null, null).also {
             Log.w(TAG, "[$videoId] No po token")
         }
+        diagnostics.poTokenAvailable = webPlayerPot != null && webStreamingPot != null
 
         val mainPlayerResponse =
-            YouTube.player(videoId, playlistId, MAIN_CLIENT, signatureTimestamp, webPlayerPot)
+            YouTube.player(videoId, playlistId, MAIN_CLIENT, signatureTimestamp, webPlayerPot,
+                requestAuthentication = authentication)
+                .onFailure { failure ->
+                    if (failure is CancellationException) throw failure
+                    diagnostics.record(MAIN_CLIENT.clientName, false, PlaybackFailureStage.REQUEST, failure = failure)
+                    failure.addSuppressed(diagnostics.asException())
+                }
                 .getOrThrow()
 
         val audioConfig = mainPlayerResponse.playerConfig?.audioConfig
@@ -128,6 +166,7 @@ object YTPlayerUtils {
 
         var streamPlayerResponse: PlayerResponse? = null
         for (clientIndex in (-1 until STREAM_FALLBACK_CLIENTS.size)) {
+            currentCoroutineContext().ensureActive()
             // reset for each client
             format = null
             streamUrl = null
@@ -147,14 +186,41 @@ object YTPlayerUtils {
 
                 if (client.loginRequired && !isLoggedIn) {
                     // skip client if it requires login but user is not logged in
+                    diagnostics.record(client.clientName, false, PlaybackFailureStage.SKIPPED_LOGIN)
                     continue
                 }
 
                 streamPlayerResponse =
-                    YouTube.player(videoId, playlistId, client, signatureTimestamp, webPlayerPot)
+                    YouTube.player(videoId, playlistId, client, signatureTimestamp, webPlayerPot,
+                        requestAuthentication = authentication)
+                        .onFailure { failure ->
+                            if (failure is CancellationException) throw failure
+                            diagnostics.record(
+                                client.clientName,
+                                client.loginSupported && authentication.cookie != null,
+                                PlaybackFailureStage.REQUEST,
+                                failure = failure,
+                            )
+                        }
                         .getOrNull()
+                if (streamPlayerResponse == null) continue
             }
 
+            fun recordFailure(
+                stage: PlaybackFailureStage,
+                httpCode: Int? = null,
+                failure: Throwable? = null,
+            ) = diagnostics.record(
+                client.clientName,
+                client.loginSupported && authentication.cookie != null,
+                stage,
+                status = streamPlayerResponse?.playabilityStatus?.status,
+                httpCode = httpCode,
+                selectedItag = format?.itag,
+                failure = failure,
+            )
+
+            currentCoroutineContext().ensureActive()
             Log.d(TAG, "[$videoId] stream client: ${client.clientName}, " +
                     "playabilityStatus: ${streamPlayerResponse?.playabilityStatus?.let {
                         it.status + (it.reason?.let { " - $it" } ?: "")
@@ -168,10 +234,21 @@ object YTPlayerUtils {
                         audioQuality,
                         connectivityManager,
                         requiredItag,
-                    ) ?: continue
-                streamUrl = findUrlOrNull(format, videoId) ?: continue
-                streamExpiresInSeconds =
-                    streamPlayerResponse.streamingData?.expiresInSeconds ?: continue
+                    )
+                if (format == null) {
+                    recordFailure(PlaybackFailureStage.FORMAT)
+                    continue
+                }
+                streamUrl = findUrlOrNull(format, videoId)
+                if (streamUrl == null) {
+                    recordFailure(PlaybackFailureStage.URL)
+                    continue
+                }
+                streamExpiresInSeconds = streamPlayerResponse.streamingData?.expiresInSeconds
+                if (streamExpiresInSeconds == null) {
+                    recordFailure(PlaybackFailureStage.EXPIRY)
+                    continue
+                }
 
                 if (client.useWebPoTokens && webStreamingPot != null) {
                     streamUrl += "&pot=$webStreamingPot";
@@ -181,45 +258,52 @@ object YTPlayerUtils {
                     /** skip [validateStatus] for last client */
                     break
                 }
-                if (validateStatus(streamUrl)) {
+                val streamStatus = validateStatus(streamUrl)
+                if (streamStatus.getOrNull()?.let { it in 200..299 } == true) {
                     // working stream found
                     Log.i(TAG, "[$videoId] [${client.clientName}] found working stream")
                     break
                 } else {
+                    recordFailure(
+                        if (streamStatus.isSuccess) PlaybackFailureStage.STREAM_HTTP else PlaybackFailureStage.STREAM_NETWORK,
+                        httpCode = streamStatus.getOrNull(),
+                        failure = streamStatus.exceptionOrNull(),
+                    )
                     Log.w(TAG, "[$videoId] [${client.clientName}] got bad http status code")
                 }
+            } else {
+                recordFailure(PlaybackFailureStage.PLAYABILITY)
             }
         }
 
         if (streamPlayerResponse == null) {
-            throw Exception("Bad stream player response")
+            throw Exception("Bad stream player response", diagnostics.asException())
         }
         if (streamPlayerResponse.playabilityStatus.status != "OK") {
             throw PlaybackException(
                 streamPlayerResponse.playabilityStatus.reason,
-                null,
+                diagnostics.asException(),
                 PlaybackException.ERROR_CODE_REMOTE_ERROR
             )
         }
         if (streamExpiresInSeconds == null) {
-            throw Exception("Missing stream expire time")
+            throw Exception("Missing stream expire time", diagnostics.asException())
         }
         if (format == null) {
-            throw Exception("Could not find format")
+            throw Exception("Could not find format", diagnostics.asException())
         }
         if (streamUrl == null) {
-            throw Exception("Could not find stream url")
+            throw Exception("Could not find stream url", diagnostics.asException())
         }
 
-        Log.d(TAG, "[$videoId] stream url: $streamUrl")
-
-        PlaybackData(
+        return PlaybackData(
             audioConfig,
             videoDetails,
             playbackTracking,
             format,
             streamUrl,
             streamExpiresInSeconds,
+            authentication.revision,
         )
     }
 
@@ -247,22 +331,19 @@ object YTPlayerUtils {
         )
 
     /**
-     * Checks if the stream url returns a successful status.
-     * If this returns true the url is likely to work.
-     * If this returns false the url might cause an error during playback.
+     * Preserve HTTP status separately from transport failures for the error details.
      */
-    private fun validateStatus(url: String): Boolean {
+    private fun validateStatus(url: String): Result<Int> {
         try {
             val requestBuilder = okhttp3.Request.Builder()
                 .head()
                 .url(url)
-            return httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                response.isSuccessful
-            }
+            return Result.success(httpClient.newCall(requestBuilder.build()).execute().use { it.code })
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
-            reportException(e)
+            return Result.failure(e)
         }
-        return false
     }
 
     /**
@@ -295,13 +376,15 @@ object YTPlayerUtils {
     /**
      * Wrapper around the [PoTokenGenerator.getWebClientPoToken] function which reports exceptions
      */
-    private fun getWebClientPoTokenOrNull(videoId: String, sessionId: String?): PoTokenResult? {
+    private suspend fun getWebClientPoTokenOrNull(videoId: String, sessionId: String?, authRevision: Long): PoTokenResult? {
         if (sessionId == null) {
             Log.d(TAG, "[$videoId] Session identifier is null")
             return null
         }
         try {
-            return poTokenGenerator.getWebClientPoToken(videoId, sessionId)
+            return poTokenGenerator.getWebClientPoToken(videoId, sessionId, authRevision)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             reportException(e)
         }

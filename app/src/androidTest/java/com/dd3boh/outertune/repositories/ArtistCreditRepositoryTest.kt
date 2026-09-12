@@ -271,7 +271,164 @@ class ArtistCreditRepositoryTest {
         } finally { fixture.close() }
     }
 
-    private data class Session(val token: String, val language: String)
+    @Test
+    fun emptyOldLanguageDatabaseCreditCanRecoverFromJapaneseRefetchAndReopen() = runBlocking {
+        val emptyEnglish = ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "context-refresh", "en")
+        val calls = AtomicInteger()
+        val fixture = Fixture { calls.incrementAndGet(); Result.success(complete) }
+        try {
+            fixture.database.insert(song(emptyEnglish).toMediaMetadata())
+            val repository = fixture.repository()
+            repository.request(song(), priority = true)
+            fixture.awaitIdle()
+            val stored = fixture.database.artistCredit(videoId).first()!!
+            assertEquals("ja", stored.language)
+            assertEquals(ArtistCreditStatus.COMPLETE, stored.status)
+            assertEquals(complete.artists.map { it.id }, stored.artists.map { it.id })
+            assertEquals(stored.artists.map { it.ref }, fixture.database.artistIdsForSong(videoId))
+            assertEquals(1, calls.get())
+
+            // A fresh cache context must recover from persisted DB data, not the prior instance's
+            // successfully fetched in-memory credit that concealed the damaged row.
+            fixture.session.set(Session("test:ja:reopened", "ja"))
+            val restored = fixture.repository()
+            val source = fixture.database.song(videoId).first()!!.toMediaMetadata()
+            restored.request(source, priority = true)
+            fixture.awaitIdle()
+            assertEquals(1, calls.get())
+            assertEquals(stored, restored.withCredit(source).artistCredit)
+            assertEquals(stored.artists.map { it.id }, restored.withCredit(source).artists.map { it.onlineId })
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun wrongLanguagePersistentCacheCannotOverrideJapaneseSourceOrThrottleItsRepair() = runBlocking {
+        val japanese = ArtistCredit("椎名林檎", listOf(Artist("椎名林檎", "UCbrWU0y_rLsEOYgaTX5Y74A", "LA-kept")),
+            ArtistCreditStatus.COMPLETE, "structured-byline", "ja")
+        val wrongLanguage = ArtistCredit("Sheena Ringo", emptyList(), ArtistCreditStatus.RAW, "old-cache", "en")
+        val calls = AtomicInteger()
+        val fixture = Fixture { calls.incrementAndGet(); Result.success(japanese) }
+        try {
+            fixture.database.insert(song(japanese.copy(artists = emptyList(), status = ArtistCreditStatus.RAW)).toMediaMetadata())
+            // Simulate an old incorrectly namespaced entry and its successful-attempt retry time.
+            fixture.cache(videoId, wrongLanguage, retryAt = 1_000_000L + 30 * 60_000L)
+            val repository = fixture.repository()
+            val source = song(japanese).toMediaMetadata()
+            val displayed = repository.withCredit(source)
+            assertEquals(japanese, displayed.artistCredit)
+            assertEquals(listOf("UCbrWU0y_rLsEOYgaTX5Y74A"), displayed.artists.map { it.onlineId })
+            assertEquals("椎名林檎", displayed.artistDisplayText())
+
+            // An actual Japanese request must be allowed now, even though the discarded English
+            // entry had a future retry time. The known source has no album, so repair is required.
+            repository.request(source, priority = true)
+            fixture.awaitIdle()
+            assertEquals(1, calls.get())
+            val stored = fixture.database.artistCredit(videoId).first()!!
+            assertEquals("ja", stored.language)
+            assertEquals(ArtistCreditStatus.COMPLETE, stored.status)
+            assertEquals(japanese.artists.map { it.id }, stored.artists.map { it.id })
+            val reopened = fixture.repository()
+            assertEquals(stored, reopened.withCredit(fixture.database.song(videoId).first()!!.toMediaMetadata()).artistCredit)
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun returningToSameAccountStartsNewRequestAndRejectsPreviousLoginResponse() = runBlocking {
+        val oldStarted = CompletableDeferred<Unit>()
+        val newStarted = CompletableDeferred<Unit>()
+        val oldReply = CompletableDeferred<Result<ArtistCredit>>()
+        val newReply = CompletableDeferred<Result<ArtistCredit>>()
+        val calls = AtomicInteger()
+        val fixture = Fixture {
+            if (calls.incrementAndGet() == 1) {
+                oldStarted.complete(Unit)
+                oldReply.await()
+            } else {
+                newStarted.complete(Unit)
+                newReply.await()
+            }
+        }
+        try {
+            fixture.session.set(Session("test:ja:account-a", "ja", 1))
+            val repository = fixture.repository()
+            val oldContext = repository.contextToken()
+            val oldState = repository.observe(videoId)
+            repository.request(song(), priority = true)
+            withTimeout(15_000) { oldStarted.await() }
+            fixture.session.set(Session("test:ja:logged-out", "ja", 2))
+            assertNotEquals(oldContext, repository.contextToken())
+            fixture.session.set(Session("test:ja:account-a", "ja", 3))
+            assertNotEquals("The same credentials after login must not revive the previous request",
+                oldContext, repository.contextToken())
+            val newCredit = complete.copy(rawText = "Current artist",
+                artists = listOf(Artist("Current artist", "UC-current-login")))
+            val currentState = repository.observe(videoId)
+            repository.request(song(newCredit.copy(artists = emptyList(), status = ArtistCreditStatus.RAW)), priority = true)
+            withTimeout(15_000) { newStarted.await() }
+            newReply.complete(Result.success(newCredit))
+            withTimeout(15_000) { currentState.filterNotNull().first { it.status == ArtistCreditStatus.COMPLETE } }
+            oldReply.complete(Result.success(complete))
+            fixture.awaitIdle()
+
+            assertEquals(2, calls.get())
+            assertEquals(newCredit.artists.map { it.id }, currentState.value!!.artists.map { it.id })
+            assertEquals(ArtistCreditStatus.RAW, oldState.value!!.status)
+            assertEquals(currentState.value, fixture.repository().observe(videoId).value)
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun retryFromPreviousLoginDoesNotThrottleSameAccountAfterLogin() = runBlocking {
+        val calls = AtomicInteger()
+        val fixture = Fixture {
+            if (calls.incrementAndGet() == 1) Result.failure(IOException("previous login failed"))
+            else Result.success(complete)
+        }
+        try {
+            fixture.session.set(Session("test:ja:account-a", "ja", 1))
+            val repository = fixture.repository()
+            repository.request(song(), priority = true)
+            fixture.awaitIdle()
+            assertEquals(1, calls.get())
+            fixture.session.set(Session("test:ja:logged-out", "ja", 2))
+            repository.contextToken()
+            fixture.session.set(Session("test:ja:account-a", "ja", 3))
+            repository.request(song(), priority = true)
+            fixture.awaitIdle()
+
+            assertEquals("A prior login's failure delay must not suppress a fresh login", 2, calls.get())
+            assertEquals(ArtistCreditStatus.COMPLETE, repository.observe(videoId).value!!.status)
+            assertEquals(complete.artists.map { it.id }, repository.observe(videoId).value!!.artists.map { it.id })
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun successfulPersistentCreditAndAlbumRemainReusableAfterNewLoginGeneration() = runBlocking {
+        val calls = AtomicInteger()
+        val fixture = Fixture { calls.incrementAndGet(); Result.success(complete) }
+        try {
+            fixture.session.set(Session("test:ja:account-a", "ja", 1))
+            val repository = fixture.repository()
+            repository.request(song(), priority = true)
+            fixture.awaitIdle()
+            val cached = repository.observe(videoId).value!!
+            val album = repository.observeAlbum(videoId).value!!
+            fixture.session.set(Session("test:ja:logged-out", "ja", 2))
+            repository.contextToken()
+            fixture.session.set(Session("test:ja:account-a", "ja", 3))
+            val reopened = fixture.repository()
+            assertEquals(cached, reopened.observe(videoId).value)
+            assertEquals(album, reopened.observeAlbum(videoId).value)
+            reopened.request(song(), priority = true)
+            fixture.awaitIdle()
+            assertEquals(1, calls.get())
+            assertEquals(cached, reopened.withCredit(song()).artistCredit)
+            assertEquals(album, reopened.withCredit(song()).album)
+        } finally { fixture.close() }
+    }
+
+    private data class Session(val token: String, val language: String, val revision: Long = 0)
 
     @Test
     fun missingAlbumArrivesWithoutChangingArtistsAndSurvivesLaterSaveAndRestart() = runBlocking {
@@ -323,14 +480,18 @@ class ArtistCreditRepositoryTest {
             scope = CoroutineScope(job + Dispatchers.IO),
             fetch = { song -> fetch(song).map { ArtistCreditResolution(it, resolvedAlbum) } },
             contextToken = { session.get().token },
+            authRevision = { session.get().revision },
             language = { session.get().language },
             now = { 1_000_000L },
         )
 
         fun repository() = ArtistCreditRepository(database, isolatedContext, runtime)
 
-        fun cache(videoId: String, credit: ArtistCredit) {
-            assertTrue(preferences.edit().putString("${session.get().token}:$videoId", credit.toStoredJson()).commit())
+        fun cache(videoId: String, credit: ArtistCredit, retryAt: Long? = null) {
+            val key = "${session.get().token}:$videoId"
+            val editor = preferences.edit().putString(key, credit.toStoredJson())
+            retryAt?.let { editor.putLong("retry:${session.get().revision}:$key", it) }
+            assertTrue(editor.commit())
         }
 
         suspend fun awaitIdle() = withTimeout(15_000) { job.children.toList().joinAll() }

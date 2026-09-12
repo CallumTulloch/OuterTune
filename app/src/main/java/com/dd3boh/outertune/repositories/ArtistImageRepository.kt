@@ -16,6 +16,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 
 /** Repairs saved artist profiles independently of the name cache and the currently open screen. */
 @Singleton
@@ -31,14 +32,16 @@ class ArtistImageRepository internal constructor(
         val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
         val now: () -> Long = System::currentTimeMillis,
         val locale: () -> YouTubeLocale = { YouTube.locale.copy(hl = "en") },
+        val authRevision: () -> Long = { YouTube.authRevision },
+        val authUpdates: Flow<Long> = YouTube.authUpdates,
         val contextKey: (YouTubeLocale) -> String = ::youtubeMetadataContextKey,
         val fetch: suspend (String, YouTubeLocale) -> Result<ArtistItem> = { id, locale ->
             YouTube.artist(id, requestLocale = locale, notifyMetadata = false).map { it.artist }
         },
     )
 
-    private data class Request(val onlineId: String, val locale: YouTubeLocale, val contextKey: String) {
-        val key: String get() = "$contextKey:$onlineId"
+    private data class Request(val onlineId: String, val locale: YouTubeLocale, val contextKey: String, val authRevision: Long) {
+        val key: String get() = "$authRevision:$contextKey:$onlineId"
     }
 
     private val scope = runtime.scope
@@ -54,6 +57,7 @@ class ArtistImageRepository internal constructor(
         scope.launch {
             database.allRemoteArtists().collect { artists -> safely { artists.forEach(::schedule) } }
         }
+        scope.launch { runtime.authUpdates.collect { safely { refreshSavedArtists() } } }
         repeat(2) { scope.launch { for (request in requests) fetch(request) } }
         scope.launch {
             while (isActive) {
@@ -76,14 +80,16 @@ class ArtistImageRepository internal constructor(
         val id = artist.onlineArtistId ?: return
         if (!artistImageNeedsRefresh(artist, runtime.now())) return
         val locale = runtime.locale()
-        val request = Request(id, locale, runtime.contextKey(locale))
+        val revision = runtime.authRevision()
+        val request = Request(id, locale, runtime.contextKey(locale), revision)
         if (preferences.getLong(request.key, 0L) > runtime.now()) return
         if (pending.add(request) && requests.trySend(request).isFailure) pending.remove(request)
     }
 
     private fun current(request: Request): Boolean {
         val locale = runtime.locale()
-        return request.locale.gl == locale.gl && request.contextKey == runtime.contextKey(locale)
+        return request.authRevision == runtime.authRevision() && request.locale.gl == locale.gl &&
+            request.contextKey == runtime.contextKey(locale)
     }
 
     private suspend fun fetch(request: Request) {

@@ -24,6 +24,23 @@ class ContentConsumerConfigurationTest {
     private fun settings() = preferencesOf(ContentLanguageKey to "ja", ContentCountryKey to "JP")
 
     @Test
+    fun `metadata refresh observes login generations even when locale and preferences are unchanged`() = runBlocking {
+        val locales = MutableStateFlow(japanese)
+        val preferences = MutableStateFlow<Preferences>(settings())
+        val revisions = MutableStateFlow(1L)
+        val changes = Channel<YouTubeLocale>(Channel.UNLIMITED)
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            metadataRequestConfiguration(locales, preferences, revisions).collect { changes.send(it) }
+        }
+        try {
+            assertEquals(japanese, withTimeout(5_000) { changes.receive() })
+            revisions.value = 3L // A logout/login round trip may be conflated to its final revision.
+            assertEquals(japanese, withTimeout(5_000) { changes.receive() })
+            assertEquals(settings(), preferences.value)
+        } finally { collector.cancelAndJoin() }
+    }
+
+    @Test
     fun `search invalidates for a published language or country without a preferences emission`() = runBlocking {
         val locales = MutableStateFlow(japanese)
         val preferences = MutableStateFlow<Preferences>(settings())

@@ -16,11 +16,18 @@ data class ArtistCredit(
     val evidence: List<String> = emptyList(),
 ) : java.io.Serializable
 
+/** An unanswered request carries no byline or adopted person, even if it records a language. */
+fun ArtistCredit.isEmptyByline(): Boolean =
+    status == ArtistCreditStatus.RAW && rawText.isBlank() && artists.isEmpty()
+
 /** Merge evidence without turning a later, thinner response into a destructive replacement. */
 fun ArtistCredit.merge(incoming: ArtistCredit): ArtistCredit {
     if (incoming == this) return this
-    if (language.isNotEmpty() && incoming.language.isNotEmpty() && language != incoming.language) return this
     val notes = (evidence + incoming.evidence).distinct()
+    // A failed request in an earlier language must not permanently block a successful repair.
+    // Keep the language guard for actual literal bylines and previously adopted people.
+    if (isEmptyByline()) return incoming.copy(evidence = notes)
+    if (language.isNotEmpty() && incoming.language.isNotEmpty() && language != incoming.language) return this
     fun conflict() = copy(
         evidence = (notes + "conflict:${incoming.source}:${incoming.artists.map { it.name to it.id }}").distinct())
     if (status == ArtistCreditStatus.CONFLICT) return copy(evidence = notes)

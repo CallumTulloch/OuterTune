@@ -121,6 +121,7 @@ import com.dd3boh.outertune.utils.CoilBitmapLoader
 import com.dd3boh.outertune.utils.NetworkConnectivityObserver
 import com.dd3boh.outertune.utils.SyncUtils
 import com.dd3boh.outertune.utils.YTPlayerUtils
+import com.dd3boh.outertune.utils.withStablePlaybackSession
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.enumPreference
 import com.dd3boh.outertune.utils.get
@@ -128,6 +129,7 @@ import com.dd3boh.outertune.utils.playerCoroutine
 import com.dd3boh.outertune.utils.reportException
 import com.google.common.util.concurrent.MoreExecutors
 import com.zionhuang.innertube.YouTube
+import com.zionhuang.innertube.AuthenticationChangedException
 import com.zionhuang.innertube.models.SongItem
 import com.zionhuang.innertube.models.WatchEndpoint
 import dagger.hilt.android.AndroidEntryPoint
@@ -234,7 +236,7 @@ class MusicService : MediaLibraryService(),
     private var isAudioEffectSessionOpened = false
 
     var consecutivePlaybackErr = 0
-    private val songUrlCache = PlaybackUrlCache(SystemClock::elapsedRealtime)
+    private val songUrlCache = PlaybackUrlCache(SystemClock::elapsedRealtime, authRevision = { YouTube.authRevision })
     private val streamRefreshRetry = StreamRefreshRetry()
 
     override fun onCreate() {
@@ -327,6 +329,12 @@ class MusicService : MediaLibraryService(),
 
         scope.launch {
             YouTube.localeUpdates.collect {
+                player.currentMetadata?.let { artistCredits.request(it, priority = true) }
+            }
+        }
+
+        scope.launch {
+            YouTube.authUpdates.collect {
                 player.currentMetadata?.let { artistCredits.request(it, priority = true) }
             }
         }
@@ -737,7 +745,13 @@ class MusicService : MediaLibraryService(),
         }
     }
 
-    private fun resolveStreamDataSpec(dataSpec: DataSpec): DataSpec {
+    private fun resolveStreamDataSpec(dataSpec: DataSpec): DataSpec = runBlocking(Dispatchers.IO) {
+        withStablePlaybackSession({ YouTube.authRevision }) {
+            resolveStreamDataSpecForSession(dataSpec)
+        }
+    }
+
+    private fun resolveStreamDataSpecForSession(dataSpec: DataSpec): DataSpec {
         val mediaId = dataSpec.key ?: error("No media id")
         songUrlCache[mediaId]?.let {
             Log.d(TAG, "PLAYING: remote song (temp cache)")
@@ -804,11 +818,14 @@ class MusicService : MediaLibraryService(),
                 )
             )
         }
+        if (playbackData.authRevision != YouTube.authRevision) {
+            throw AuthenticationChangedException()
+        }
         offloadScope.launch { recoverSong(mediaId, playbackData) }
 
         val streamUrl = playbackData.streamUrl
 
-        songUrlCache.put(mediaId, streamUrl, playbackData.streamExpiresInSeconds)
+        songUrlCache.put(mediaId, streamUrl, playbackData.streamExpiresInSeconds, playbackData.authRevision)
         return dataSpec.withUri(streamUrl.toUri())
     }
 

@@ -150,6 +150,74 @@ class AlbumMetadataRepositoryTest {
         } finally { fixture.close() }
     }
 
+    @Test fun sameAccountLoginRoundTripRejectsOldHeaderBeforeNewHeaderArrives() = runBlocking {
+        val firstStarted = CompletableDeferred<Unit>()
+        val secondStarted = CompletableDeferred<Unit>()
+        val firstReply = CompletableDeferred<Result<AlbumItem>>()
+        val secondReply = CompletableDeferred<Result<AlbumItem>>()
+        val calls = AtomicInteger()
+        val fixture = Fixture { _, _ ->
+            if (calls.incrementAndGet() == 1) { firstStarted.complete(Unit); firstReply.await() }
+            else { secondStarted.complete(Unit); secondReply.await() }
+        }
+        try {
+            fixture.database.insert(AlbumEntity(albumId, title = "Saved", songCount = 1, duration = 100))
+            val repository = fixture.repository()
+            withTimeout(15_000) { firstStarted.await() }
+            fixture.authUpdates.value = 2L // Same credentials after logout/login; no settings emission.
+            withTimeout(15_000) { secondStarted.await() }
+            assertFalse(repository.acceptHeader(header(), locale, fixture.contextKey.get(), 0L))
+            firstReply.complete(Result.success(header()))
+            withTimeout(15_000) { while (repository.pendingRequestCount != 1) delay(10) }
+            assertNull(fixture.database.albumById(albumId)!!.artistCredit)
+            secondReply.complete(Result.success(header()))
+            fixture.awaitIdle(repository)
+            assertEquals(ArtistCreditStatus.COMPLETE, fixture.database.albumById(albumId)!!.artistCredit!!.status)
+            assertEquals(2, calls.get())
+        } finally { fixture.close() }
+    }
+
+    @Test fun restartKeepsFailureDelayButNewLoginRetriesSavedAlbumImmediately() = runBlocking {
+        val calls = AtomicInteger()
+        val fixture = Fixture { _, _ ->
+            if (calls.incrementAndGet() == 1) Result.failure(IOException("previous login failed"))
+            else Result.success(header())
+        }
+        try {
+            fixture.database.insert(AlbumEntity(albumId, title = "Saved", songCount = 1, duration = 100))
+            val first = fixture.repository()
+            first.refreshSavedAlbums()
+            fixture.awaitIdle(first)
+            assertEquals(MetadataFetchEntity.FAILED, fixture.state(albumId)!!.status)
+            val restarted = fixture.repository()
+            restarted.refreshSavedAlbums()
+            fixture.awaitIdle(restarted)
+            assertEquals(1, calls.get())
+            fixture.authUpdates.value = 2L
+            withTimeout(15_000) { while (fixture.database.albumById(albumId)!!.artistCredit == null) delay(10) }
+            fixture.awaitIdle(restarted)
+            assertEquals(2, calls.get())
+            assertEquals(ArtistCreditStatus.COMPLETE, fixture.database.albumById(albumId)!!.artistCredit!!.status)
+        } finally { fixture.close() }
+    }
+
+    @Test fun authenticationRestoredBetweenConstructionAndStartKeepsPersistedFailureDelay() = runBlocking {
+        val calls = AtomicInteger()
+        val fixture = Fixture { _, _ -> calls.incrementAndGet(); Result.success(header()) }
+        try {
+            fixture.database.insert(AlbumEntity(albumId, title = "Saved", songCount = 1, duration = 100))
+            fixture.database.recordMetadataFetch(MetadataFetchEntity("ALBUM", albumId, "ja",
+                MetadataFetchEntity.FAILED, fixture.now.get(), "album-credit:${fixture.contextKey.get()}"))
+            val repository = fixture.repository(start = false)
+            fixture.authUpdates.value = 2L // Hilt construction precedes restoration of saved auth.
+            repository.start()
+            repository.refreshSavedAlbums()
+            fixture.awaitIdle(repository)
+            assertEquals(0, calls.get())
+            assertEquals(MetadataFetchEntity.FAILED, fixture.state(albumId)!!.status)
+        } finally { fixture.close() }
+    }
+
     @Test fun obsoleteAccountResponseIsDiscardedAndNewRequestFillsSavedAlbum() = runBlocking {
         val firstStarted = CompletableDeferred<Unit>()
         val secondStarted = CompletableDeferred<Unit>()
@@ -273,6 +341,7 @@ class AlbumMetadataRepositoryTest {
         val contextKey = AtomicReference("JP:test")
         val currentLocale = AtomicReference(YouTubeLocale(gl = "JP", hl = "ja"))
         val configuration = MutableStateFlow(currentLocale.get())
+        val authUpdates = MutableStateFlow(0L)
         private var job: Job? = null
 
         suspend fun repository(start: Boolean = true): AlbumMetadataRepository {
@@ -281,6 +350,7 @@ class AlbumMetadataRepositoryTest {
             return AlbumMetadataRepository(database, context, AlbumMetadataRepository.Runtime(
                 scope = CoroutineScope(newJob + Dispatchers.IO), now = now::get,
                 locale = currentLocale::get, configuration = configuration,
+                authRevision = { authUpdates.value }, authUpdates = authUpdates,
                 contextKey = { contextKey.get() }, fetch = fetch,
             )).also { if (start) it.start() }
         }

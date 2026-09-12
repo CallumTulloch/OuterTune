@@ -56,12 +56,12 @@ fun ByteArray.toHex(): String = joinToString(separator = "") { eachByte -> "%02x
 fun sha1(str: String): String = MessageDigest.getInstance("SHA-1").digest(str.toByteArray()).toHex()
 
 fun parseCookieString(cookie: String): Map<String, String> =
-    cookie.split("; ")
-        .filter { it.isNotEmpty() }
-        .associate {
-            val (key, value) = it.split("=")
-            key to value
-        }
+    cookie.split(';').mapNotNull { part ->
+        val separator = part.indexOf('=')
+        if (separator < 0) return@mapNotNull null
+        val key = part.substring(0, separator).trim().takeIf(String::isNotEmpty) ?: return@mapNotNull null
+        key to part.substring(separator + 1).trim()
+    }.toMap()
 
 fun String.parseTime(): Int? {
     try {

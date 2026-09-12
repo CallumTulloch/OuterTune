@@ -39,6 +39,7 @@ import com.dd3boh.outertune.playback.downloadManager.DownloadDirectoryManagerOt
 import com.dd3boh.outertune.playback.downloadManager.DownloadManagerOt
 import com.dd3boh.outertune.repositories.ArtistCreditRepository
 import com.dd3boh.outertune.utils.YTPlayerUtils
+import com.dd3boh.outertune.utils.withStablePlaybackSession
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.dlCoroutine
 import com.dd3boh.outertune.utils.enumPreference
@@ -112,7 +113,7 @@ class DownloadUtil @Inject constructor(
 
     private val connectivityManager = context.getSystemService<ConnectivityManager>()!!
     private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
-    private val songUrlCache = PlaybackUrlCache(SystemClock::elapsedRealtime)
+    private val songUrlCache = PlaybackUrlCache(SystemClock::elapsedRealtime, authRevision = { YouTube.authRevision })
     private val dataSourceFactory = createResolvingPlayerCacheDataSourceFactory(
         playerCache = playerCache,
         upstreamFactory = OkHttpDataSource.Factory(OkHttpClient.Builder().proxy(YouTube.proxy).build()),
@@ -293,7 +294,13 @@ class DownloadUtil @Inject constructor(
         }
     }
 
-    private fun resolvePlaybackData(mediaId: String): YTPlayerUtils.PlaybackData {
+    private fun resolvePlaybackData(mediaId: String): YTPlayerUtils.PlaybackData = runBlocking(Dispatchers.IO) {
+        withStablePlaybackSession({ YouTube.authRevision }) {
+            resolvePlaybackDataForSession(mediaId)
+        }
+    }
+
+    private fun resolvePlaybackDataForSession(mediaId: String): YTPlayerUtils.PlaybackData {
         val playbackData = runBlocking(Dispatchers.IO) {
             val hasExistingBytes = playerCache.getCachedSpans(mediaId).isNotEmpty()
                 || downloadCache.getCachedSpans(mediaId).isNotEmpty()
@@ -326,7 +333,7 @@ class DownloadUtil @Inject constructor(
 
         // Keep the signed stream URL unchanged. Media3 sends byte ranges through the
         // HTTP Range header; appending query parameters can invalidate the CDN request.
-        songUrlCache.put(mediaId, playbackData.streamUrl, playbackData.streamExpiresInSeconds)
+        songUrlCache.put(mediaId, playbackData.streamUrl, playbackData.streamExpiresInSeconds, playbackData.authRevision)
         return playbackData
     }
 

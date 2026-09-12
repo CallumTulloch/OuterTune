@@ -32,6 +32,7 @@ import com.dd3boh.outertune.models.artistCreditFromJson
 import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.ArtistCredit
 import com.zionhuang.innertube.models.ArtistCreditStatus
+import com.zionhuang.innertube.models.isEmptyByline
 import com.zionhuang.innertube.models.merge
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -464,6 +465,7 @@ interface AlbumsDao : ArtistCreditDao {
 
     @Transaction
     fun applyAlbumArtistCredit(albumId: String, credit: ArtistCredit) {
+        if (credit.isEmptyByline()) return
         val album = albumById(albumId)?.takeUnless { it.isLocal } ?: return
         val previous = album.artistCredit
         val accepted = ArtistIdentity.withStableRefs("album:$albumId", previous?.merge(credit) ?: credit, previous)
@@ -517,8 +519,11 @@ interface AlbumsDao : ArtistCreditDao {
             return
         }
         val stored = albumById(album.id)
-        updateAlbumEntity(album.copy(artistCreditJson = stored?.artistCreditJson ?: album.artistCreditJson))
-        artistCreditFromJson(album.artistCreditJson)?.let { applyAlbumArtistCredit(album.id, it) }
+        val incoming = artistCreditFromJson(album.artistCreditJson)
+        val storedJson = if (stored != null && incoming?.isEmptyByline() == true) stored.artistCreditJson
+            else stored?.artistCreditJson ?: album.artistCreditJson
+        updateAlbumEntity(album.copy(artistCreditJson = storedJson))
+        incoming?.let { applyAlbumArtistCredit(album.id, it) }
     }
 
     @Upsert

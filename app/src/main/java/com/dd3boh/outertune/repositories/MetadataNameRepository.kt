@@ -38,13 +38,17 @@ class MetadataNameRepository internal constructor(
 ) {
     @Inject
     constructor(database: MusicDatabase, @ApplicationContext context: Context, albums: AlbumMetadataRepository) : this(
-        database, context, Runtime(acceptAlbumHeader = { album, locale, contextKey -> albums.acceptHeader(album, locale, contextKey); Unit }),
+        database, context, Runtime(acceptAlbumHeader = { album, locale, contextKey, revision ->
+            albums.acceptHeader(album, locale, contextKey, revision); Unit
+        }),
     )
 
     internal class Runtime(
         val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
         val locale: () -> YouTubeLocale = { YouTube.locale },
         val localeUpdates: Flow<YouTubeLocale> = YouTube.localeUpdates,
+        val authRevision: () -> Long = { YouTube.authRevision },
+        val authUpdates: Flow<Long> = YouTube.authUpdates,
         val preferences: Flow<Preferences>? = null,
         val observeMetadata: ((List<YTItem>, YouTubeLocale, String) -> Unit) -> Unit = { YouTube.metadataObserver = it },
         val publishNames: (Map<OriginalNameTarget, String>, Map<OriginalNameTarget, List<String>>) -> Unit = MetadataNames::publish,
@@ -68,7 +72,7 @@ class MetadataNameRepository internal constructor(
         val main: suspend (String, YouTubeLocale) -> Result<ArtTrackOriginalMetadata> = { id, locale ->
             YouTube.artTrackOriginalMetadata(id, locale)
         },
-        val acceptAlbumHeader: suspend (AlbumItem, YouTubeLocale, String) -> Unit = { _, _, _ -> },
+        val acceptAlbumHeader: suspend (AlbumItem, YouTubeLocale, String, Long) -> Unit = { _, _, _, _ -> },
         val assessOriginals: suspend (List<ArtTrackOriginalName>, Long) -> List<OriginalNameAssessment> = OriginalAlbumLanguageResolver()::assess,
     )
 
@@ -82,30 +86,36 @@ class MetadataNameRepository internal constructor(
     private val originalEvaluations = Channel<List<MetadataNameEntity>>(Channel.CONFLATED)
     private val englishSongs = ConcurrentHashMap<String, SongItem>()
     private val currentLocale: YouTubeLocale get() = runtime.locale()
+    private var initialAuthRevision = 0L
     private var started = false
+    internal val pendingRequestCount: Int get() = scheduled.size
 
-    private data class Packet(val items: List<YTItem>, val locale: YouTubeLocale, val source: String, val contextKey: String)
+    private data class Packet(val items: List<YTItem>, val locale: YouTubeLocale, val source: String,
+        val contextKey: String, val authRevision: Long)
     private data class Settings(val locale: YouTubeLocale, val preferOriginal: Boolean)
 
     @Synchronized
     fun start() {
         if (started) return
         started = true
+        initialAuthRevision = runtime.authRevision()
         runtime.observeMetadata { items, locale, source ->
-            packets.trySend(Packet(items.toList(), locale, source, runtime.contextKey(locale)))
+            packets.trySend(Packet(items.toList(), locale, source, runtime.contextKey(locale), runtime.authRevision()))
             Unit
         }
         scope.launch {
             for (packet in packets) keepCollectorRunning {
                 // The observer's callback may wait in the packet queue across a setting/account change.
-                if (packet.locale.gl != currentLocale.gl || packet.contextKey != runtime.contextKey(currentLocale)) {
+                if (packet.locale.gl != currentLocale.gl || packet.contextKey != runtime.contextKey(currentLocale) ||
+                    packet.authRevision != runtime.authRevision()) {
                     packet.items.forEach { scheduleItem(it) }
                     return@keepCollectorRunning
                 }
                 val names = metadataNameCandidates(packet.items, packet.locale.hl, packet.source)
                 var saved = false
                 database.awaitTransaction {
-                    if (packet.locale.gl == currentLocale.gl && packet.contextKey == runtime.contextKey(currentLocale)) {
+                    if (packet.locale.gl == currentLocale.gl && packet.contextKey == runtime.contextKey(currentLocale) &&
+                        packet.authRevision == runtime.authRevision()) {
                         recordMetadataNames(names)
                         saved = true
                     }
@@ -133,7 +143,7 @@ class MetadataNameRepository internal constructor(
         val settings = combine(runtime.localeUpdates, preferences.map { it[PreferEnglishOriginalKey] ?: false }
             .distinctUntilChanged()) { locale, preferOriginal -> Settings(locale, preferOriginal) }
         scope.launch {
-            metadataRequestConfiguration(runtime.localeUpdates, preferences).collect {
+            metadataRequestConfiguration(runtime.localeUpdates, preferences, runtime.authUpdates).collect {
                 keepCollectorRunning { refreshTargets() }
             }
         }
@@ -199,7 +209,7 @@ class MetadataNameRepository internal constructor(
         }
     }
 
-    private suspend fun refreshTargets() {
+    internal suspend fun refreshTargets() {
         (database.allMetadataTargets() + database.metadataLibraryTargets().first()).distinct()
             .forEach { schedule(OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId)) }
     }
@@ -216,14 +226,16 @@ class MetadataNameRepository internal constructor(
     private fun schedule(target: OriginalNameTarget) {
         if (target.id.isBlank()) return
         val locale = currentLocale
+        val revision = runtime.authRevision()
         val contextKey = runtime.contextKey(locale)
         for (language in listOf("en", locale.hl).distinct()) {
-            enqueue(MetadataFetchRequest(target, locale.copy(hl = language), contextKey))
+            enqueue(MetadataFetchRequest(target, locale.copy(hl = language), contextKey, authRevision = revision))
         }
         // Queue persistence creates album stubs for every search result in the queue. Expand only
         // albums explicitly saved/bookmarked/downloaded, not every unplayed queued album.
         if (target.kind == OriginalNameKind.ALBUM && database.isAlbumOriginalContextEligible(target.id)) {
-            enqueue(MetadataFetchRequest(target, locale.copy(hl = "en"), albumOriginalContextKey(contextKey), original = true))
+            enqueue(MetadataFetchRequest(target, locale.copy(hl = "en"), albumOriginalContextKey(contextKey),
+                original = true, authRevision = revision))
         }
         if (target.kind == OriginalNameKind.SONG && (target in knownArtTracks ||
                 database.metadataFetchStates(target.kind.name, target.id).any {
@@ -237,7 +249,8 @@ class MetadataNameRepository internal constructor(
     private fun scheduleOriginal(target: OriginalNameTarget) {
         if (target !in knownArtTracks) return
         val locale = currentLocale.copy(hl = "en")
-        enqueue(MetadataFetchRequest(target, locale, originalMetadataContextKey(locale), original = true))
+        enqueue(MetadataFetchRequest(target, locale, originalMetadataContextKey(locale),
+            original = true, authRevision = runtime.authRevision()))
     }
 
     private fun enqueue(request: MetadataFetchRequest) {
@@ -247,7 +260,7 @@ class MetadataNameRepository internal constructor(
 
     private fun isCurrent(request: MetadataFetchRequest): Boolean {
         val locale = currentLocale
-        return isMetadataFetchCurrent(request, locale, runtime.contextKey(locale))
+        return isMetadataFetchCurrent(request, locale, runtime.contextKey(locale), runtime.authRevision())
     }
 
     private fun requeueIfObsolete(request: MetadataFetchRequest): Boolean {
@@ -259,7 +272,10 @@ class MetadataNameRepository internal constructor(
     private fun due(request: MetadataFetchRequest): Boolean {
         if (requeueIfObsolete(request)) return false
         val previous = database.metadataFetch(request.target.kind.name, request.target.id, request.storedLanguage, request.contextKey)
-        val expires = previous?.let { it.updatedAt + metadataRetryDelay(it.status) } ?: 0L
+        // Successful names remain useful across sessions. A fresh login can retry a failure or
+        // empty response from the earlier session, while a normal process restart keeps its TTL.
+        val expires = previous?.takeIf { request.authRevision == initialAuthRevision || it.status == MetadataFetchEntity.SUCCESS }
+            ?.let { it.updatedAt + metadataRetryDelay(it.status) } ?: 0L
         if (expires > runtime.now()) {
             nextAttempt[request] = expires
             return false
@@ -322,7 +338,7 @@ class MetadataNameRepository internal constructor(
         }
         if (!saved) { schedule(request.target); return }
         if (item is AlbumItem && request.locale.hl == currentLocale.hl) {
-            runtime.acceptAlbumHeader(item, request.locale, request.contextKey)
+            runtime.acceptAlbumHeader(item, request.locale, request.contextKey, request.authRevision)
         }
         nextAttempt[request] = now + metadataRetryDelay(status)
         // Embedded names also need both locales and their own authoritative header. A detail
@@ -332,7 +348,7 @@ class MetadataNameRepository internal constructor(
             .distinct().forEach(::schedule)
         if (isArtTrack && request.locale.hl == "en") {
             if (englishSongs.size > 1024) englishSongs.clear()
-            englishSongs[runtime.contextKey(request.locale) + ":" + request.target.id] = song!!
+            englishSongs["${request.authRevision}:${request.contextKey}:${request.target.id}"] = song!!
             knownArtTracks.add(request.target)
             scheduleOriginal(request.target)
         }
@@ -360,7 +376,7 @@ class MetadataNameRepository internal constructor(
     private suspend fun captureOriginalTitle(request: MetadataFetchRequest) {
         if (requeueIfObsolete(request)) return
         val musicContext = runtime.contextKey(request.locale)
-        val englishSong = englishSongs[musicContext + ":" + request.target.id]
+        val englishSong = englishSongs["${request.authRevision}:$musicContext:${request.target.id}"]
             ?: runtime.queue(listOf(request.target.id), request.locale).getOrThrow().singleOrNull { it.id == request.target.id }
             ?: error("Missing exact Art Track identity")
         val original = runtime.main(request.target.id, request.locale).getOrThrow()
@@ -418,7 +434,7 @@ internal fun selectMetadataDisplayName(
     assessments: List<OriginalNameAssessment> = emptyList(),
 ): String? {
     val sorted = candidates.filter { it.kind == target.kind.name && it.targetId == target.id && it.name.isNotBlank() }
-        .sortedWith(compareByDescending<MetadataNameEntity> { it.sourcePriority }
+        .sortedWith(compareByDescending<MetadataNameEntity> { metadataNameSourcePriority(it.source, it.sourcePriority) }
             .thenByDescending { it.observedAt }.thenBy { it.name }.thenBy { it.source })
     sorted.firstOrNull { it.source == "manual" }?.let { return it.name }
     val selection = OriginalNamePolicy.select(target,
@@ -432,30 +448,40 @@ internal fun selectMetadataDisplayName(
     return selection.name.takeUnless { selection.reason == OriginalNameSelectionReason.AVAILABLE_NAME_FALLBACK }
 }
 
+/** List/card observations cannot outrank a dedicated detail fetch, including rows cached by older builds. */
+private fun metadataNameSourcePriority(source: String, observedPriority: Int): Int = when {
+    source == "detail" || source == "manual" || source.startsWith(ORIGINAL_NAME_SOURCE_PREFIX) -> observedPriority
+    else -> observedPriority.coerceAtMost(50)
+}
+
 internal data class MetadataFetchRequest(
     val target: OriginalNameTarget,
     val locale: YouTubeLocale,
     val contextKey: String,
     val original: Boolean = false,
+    val authRevision: Long = 0,
 ) {
     val storedLanguage: String get() = if (original) "und" else locale.hl
     fun state(status: String, now: Long) = MetadataFetchEntity(target.kind.name, target.id, storedLanguage, status, now, contextKey)
 }
 
-internal fun youtubeMetadataContextKey(locale: YouTubeLocale): String = metadataFetchContextKey(
-    locale, YouTube.useLoginForBrowse, YouTube.cookie, YouTube.dataSyncId,
-)
+internal fun youtubeMetadataContextKey(locale: YouTubeLocale): String = YouTube.authentication.let { authentication ->
+    metadataFetchContextKey(locale, authentication.useLoginForBrowse, authentication.cookie,
+        authentication.dataSyncId, authentication.visitorData)
+}
 
-internal fun metadataFetchContextKey(locale: YouTubeLocale, useLogin: Boolean, cookie: String?, dataSyncId: String?): String {
+internal fun metadataFetchContextKey(locale: YouTubeLocale, useLogin: Boolean, cookie: String?, dataSyncId: String?,
+    visitorData: String? = null): String {
     val auth = MessageDigest.getInstance("SHA-256")
-        .digest("$useLogin:${cookie.orEmpty().length}:${cookie.orEmpty()}:${dataSyncId.orEmpty().length}:${dataSyncId.orEmpty()}".toByteArray())
+        .digest("$useLogin:${cookie.orEmpty().length}:${cookie.orEmpty()}:${dataSyncId.orEmpty().length}:${dataSyncId.orEmpty()}:${visitorData.orEmpty().length}:${visitorData.orEmpty()}".toByteArray())
         .joinToString("") { "%02x".format(it) }
     // Re-fetch authoritative names after correcting the old priority/timestamp merge policy.
     return "${locale.gl}:$auth:names-v2"
 }
 
-internal fun isMetadataFetchCurrent(request: MetadataFetchRequest, locale: YouTubeLocale, contextKey: String): Boolean =
-    request.locale.gl == locale.gl && if (request.original) {
+internal fun isMetadataFetchCurrent(request: MetadataFetchRequest, locale: YouTubeLocale, contextKey: String,
+    authRevision: Long = 0): Boolean =
+    request.authRevision == authRevision && request.locale.gl == locale.gl && if (request.original) {
         request.contextKey == if (request.target.kind == OriginalNameKind.ALBUM) {
             albumOriginalContextKey(contextKey)
         } else {
@@ -506,7 +532,7 @@ internal fun originalInputKey(rows: List<MetadataNameEntity>): List<Pair<ArtTrac
 
 internal fun groupMetadataFetchRequests(requests: List<MetadataFetchRequest>, maxSongBatchSize: Int = 50): List<List<MetadataFetchRequest>> {
     require(maxSongBatchSize in 1..YouTube.MAX_GET_QUEUE_SIZE)
-    return requests.distinct().groupBy { Triple(it.locale, it.contextKey, it.original to it.target.kind) }
+    return requests.distinct().groupBy { Triple(it.locale, it.contextKey to it.authRevision, it.original to it.target.kind) }
         .values.flatMap { group ->
             group.chunked(if (!group.first().original && group.first().target.kind == OriginalNameKind.SONG) maxSongBatchSize else 1)
         }
@@ -559,7 +585,7 @@ internal fun metadataNameCandidates(items: List<YTItem>, language: String, sourc
     observedAt: Long = System.currentTimeMillis()): List<MetadataNameEntity> = buildList {
     fun name(kind: OriginalNameKind, id: String?, text: String, priority: Int) {
         if (!id.isNullOrBlank() && text.isNotBlank()) add(MetadataNameEntity(kind.name, id, language,
-            text, source, priority, observedAt))
+            text, source, metadataNameSourcePriority(source, priority), observedAt))
     }
     fun artists(artists: List<Artist>, priority: Int) = artists.forEach {
         name(OriginalNameKind.ARTIST, ArtistIdentity.onlineId(it.id), it.name, priority)

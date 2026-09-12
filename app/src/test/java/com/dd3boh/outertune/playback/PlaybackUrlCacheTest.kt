@@ -8,6 +8,19 @@ import org.junit.Test
 
 class PlaybackUrlCacheTest {
     @Test
+    fun `logout and same account login invalidate urls and cannot accept late old responses`() {
+        var revision = 1L
+        val cache = PlaybackUrlCache({ 0L }, authRevision = { revision })
+        cache.put("song", "account-a-old", 600)
+        revision++ // logout, even if no cache lookup happens here
+        revision++ // the same account logs in again
+        assertNull(cache["song"])
+        cache.put("song", "account-a-new", 600, requestAuthRevision = revision)
+        cache.put("song", "late-account-a-old", 600, requestAuthRevision = 1L)
+        assertEquals("account-a-new", cache["song"])
+    }
+
+    @Test
     fun `rejected url is unavailable on manual retry while other songs survive`() {
         val cache = PlaybackUrlCache({ 0L })
         cache.put("failed", "expired-signature", 600)
