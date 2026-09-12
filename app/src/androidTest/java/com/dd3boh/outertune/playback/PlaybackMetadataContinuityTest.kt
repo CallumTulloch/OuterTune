@@ -16,6 +16,12 @@ import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.test.platform.app.InstrumentationRegistry
+import com.dd3boh.outertune.extensions.metadata
+import com.dd3boh.outertune.extensions.toMediaItem
+import com.dd3boh.outertune.models.withArtistCredit
+import com.zionhuang.innertube.models.Artist
+import com.zionhuang.innertube.models.ArtistCredit
+import com.zionhuang.innertube.models.ArtistCreditStatus
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -30,6 +36,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.dd3boh.outertune.models.MediaMetadata as TrackMetadata
 
 /** Real extractor, decoder and player; only the remote audio bytes are replaced by a local fixture. */
 class PlaybackMetadataContinuityTest {
@@ -41,11 +48,22 @@ class PlaybackMetadataContinuityTest {
         val downloadCache = SimpleCache(File(directory, "download"), NoOpCacheEvictor())
         val playerCache = SimpleCache(File(directory, "player"), NoOpCacheEvictor())
         val mediaId = "abcdefghijk"
+        val emptyCredit = ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "queue", "ja",
+            evidence = listOf("video-source:MUSIC_VIDEO_TYPE_OMV"))
+        val originalMetadata = TrackMetadata(mediaId, "日本語の曲名", emptyList(), 12,
+            genre = null, artistCredit = emptyCredit)
+        val artistId = "UC-continuity-kanata"
+        val resolvedMetadata = originalMetadata.withArtistCredit(emptyCredit.copy(
+            rawText = "天音かなた",
+            artists = listOf(Artist("天音かなた", artistId, artistId)),
+            status = ArtistCreditStatus.COMPLETE,
+        ))
         val originalUri = Uri.parse(mediaId)
         val signedUri = Uri.parse("https://stream.example.test/continuity.wav?signature=fresh")
         val audio = silentWav()
         val resolutions = CopyOnWriteArrayList<DataSpec>()
         val errors = CopyOnWriteArrayList<PlaybackException>()
+        val discontinuities = CopyOnWriteArrayList<Int>()
         var player: ExoPlayer? = null
         try {
             val prefixLength = 4096L
@@ -80,10 +98,17 @@ class PlaybackMetadataContinuityTest {
                         value.volume = 0f
                         value.addListener(object : Player.Listener {
                             override fun onPlayerError(error: PlaybackException) { errors += error }
+                            override fun onPositionDiscontinuity(
+                                oldPosition: Player.PositionInfo,
+                                newPosition: Player.PositionInfo,
+                                reason: Int,
+                            ) { discontinuities += reason }
                         })
                         value.setMediaItem(MediaItem.Builder().setMediaId(mediaId).setUri(originalUri)
                             .setCustomCacheKey(mediaId).setMimeType(MimeTypes.AUDIO_WAV)
-                            .setMediaMetadata(MediaMetadata.Builder().setTitle("日本語の曲名").build()).build())
+                            .setTag(originalMetadata)
+                            .setMediaMetadata(MediaMetadata.Builder().setTitle("日本語の曲名")
+                                .setArtist("アーティスト不明").build()).build())
                         value.prepare()
                         value.play()
                     }
@@ -102,6 +127,39 @@ class PlaybackMetadataContinuityTest {
             awaitPosition(250)
             assertTrue("The player never reached the hole after its downloaded prefix", resolutions.isNotEmpty())
             assertEquals(prefixLength, resolutions.first().position)
+            val discontinuitiesBeforeUpdates = discontinuities.size
+            val beforeArtistRepair = withContext(Dispatchers.Main) {
+                val position = activePlayer.currentPosition
+                val item = activePlayer.currentMediaItem!!
+                assertEquals("アーティスト不明", item.mediaMetadata.artist.toString())
+                assertEquals(emptyCredit, item.metadata!!.artistCredit)
+                assertTrue(item.metadata!!.artists.isEmpty())
+                // Same operation as MusicService's ArtistCreditRepository update subscription:
+                // update both the app's tag and Media3's display while keeping this audio source.
+                activePlayer.replaceMediaItem(activePlayer.currentMediaItemIndex,
+                    item.buildUpon().setTag(resolvedMetadata)
+                        .setMediaMetadata(resolvedMetadata.toMediaItem().mediaMetadata).build())
+                assertTrue(activePlayer.playWhenReady)
+                assertTrue("Artist repair reset the playback position", activePlayer.currentPosition >= position)
+                position
+            }
+            awaitPosition(beforeArtistRepair + 250)
+            withContext(Dispatchers.Main) {
+                val item = activePlayer.currentMediaItem!!
+                assertEquals("天音かなた", item.mediaMetadata.artist.toString())
+                assertEquals("天音かなた", item.mediaMetadata.subtitle.toString())
+                assertEquals(resolvedMetadata, item.metadata)
+                assertEquals(mediaId, item.metadata!!.id)
+                assertEquals(artistId, item.metadata!!.artists.single().id)
+                assertEquals(artistId, item.metadata!!.artists.single().onlineId)
+                assertEquals(mediaId, item.mediaId)
+                assertEquals(originalUri, item.localConfiguration!!.uri)
+                assertEquals(mediaId, item.localConfiguration!!.customCacheKey)
+                assertTrue(activePlayer.isPlaying)
+                assertNull(activePlayer.playerError)
+            }
+            assertEquals("Artist repair caused a position discontinuity",
+                discontinuitiesBeforeUpdates, discontinuities.size)
             for (title in listOf("Original English Title", "日本語の曲名")) {
                 val before = withContext(Dispatchers.Main) {
                     val position = activePlayer.currentPosition
@@ -110,18 +168,23 @@ class PlaybackMetadataContinuityTest {
                     activePlayer.replaceMediaItem(activePlayer.currentMediaItemIndex,
                         item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setTitle(title).build()).build())
                     assertTrue(activePlayer.playWhenReady)
+                    assertTrue("Title update reset the playback position", activePlayer.currentPosition >= position)
                     position
                 }
                 awaitPosition(before + 250)
                 withContext(Dispatchers.Main) {
                     val item = activePlayer.currentMediaItem!!
                     assertEquals(title, item.mediaMetadata.title.toString())
+                    assertEquals("天音かなた", item.mediaMetadata.artist.toString())
+                    assertEquals(resolvedMetadata, item.metadata)
                     assertEquals(mediaId, item.mediaId)
                     assertEquals(originalUri, item.localConfiguration!!.uri)
                     assertEquals(mediaId, item.localConfiguration!!.customCacheKey)
                     assertNull(activePlayer.playerError)
                 }
             }
+            assertEquals("Metadata updates caused a position discontinuity",
+                discontinuitiesBeforeUpdates, discontinuities.size)
 
             // Stereo PCM at 48kHz occupies 192,000 bytes/sec; 8 seconds is beyond 512KiB.
             withContext(Dispatchers.Main) { activePlayer.seekTo(8_000) }
@@ -129,6 +192,8 @@ class PlaybackMetadataContinuityTest {
             withContext(Dispatchers.Main) {
                 assertTrue(activePlayer.isPlaying)
                 assertEquals(mediaId, activePlayer.currentMediaItem!!.mediaId)
+                assertEquals("天音かなた", activePlayer.currentMediaItem!!.mediaMetadata.artist.toString())
+                assertEquals(resolvedMetadata, activePlayer.currentMediaItem!!.metadata)
                 assertNull(activePlayer.playerError)
             }
             assertTrue(errors.isEmpty())

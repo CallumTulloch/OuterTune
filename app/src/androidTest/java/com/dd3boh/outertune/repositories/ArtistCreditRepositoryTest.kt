@@ -14,8 +14,10 @@ import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.ArtistCredit
 import com.zionhuang.innertube.models.ArtistCreditResolution
 import com.zionhuang.innertube.models.Album
+import com.zionhuang.innertube.models.AlbumItem
 import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.pages.AlbumPage
 import java.util.UUID
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
@@ -298,6 +300,99 @@ class ArtistCreditRepositoryTest {
             assertEquals(1, calls.get())
             assertEquals(stored, restored.withCredit(source).artistCredit)
             assertEquals(stored.artists.map { it.id }, restored.withCredit(source).artists.map { it.onlineId })
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun emptyAlbumVideoBylineResolvesTrackPeopleAndKeepsThemAfterRepositoryRestart() = runBlocking {
+        val album = Album("Repository video album", "MPRE-repository-video-album")
+        val emptyVideo = ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "AlbumPage", "ja",
+            listOf("literal-byline:AlbumPage", "video-source:MUSIC_VIDEO_TYPE_OMV"))
+        val track = song(emptyVideo).copy(album = album)
+        val headerCredit = ArtistCredit("アルバムのアーティスト",
+            listOf(Artist("アルバムのアーティスト", "UC-repository-album-header")),
+            ArtistCreditStatus.COMPLETE, "album-header", "ja")
+        val trackCredit = ArtistCredit("曲のアーティスト",
+            listOf(Artist("曲のアーティスト", "UC-repository-video-performer")),
+            ArtistCreditStatus.COMPLETE, "queue-song", "ja", listOf("structured-byline:queue-song"))
+        val calls = AtomicInteger()
+        val requested = AtomicReference<SongItem>()
+        val fixture = Fixture(album) { item ->
+            calls.incrementAndGet()
+            requested.set(item)
+            Result.success(trackCredit)
+        }
+        try {
+            // Reproduce the reported DB shape through the real album import: a complete header
+            // does not establish the performers of an individual row whose byline is absent.
+            fixture.database.insert(AlbumPage(
+                album = AlbumItem(browseId = album.id, playlistId = null, title = album.name,
+                    artists = headerCredit.artists, thumbnail = track.thumbnail, artistCredit = headerCredit),
+                songs = listOf(track), otherVersions = emptyList(),
+            ))
+            val savedAlbum = fixture.database.albumById(album.id)!!
+            val albumArtistIds = fixture.database.albumArtistIdsForAlbum(album.id)
+            val initial = fixture.database.song(videoId).first()!!
+            assertEquals(emptyVideo, initial.artistCredit)
+            assertTrue(initial.artists.isEmpty())
+            assertEquals(listOf("UC-repository-album-header"), albumArtistIds)
+            assertEquals(ArtistCreditStatus.COMPLETE, savedAlbum.artistCredit!!.status)
+
+            val repository = fixture.repository()
+            repository.request(initial.toMediaMetadata(), priority = true)
+            fixture.awaitIdle()
+            assertEquals("An empty OMV byline must reach individual track resolution", 1, calls.get())
+            assertEquals(videoId, requested.get().id)
+            assertEquals(album, requested.get().album)
+            assertEquals(emptyVideo, requested.get().artistCredit)
+
+            val repaired = fixture.database.song(videoId).first()!!
+            val stored = repaired.artistCredit!!
+            val artistIds = fixture.database.artistIdsForSong(videoId)
+            assertEquals(ArtistCreditStatus.COMPLETE, stored.status)
+            assertEquals("ja", stored.language)
+            assertEquals(trackCredit.artists.map { it.name to it.id }, stored.artists.map { it.name to it.id })
+            assertEquals(stored.artists.map { it.ref }, artistIds)
+            assertEquals(trackCredit.artists.map { it.name to it.id }, repaired.artists.map { it.name to it.onlineArtistId })
+            assertEquals("曲のアーティスト", repository.withCredit(initial.toMediaMetadata()).artistDisplayText())
+            assertEquals(savedAlbum, fixture.database.albumById(album.id))
+            assertEquals(albumArtistIds, fixture.database.albumArtistIdsForAlbum(album.id))
+            assertNull(repaired.song.inLibrary)
+            assertFalse(repaired.song.liked)
+
+            // A different cache context forces the new repository to restore the saved DB credit.
+            fixture.session.set(Session("test:ja:video-reopened", "ja"))
+            val restored = fixture.repository()
+            val source = repaired.toMediaMetadata()
+            restored.request(source, priority = true)
+            fixture.awaitIdle()
+            restored.request(track, priority = true) // A later album row is still missing its byline.
+            fixture.awaitIdle()
+            assertEquals(1, calls.get())
+            assertEquals(stored, restored.withCredit(source).artistCredit)
+            assertEquals(trackCredit.artists.map { it.id }, restored.withCredit(source).artists.map { it.onlineId })
+            assertEquals(stored, fixture.database.artistCredit(videoId).first())
+            assertEquals(artistIds, fixture.database.artistIdsForSong(videoId))
+            assertEquals(savedAlbum, fixture.database.albumById(album.id))
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun nonemptyVideoBylineRemainsExcludedFromAutomaticPersonResolution() = runBlocking {
+        val literal = ArtistCredit("動画に記載された表記", emptyList(), ArtistCreditStatus.RAW, "PlaylistPage", "ja",
+            listOf("literal-byline:PlaylistPage", "video-source:MUSIC_VIDEO_TYPE_OMV"))
+        val calls = AtomicInteger()
+        val fixture = Fixture { calls.incrementAndGet(); Result.success(complete) }
+        try {
+            fixture.database.insert(song(literal).toMediaMetadata())
+            val repository = fixture.repository()
+            repository.request(song(literal), priority = true)
+            fixture.awaitIdle()
+
+            assertEquals(0, calls.get())
+            assertEquals(literal, fixture.database.artistCredit(videoId).first())
+            assertTrue(fixture.database.artistIdsForSong(videoId).isEmpty())
+            assertEquals(literal.rawText, repository.withCredit(song(literal).toMediaMetadata()).artistDisplayText())
         } finally { fixture.close() }
     }
 

@@ -9,6 +9,7 @@ import com.zionhuang.innertube.pages.SearchSummaryPage
 import com.zionhuang.innertube.pages.SearchPage
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -25,6 +26,25 @@ class ArtistCreditTest {
     private fun raw(text: String) = ArtistCredit(text, emptyList(), ArtistCreditStatus.RAW, "test", "ja")
     private fun candidates(vararg names: String) = names.map { Artist(it, null) }
     private val audioId = "UChWKQRswWTLRXp98zmgHtdQ"
+
+    // Models reconstructed from the public fields observed on 2026-09-12, not full response captures:
+    // Trigger's Last-resort album row has no byline and an OMV endpoint; its same-ID queue has this artist.
+    private fun emptyVideoAlbumSong() = SongItem(
+        id = "Ohf-kbf6cR4", title = "Last-resort", artists = emptyList(),
+        album = Album("Trigger", "MPREb_D37btAezO0h"), thumbnail = "cover",
+        endpoint = WatchEndpoint(videoId = "Ohf-kbf6cR4", watchEndpointMusicSupportedConfigs =
+            WatchEndpoint.WatchEndpointMusicSupportedConfigs(
+                WatchEndpoint.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig("MUSIC_VIDEO_TYPE_OMV"))),
+        artistCredit = ArtistCredit("", emptyList(), ArtistCreditStatus.RAW, "AlbumPage", "ja",
+            listOf("literal-byline:AlbumPage", "video-source:MUSIC_VIDEO_TYPE_OMV")),
+    )
+
+    private fun namedVideoQueueSong(): SongItem {
+        val artist = Artist("天音かなた", "UCPCiIrrrNJOKvi_5vr3G6PA")
+        return emptyVideoAlbumSong().copy(artists = listOf(artist), album = null,
+            artistCredit = ArtistCredit(artist.name, listOf(artist), ArtistCreditStatus.COMPLETE, "queue", "ja",
+                listOf("structured-byline:queue", "video-source:MUSIC_VIDEO_TYPE_OMV")))
+    }
 
     @Test fun `captured target starts as literal and credits establish two people with one page`() {
         val target = queue("target-queue.json")
@@ -223,6 +243,113 @@ class ArtistCreditTest {
                 WatchEndpoint.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig("MUSIC_VIDEO_TYPE_OMV")))))
         assertTrue(NextPage.fromPlaylistPanelVideoRenderer(video)!!.artistCredit!!.evidence.contains("video-source:MUSIC_VIDEO_TYPE_OMV"))
         assertFalse(queue("target-queue.json").artistCredit!!.evidence.any { it.startsWith("video-source:") })
+    }
+
+    @Test fun `empty video album byline is recovered from its own queue without artist inference`() = runBlocking {
+        val source = emptyVideoAlbumSong()
+        val queued = namedVideoQueueSong()
+        var queueCalls = 0
+        var browseCalls = 0
+        val response = YouTube.resolveTrackArtistCredit(source,
+            getQueue = { queueCalls++; listOf(queued) },
+            browse = { browseCalls++; error("Video recovery must not browse artist pages or performer credits") }).getOrThrow()
+        assertEquals(1, queueCalls)
+        assertEquals(0, browseCalls)
+        assertEquals("天音かなた", response.credit.rawText)
+        assertEquals(queued.artists, response.credit.artists)
+        assertEquals(ArtistCreditStatus.COMPLETE, response.credit.status)
+        assertEquals(source.album, response.album)
+        assertTrue("video-source:MUSIC_VIDEO_TYPE_OMV" in response.credit.evidence)
+    }
+
+    @Test fun `endpoint only video source can recover a literal byline but cannot trigger deeper resolution`() = runBlocking {
+        for (type in listOf("MUSIC_VIDEO_TYPE_OMV", "MUSIC_VIDEO_TYPE_UGC")) {
+            val original = emptyVideoAlbumSong()
+            val source = original.copy(artistCredit = original.artistCredit!!.copy(evidence = emptyList()),
+                endpoint = original.endpoint!!.copy(watchEndpointMusicSupportedConfigs =
+                    WatchEndpoint.WatchEndpointMusicSupportedConfigs(
+                        WatchEndpoint.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig(type))))
+            // A later audio response must not turn this video repair into performer-name inference.
+            val queued = source.copy(artistCredit = raw("A、B"), endpoint = source.endpoint!!.copy(
+                watchEndpointMusicSupportedConfigs = WatchEndpoint.WatchEndpointMusicSupportedConfigs(
+                    WatchEndpoint.WatchEndpointMusicSupportedConfigs.WatchEndpointMusicConfig("MUSIC_VIDEO_TYPE_ATV"))),
+                artistBrowseIds = listOf(audioId))
+            var queueCalls = 0
+            var browseCalls = 0
+            val response = YouTube.resolveTrackArtistCredit(source,
+                getQueue = { queueCalls++; listOf(queued) },
+                browse = { browseCalls++; error("An unlinked video byline must stay literal") }).getOrThrow()
+            assertEquals(1, queueCalls)
+            assertEquals(0, browseCalls)
+            assertEquals("A、B", response.credit.rawText)
+            assertEquals(ArtistCreditStatus.RAW, response.credit.status)
+            assertTrue(response.credit.artists.isEmpty())
+            assertTrue("video-source:$type" in response.credit.evidence)
+        }
+    }
+
+    @Test fun `empty or unrelated or ambiguous video queue responses never supply names or browse candidates`() = runBlocking {
+        val source = emptyVideoAlbumSong()
+        val named = namedVideoQueueSong()
+        for (items in listOf(emptyList(), listOf(named.copy(id = "unrelated")), listOf(named, named), listOf(source))) {
+            var queueCalls = 0
+            var browseCalls = 0
+            val response = YouTube.resolveTrackArtistCredit(source,
+                getQueue = { queueCalls++; items },
+                browse = { browseCalls++; error("An unusable video queue must not trigger inference") }).getOrThrow()
+            assertEquals(1, queueCalls)
+            assertEquals(0, browseCalls)
+            assertEquals(source.artistCredit, response.credit)
+            assertEquals(source.album, response.album)
+        }
+    }
+
+    @Test fun `empty video queue transport failure remains a failure instead of a completed empty credit`() = runBlocking {
+        val failure = java.io.IOException("queue unavailable")
+        var queueCalls = 0
+        var browseCalls = 0
+        val response = YouTube.resolveTrackArtistCredit(emptyVideoAlbumSong(),
+            getQueue = { queueCalls++; throw failure },
+            browse = { browseCalls++; error("A failed video queue must not trigger inference") })
+        assertEquals(1, queueCalls)
+        assertEquals(0, browseCalls)
+        assertSame(failure, response.exceptionOrNull())
+    }
+
+    @Test fun `empty video queue cancellation is propagated`() = runBlocking {
+        val cancellation = CancellationException("request context changed")
+        var queueCalls = 0
+        var caught: CancellationException? = null
+        try {
+            YouTube.resolveTrackArtistCredit(emptyVideoAlbumSong(),
+                getQueue = { queueCalls++; throw cancellation },
+                browse = { error("A cancelled video queue must not trigger inference") })
+        } catch (error: CancellationException) {
+            caught = error
+        }
+        assertEquals(1, queueCalls)
+        assertSame(cancellation, caught)
+    }
+
+    @Test fun `video repair preserves existing literal adopted and conflicting credits without requests`() = runBlocking {
+        val original = emptyVideoAlbumSong()
+        val credits = listOf(original.artistCredit!!.copy(rawText = "Original uploader"),
+            namedVideoQueueSong().artistCredit!!.copy(rawText = ""),
+            original.artistCredit!!.copy(status = ArtistCreditStatus.CONFLICT))
+        for (credit in credits) {
+            for (evidence in listOf(credit.evidence, emptyList())) {
+                val source = original.copy(artistCredit = credit.copy(evidence = evidence))
+                var queueCalls = 0
+                var browseCalls = 0
+                val response = YouTube.resolveTrackArtistCredit(source,
+                    getQueue = { queueCalls++; error("An existing video byline must not be replaced") },
+                    browse = { browseCalls++; error("Video recovery must not infer people") }).getOrThrow()
+                assertEquals(0, queueCalls)
+                assertEquals(0, browseCalls)
+                assertEquals(source.artistCredit, response.credit)
+                assertEquals(source.album, response.album)
+            }
+        }
     }
 
     @Test fun `overlapping credit candidates have a bounded search and preserve partial identities`() {

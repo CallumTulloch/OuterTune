@@ -6,6 +6,7 @@ import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.ArtistCredit
 import com.zionhuang.innertube.models.ArtistCreditResolution
 import com.zionhuang.innertube.models.ArtistCreditStatus
+import com.zionhuang.innertube.models.isEmptyByline
 import com.zionhuang.innertube.models.merge
 import com.zionhuang.innertube.models.Run
 import com.zionhuang.innertube.models.toArtistCredit
@@ -987,17 +988,23 @@ object YouTube {
                 "song", requestLocale.hl))
             var album = song.album
             fun result() = Result.success(ArtistCreditResolution(credit, album))
-            if (credit.evidence.any { it.startsWith("video-source:") } ||
+            val knownType = song.endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType
+            val videoSource = credit.evidence.any { it.startsWith("video-source:") } ||
+                (knownType != null && knownType != MUSIC_VIDEO_TYPE_ATV)
+            if ((videoSource && !credit.isEmptyByline()) ||
                 (album != null && (credit.status == ArtistCreditStatus.CONFLICT ||
                     (credit.status == ArtistCreditStatus.COMPLETE && credit.artists.all { it.id != null }))))
                 return result()
-            val knownType = song.endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType
-            if (knownType != null && knownType != MUSIC_VIDEO_TYPE_ATV) return result()
+            // An album row can omit a video's entire byline while its own queue supplies it.
+            // Retain the explicit type even when only the endpoint carried it before this repair.
+            if (knownType != null && knownType != MUSIC_VIDEO_TYPE_ATV)
+                credit = credit.copy(evidence = (credit.evidence + "video-source:$knownType").distinct())
 
             val queued = getQueue().singleOrNull { it.id == song.id }
             queued?.artistCredit?.let { credit = credit.merge(it) }
             album = album ?: queued?.album
-            if (credit.evidence.any { it.startsWith("video-source:") } || credit.status == ArtistCreditStatus.CONFLICT)
+            // Repair only the directly supplied byline; do not infer video performers from other pages.
+            if (videoSource || credit.evidence.any { it.startsWith("video-source:") } || credit.status == ArtistCreditStatus.CONFLICT)
                 return result()
             val candidateIds = (song.artistBrowseIds + queued?.artistBrowseIds.orEmpty()).distinct()
                 .filter { Regex("^UC[A-Za-z0-9_-]{22}$").matches(it) }.take(5)

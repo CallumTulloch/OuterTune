@@ -287,7 +287,9 @@ class ArtistCreditRepository internal constructor(
     }
 
     private fun needsResolution(credit: ArtistCredit, cacheKey: String) =
-        credit.status != ArtistCreditStatus.CONFLICT && credit.evidence.none { it.startsWith("video-source:") } &&
+        credit.status != ArtistCreditStatus.CONFLICT &&
+            // Video album rows may omit the byline; fetch that video's own basic credit once it is needed.
+            (credit.isEmptyByline() || credit.evidence.none { it.startsWith("video-source:") }) &&
             (credit.status != ArtistCreditStatus.COMPLETE || credit.artists.any { it.id == null } || albums[cacheKey]?.value == null)
 
     private fun publishAlbum(videoId: String, cacheKey: String, album: Album) = synchronized(lock) {

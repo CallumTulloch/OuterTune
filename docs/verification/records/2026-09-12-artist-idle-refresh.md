@@ -153,3 +153,66 @@ Androidは再試行・明示実行を含め88件の成功を確認。真の端�
 - ユーザーは端末内キャッシュ等の影響を推測し、この再生エラーへの追加対応は不要と判断。指示に従い追加実装・追加再現調査は行わず、ここまでの修正・診断・検証記録をコミットする。
 - 確定事項はログイン後の復旧と、その後の再インストールでの非再発。端末キャッシュが直接原因だったと証明したものではない。アーティスト名・アルバム名の問題まで同一原因で解決したとの結論にも拡張しない。
 - 今回のコミット作業では実行コードの変更なし。既存の最終検証結果を再利用し、記録・差分・コミット対象を確認する。APK・生ログ・対応mapping・ローカルの資格情報ファイルはGit対象外のまま保全する。
+
+## 追加報告：曲のライブラリ操作と仕様の再検討
+
+- 開始点 `67e69d4d`、作業ツリーは変更なし。ユーザーは、アルバムのアーティスト名は正しい一方、同期したアーティストの曲をライブラリへ追加・削除するなどの操作中、曲だけ不明になると報告。曲名・画面の指定は「特に指定はない」。実端末DB・具体的操作列は未取得。
+- 読取調査中にユーザーが仕様変更を検討すると表明したため、実装は保留。再生エラーの終了判断は維持し、ここでは曲アーティストの表示だけを扱う。
+- コード上で確認した状態差：`Song.toMediaMetadata()` はcredit JSONがあればその空artistsも優先するため、人物関連が別に残っていても表示へ使われない。`applyArtistCredit()` は非空RAW＋既存JSONなし/破損＋既知関連ありの場合、前回の空RAW保護を通り関連を削除し得る。ただし今回の通常操作でその前提状態が生じた証拠はなく、報告の直接原因とは断定しない。
+- 通常のCOMPLETEデータについて、今回読んだライブラリ切替・同期更新は状態列の変更と既存credit保護を行っており、単純に毎回関連を削除しているわけではない。アルバム見出しと曲のbylineは別情報として解析・保存され、片方の正常表示はもう片方の正常性を保証しない。
+- 表示側の追加確認：同じ空RAW＋既知関連でも `Song.artistDisplayText()` は名前へfallbackし、`Song.toMediaMetadata()` 経由は空一覧になるため、同じ保存曲でも経路差がある。またプレイヤーのmetadata/キューはDBと別snapshotで、MusicServiceのcurrentSong監視だけではタグを更新しない。DB修復後にArtistCreditRepositoryの更新通知が発生しない場合、プレイヤーへ修復結果が反映されない候補がある。どちらも実端末での今回症状を再現した結果ではない。
+- 未決定の簡素化案：曲の保存済み表記を表示の基準とし、人物リンクの補完と分離する。同期・ライブラリ操作による再解釈を制限し、欠損補完や明示更新に範囲を絞る。英語＋指定言語の保存、端末に従う優先順位、既存の英語表記利用の意味は無断変更しない。仕様決定前に修正・試験・ビルドは行わない。
+
+### USB接続による実端末の確認
+
+- ユーザーが原因特定を先に行う方針とし、USBデバッグでSamsung SM-S931Zを接続。ADBはdevice認識、OuterTuneは起動・前面表示。配布版のためrun-asはnot debuggableと返り、アプリのprivate DBは直接読めない。
+- ユーザーが「不明」表示を出せると回答。画面を読み取り、「Last-resort」、アーティスト欄「アーティスト不明」、再生位置0:07/3:26で一時停止中を直接確認。画像はGit除外の `build/diagnostics/device-artist-current.png` に保全。端末への入力・アプリの終了・再インストール・データ変更は行っていない。
+- アプリPIDに限定したSyncUtils等の既存ログ31行をメモリ内で調べ、固定イベント名の件数だけを出力。同期失敗記録3件を検出したが、名前欠損との因果関係は未確認。ログ原文・認証値・URLは保存していない。名前関連repositoryに診断ログがなく、過去の更新経路はここから復元できない。
+- 既存の「アーティスト情報」は開くと優先再取得を行うため、初期状態の確認には使わない。標準バックアップはDBとアカウント設定を含む一方、補完用SharedPreferencesは含まない。保存データの保全には利用できるが、解析対象は曲DBに限定し、設定ファイルは抽出・表示しない方針。ユーザーによる端末内バックアップ作成後、USB経由でDBを読み取り、対象曲のJSON・人物関連・アルバムとの対応を比較する。
+
+### 実バックアップと公開応答による原因の絞り込み
+
+- ユーザー提供 `OuterTune_24_20260912190305.backup` から `song.db` だけをGit除外の `build/diagnostics/artist-20260912/reported-song.db` へ抽出。`settings.preferences_pb` は抽出・内容読取をしていない。DBはSQLiteの `mode=ro` と `query_only=ON` で確認。schema 24、`quick_check=ok`。DBのSHA-256は `a48c15b2a3eee7d807e9d77cd232561b8b3103ab0d71b17b9683df2dfbba65cd`。
+- 接続端末のインストール済みAPKを読み取り、SHA-256 `3fc267c817037a30a4e2eecea1dd952eb4cbe7bc1d7432ccff7054f2cea44373` が前述の診断配布版と一致。現在のruntimeソースは `67e69d4d` のまま。今回の調査で端末アプリのインストール・再起動・データ削除は行っていない。
+- **実DBの対象曲**：`Ohf-kbf6cR4` / Last-resort。曲creditは `RAW`、rawText空、artists空、source `AlbumPage`、language `ja`、evidenceに `video-source:MUSIC_VIDEO_TYPE_OMV`。曲と人物の関連も0件。対応するアルバム `MPREb_D37btAezO0h` / Triggerには、`COMPLETE` の「天音かなた」と人物ID `UCPCiIrrrNJOKvi_5vr3G6PA`、アルバムと人物の関連が正常にある。
+- **集計**：オンライン曲204件のうちCOMPLETE 73件、非空RAW 97件、空RAW 34件。空RAW 34件はすべてAlbumPage由来・OMVで、対応アルバムにはCOMPLETE creditと人物関連がある。全曲のJSON破損・JSONと人物関連の食い違いは確認されなかった。したがって先の「関連が残っているのにJSONが隠す」「修復済みDBとプレイヤーが食い違う」という候補は、このバックアップの対象曲を説明しない。
+- 空RAW 34曲は `inLibrary=null`、`liked=0`。これはダウンロード曲数・ユーザーが登録した曲数ではない。`DatabaseDao.upsert(albumPage)` はアルバム内の曲を一括保存し、オンライン曲の新規作成時はライブラリ所属を付けない。アルバム表示・不足アルバム取得などでもこの保存経路を通るため、同期や削除の履歴をこの件数から推測しない。音声のダウンロードと表示用metadataの保存は別であり、未ダウンロード自体は名前を不明にする条件ではない。
+- **現在の公開応答との比較**：PCから、アプリと同じWEB_REMIX版・ja/JPで対象アルバムの `browse` と対象曲の `music/get_queue` を各1回成功取得。Cookie、保存設定、ユーザー認証は使用していない。アルバム一覧のLast-resort行は第1列が曲名、第2列が空、第3列が再生回数。曲名と再生ボタンの両endpointがOMVを明示しており、曲アーティスト名はこの一覧行に存在しない。一方、同じ動画IDの個別queue応答には「天音かなた」とARTIST型の上記IDが存在する。取得日時点の匿名応答との照合であり、過去のログイン済み端末応答を復元したものではない。
+- **コードで確認できる連鎖**：`PageHelper.artistRuns` が空の第2列を読み、`AlbumPage.getSong` が空RAWを作る。アルバム見出しは曲の出演者と同一とは限らないため自動流用せず、新規SongEntityへ空RAWが保存される。次に `ArtistCreditRepository.needsResolution` がvideo-source付きcreditを除外し、`YouTube.resolveTrackArtistCredit` にもqueue取得より前の同じ終了条件がある。その結果、この曲の個別応答で取得可能な名前も取りに行かず、不明表示が維持される。
+- 動画補完を別課題にしていた仕様が除外の背景。ただしアルバム一覧にもOMVの曲が含まれ、表示名の欠落回復まで除外する結果になっている。既存 `AlbumBrowsingParsingTest` には別アルバムの「曲名あり・第2列空・OMVを含む」実fixtureと曲artists全件空の期待値があるが、保存→再表示→個別取得による回復は確認していなかった。今回の見落としは、その工程間の確認不足として扱う。
+- 確定範囲は「対象曲が不明のまま残る保存状態と取得除外条件」、および同じ入力形を現在の公開応答で確認できたこと。以前は名前が存在して消えたのか、ライブラリ削除や同期失敗が直接引き金だったのかは、履歴のないDBから断定できない。全34曲の個別API取得・全報告症状の同一原因確認はしていない。
+- 調査成果物：同ディレクトリの `target-database-initial.json`、`album-public-columns.json`、`queue-public-byline.json`。公開応答は曲名・byline・識別子・種別など比較に必要な項目だけ抽出し、応答全文やvisitor情報は保存していない。PCの標準制限下では最初の公開通信が失敗したため、同じ読取専用スクリプトを承認済みのネットワーク実行で成功確認した。
+- 今回は原因調査のみ。実装・ビルド・端末DB修正は未実施。最小の修正候補は「動画扱いでも空の曲bylineは同一動画IDの基本情報で回復できる」よう、表示名取得と深い人物補完の除外を分けること。アルバムの人物を曲へ一律コピーしたり、ダウンロードを必須にしたりする変更は原因への対処として不要。次に実装する場合はこの実データ形を起点に、保存から表示・再要求・再起動までの回帰確認を行う。
+
+### 空の動画曲bylineを回復する修正
+
+- ユーザーが修正済みかとAPKの場所を確認。前段が原因調査までだったことを説明し、今回判明した取得除外条件の修正とAPK作成へ進む。
+- 範囲：空RAWの曲bylineだけ、動画種別が付いていても同一動画IDのqueue応答による取得を許す。元入力が動画なら取得後も人物ページ・演奏者クレジットへの探索は行わない。非空の動画表記、採用済み人物、既知アルバム、言語/認証の世代保護、失敗時の再試行間隔を維持。DB schema変更なし。
+- 合格条件：実例と同じ空AlbumPage/OMVから個別名・IDを回復する。別ID・空応答・失敗で人物を作らない。アルバム見出しの人物を借用しない。曲と人物の関連・表示用metadata・保存後の再読み込みが一致する。再生中の人物metadata更新で音声・URI・再生位置を維持する。
+- 修正前のinnertube試験：`ArtistCreditTest` 39件中5件FAIL、34件PASS。追加した空OMV回復・endpointのみ動画・空/別ID/重複ID応答・通信失敗・取消の5件が旧早期returnで失敗し、非空動画等の保護対照は成功。`build/artist-byline-innertube-red.log`、Gradle7秒。
+- 検証用Pixel_9_API_35をポート5556、read-only/no-window/no-audio/no-snapshot-saveで起動。こちらが操作担当であることを案内し、接続中のユーザースマホは通常利用可能と伝えた。スマホを検証用に初期化・上書きインストールしない。
+- 修正前のapp保存境界：実AlbumPage importを用いるAndroid回帰2件を実行し、空OMVの取得回数が期待1に対して0でFAIL、既存非空動画の取得除外はPASS。`build/artist-byline-repository-red-android.log`、試験0.311秒、テストAPK作成1分11秒。innertube側の修正だけではこのapp入口を通れないことを確認後、`needsResolution`も空RAWに限って取得を許すよう修正。
+- 修正後のinnertubeモジュール：80件PASS、既存の明示通信13件SKIPPED。前述の赤5件は全件PASS。`build/artist-byline-innertube-final.log`、Gradle10秒。app・端末の最終結果は別途追記する。
+
+### 空の動画曲byline修正の最終確認・配布APK
+
+対象ソースは `67e69d4d` に今回の未コミット差分を加えたもの。本体変更は `ArtistCreditRepository.needsResolution` と `YouTube.resolveTrackArtistCredit` の取得条件。DB schema/version、言語設定、再生用URLの取得処理は変更なし。
+
+| 確認 | 結果 | 範囲・限界 |
+| --- | --- | --- |
+| appのArtist関連unit | 26件PASS | `:app:testCoreDebugUnitTest --tests '*Artist*'` |
+| innertube unit | 80件PASS、既存13件SKIPPED | 空OMV、endpointだけの動画、別ID/重複ID/空応答、通信失敗、取消、非空動画保護を含む |
+| Android Repository/DB/再生継続 | 25件PASS、7.305秒 | 実AlbumPage保存から個別取得・人物関連・既知album保持・再読込、空artistから名前付きtagへ置換しても音声/位置/URI/cache keyを保持 |
+| 対象曲の明示実通信 | 1件PASS、2.436秒 | ja/JP・匿名の実album応答からLast-resortの空OMVを保存→productionの個別queue取得で天音かなたとIDを回復→表示用metadata一致→専用cacheを空にしてファイルDBを閉じ/開き、保持を確認 |
+| debug/AndroidTest/core-releaseビルド | PASS、2分53秒 | 最終本体・試験に対するビルド。必須lint成功。従来と同じ第三者Compose mapping収集警告あり |
+| 配布APKの署名・ABI・起動 | PASS | v2署名、arm64-v8aのみ。検証エミュレータへインストールしcold startと初期設定/ホーム描画を確認 |
+| 配布APKでの対象曲の実画面 | 未完了 | releaseの通信はSSLHandshakeException/CertPathValidatorExceptionで拒否され、album/曲URLから対象表示へ到達できなかった。起動成功だけを曲表示のPASSとは扱わない |
+
+- 合計132件PASS、既存13件SKIPPED。修正前のFAIL記録は上記のまま保持する。最終ビルド後に本体・試験ソースの追加変更なし。
+- 実通信試験は使い捨ての検証エミュレータ上のdebugアプリだけで実行。専用Room/SharedPreferences/scopeを使用して片付け、言語を復元した。ただしproduction queueのmetadata通知は通常appの名前保存先にも届き得るため、完全なアプリ隔離とは称さない。ユーザーのバックアップ・設定・認証値を試験へ投入せず、接続中のスマホは変更していない。
+- releaseの通信制約は、debug専用network security設定との違いを含む検証環境上の未確認事項として残す。証明書の検証を弱める本体変更は加えない。確認した例外は型名・件数だけで、ログ原文やURL・認証値は保存していない。日本語実応答での名前回復は前述のdebug実通信試験で確認したもので、release実画面やユーザー端末で同じ結果を直接確認したとは扱わない。
+- 実行ログ：`build/artist-byline-final-build.log`、`build/artist-byline-final-android.log`、`build/artist-byline-live-android.log`。release画面は `build/diagnostics/artist-20260912/release-current.png`。いずれもGit対象外。
+- 配布APK：`build/distributions/OuterTune-artist-byline-recovery-20260912-arm64.apk`、core-release / arm64-v8a、0.10.2-b1 (71)、9,090,162 bytes。SHA-256 `df68515044a8d80ae1d39552c31859e8fee074ef46368c445505c0ee65c036a8`。署名証明書は従来配布版と同じ。対応mappingは `build/diagnostics/artist-20260912/byline-recovery-mapping.txt` に保全。
+- 残るユーザー環境確認：このAPKを上書き後、既存の不明曲を表示して名前が回復するか、ライブラリ追加/削除・アプリ再起動後も保持されるかを確認する。既存の再試行待ち時間は維持している。今回の対象曲の回復確認と、過去の同期/削除で名前が消えた原因の特定は別であり、後者を解決済みに広げない。
+- debug専用設定は、このPCのAvast通信検査用証明書を追加していることを確認。releaseにはこの証明書を追加していない。今回の配布版で通信確認できなかった環境差の根拠として記録する。
+- 検証用エミュレータを終了。APKと実データ・mappingのGit除外、最終差分の空白検査を確認済み。今回の修正は未コミット。
