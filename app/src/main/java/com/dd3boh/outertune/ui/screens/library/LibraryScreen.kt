@@ -308,15 +308,15 @@ fun LibraryScreen(
     )
     val chips = chipValues.map { chip ->
         chip to when (chip.contentFilter) {
-            LibraryContentFilter.DOWNLOADED -> stringResource(R.string.filter_downloaded)
-            LibraryContentFilter.LIBRARY -> stringResource(R.string.library)
-            LibraryContentFilter.FOLDER -> stringResource(R.string.folders)
+            LibraryContentFilter.DOWNLOADED -> navigationFilterLabel(R.string.filter_downloaded)
+            LibraryContentFilter.LIBRARY -> navigationFilterLabel(R.string.library)
+            LibraryContentFilter.FOLDER -> navigationFilterLabel(R.string.folders)
             null -> when (chip.category) {
-                LibraryFilter.ALBUMS -> stringResource(R.string.albums)
-                LibraryFilter.ARTISTS -> stringResource(R.string.artists)
-                LibraryFilter.PLAYLISTS -> stringResource(R.string.playlists)
+                LibraryFilter.ALBUMS -> navigationFilterLabel(R.string.albums)
+                LibraryFilter.ARTISTS -> navigationFilterLabel(R.string.artists)
+                LibraryFilter.PLAYLISTS -> navigationFilterLabel(R.string.playlists)
                 LibraryFilter.SONGS -> stringResource(R.string.songs)
-                LibraryFilter.FOLDERS -> stringResource(R.string.folders)
+                LibraryFilter.FOLDERS -> navigationFilterLabel(R.string.folders)
                 LibraryFilter.ALL -> stringResource(R.string.home)
             }
         }

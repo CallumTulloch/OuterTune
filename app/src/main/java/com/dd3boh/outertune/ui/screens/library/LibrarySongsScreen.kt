@@ -329,10 +329,10 @@ fun LibrarySongsScreen(
     val filterContent = @Composable {
         ChipsRow(
             chips = listOf(
-                SongFilter.LIKED to stringResource(R.string.filter_liked),
-                SongFilter.LIBRARY to stringResource(R.string.library),
-                SongFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
-                SongFilter.FOLDER to stringResource(R.string.folders),
+                SongFilter.LIKED to navigationFilterLabel(R.string.filter_liked),
+                SongFilter.LIBRARY to navigationFilterLabel(R.string.library),
+                SongFilter.DOWNLOADED to navigationFilterLabel(R.string.filter_downloaded),
+                SongFilter.FOLDER to navigationFilterLabel(R.string.folders),
             ),
             currentValue = SongFilter.ALL,
             onValueUpdate = onFilterSelected,

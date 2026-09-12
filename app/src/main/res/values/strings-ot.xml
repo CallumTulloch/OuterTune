@@ -5,6 +5,14 @@ while also allowing users to translate our app as well. New, specific strings to
 
 <resources>
     <string name="filter_liked_only">Liked only</string>
+    <!-- Used only for navigation chips when the app UI is Japanese. -->
+    <string name="navigation_filter_albums" translatable="false">Albums</string>
+    <string name="navigation_filter_artists" translatable="false">Artists</string>
+    <string name="navigation_filter_playlists" translatable="false">Playlists</string>
+    <string name="navigation_filter_liked" translatable="false">Liked</string>
+    <string name="navigation_filter_downloaded" translatable="false">DL</string>
+    <string name="navigation_filter_library" translatable="false">Library</string>
+    <string name="navigation_filter_folders" translatable="false">Folders</string>
     <string name="folder_search_close">Close folder search</string>
     <string name="folder_search_clear">Clear search text</string>
 <!-- General -->
