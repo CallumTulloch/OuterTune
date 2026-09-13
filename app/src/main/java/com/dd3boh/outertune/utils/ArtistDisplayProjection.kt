@@ -15,11 +15,11 @@ data class ArtistDisplayTarget(
     val id: String?,
     val name: String,
     val thumbnailUrl: String?,
-    internal val linked: Boolean = false,
+    internal val projectedIdentity: String? = null,
     internal val onlineIdentity: String? = null,
 )
 
-/** Only explicitly linked local artists are published here. Stored tags and relationships stay raw. */
+/** Database-established identities only. Stored tags, credits and relationships stay raw. */
 object ArtistDisplayProjection {
     private val mappings = mutableStateOf<Map<String, ArtistDisplayMapping>>(emptyMap())
     private val revision = MutableStateFlow(0L)
@@ -36,10 +36,11 @@ object ArtistDisplayProjection {
         ArtistDisplayTarget(
             sourceId = mapping.sourceArtistId,
             id = mapping.canonicalArtistId,
-            name = MetadataNames.resolve(OriginalNameKind.ARTIST, mapping.canonicalArtistId, mapping.name),
+            name = MetadataNames.resolve(OriginalNameKind.ARTIST,
+                ArtistIdentity.onlineId(mapping.canonicalArtistId), mapping.name),
             thumbnailUrl = mapping.thumbnailUrl,
-            linked = true,
-            onlineIdentity = mapping.canonicalArtistId,
+            projectedIdentity = mapping.canonicalArtistId,
+            onlineIdentity = ArtistIdentity.onlineId(mapping.canonicalArtistId),
         )
     }
 }
@@ -66,14 +67,14 @@ fun MediaMetadata.Artist.displayArtistTarget(): ArtistDisplayTarget = ArtistDisp
     ?: ArtistDisplayTarget(id, id, displayName, null,
         onlineIdentity = ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id))
 
-/** Keep order and unresolved labels; collapse a shared identity only when a manual link established it. */
-private fun distinctLinkedTargets(targets: List<ArtistDisplayTarget>): List<ArtistDisplayTarget> {
-    val linked = targets.filter { it.linked }.associateBy { it.onlineIdentity }
-    if (linked.isEmpty()) return targets
+/** Collapse only identities established by a manual link or an album-scoped provisional group. */
+private fun distinctProjectedTargets(targets: List<ArtistDisplayTarget>): List<ArtistDisplayTarget> {
+    val projected = targets.filter { it.projectedIdentity != null }.associateBy { it.projectedIdentity }
+    if (projected.isEmpty()) return targets
     val seen = mutableSetOf<String>()
     return targets.mapNotNull { target ->
-        val canonical = target.onlineIdentity
-        val replacement = linked[canonical]
+        val canonical = target.projectedIdentity ?: target.onlineIdentity ?: target.id
+        val replacement = projected[canonical]
         if (canonical == null || replacement == null) target
         else if (seen.add(canonical)) replacement else null
     }
@@ -81,7 +82,7 @@ private fun distinctLinkedTargets(targets: List<ArtistDisplayTarget>): List<Arti
 
 @JvmName("artistEntityDisplayTargets")
 fun List<ArtistEntity>.artistDisplayTargets(preserveLocalNames: Boolean = false): List<ArtistDisplayTarget> =
-    distinctLinkedTargets(map { artist ->
+    distinctProjectedTargets(map { artist ->
         ArtistDisplayProjection.resolve(artist.id) ?: if (preserveLocalNames) {
             ArtistDisplayTarget(artist.id, artist.id, artist.name, artist.thumbnailUrl)
         } else artist.displayArtistTarget()
@@ -89,7 +90,7 @@ fun List<ArtistEntity>.artistDisplayTargets(preserveLocalNames: Boolean = false)
 
 @JvmName("mediaArtistDisplayTargets")
 fun List<MediaMetadata.Artist>.artistDisplayTargets(preserveLocalNames: Boolean = false): List<ArtistDisplayTarget> =
-    distinctLinkedTargets(map { artist ->
+    distinctProjectedTargets(map { artist ->
         ArtistDisplayProjection.resolve(artist.id) ?: if (preserveLocalNames) {
             ArtistDisplayTarget(artist.id, artist.id, artist.name, null)
         } else artist.displayArtistTarget()

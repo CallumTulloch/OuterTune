@@ -18,7 +18,7 @@ import java.time.LocalDateTime
 @Immutable
 @Entity(
     tableName = "artist",
-    indices = [Index(value = ["isLocal", "name"]), Index(value = ["onlineId"])],
+    indices = [Index(value = ["isLocal", "name"]), Index(value = ["onlineId"]), Index(value = ["albumGroupId"])],
 )
 data class ArtistEntity(
     @PrimaryKey val id: String,
@@ -30,6 +30,8 @@ data class ArtistEntity(
     @ColumnInfo(name = "isLocal", defaultValue = false.toString())
     val isLocal: Boolean = false,
     val onlineId: String? = null,
+    // A reversible album-scoped display group. Raw credit identity and relations stay on id.
+    val albumGroupId: String? = null,
 ) {
     val onlineArtistId: String?
         get() = if (isLocal) null else ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id)

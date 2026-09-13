@@ -62,7 +62,8 @@ val MediaMetadata.Artist.displayName: String
 val MediaMetadata.Album.displayTitle: String
     get() = if (isLocal) title else MetadataNames.resolve(OriginalNameKind.ALBUM, id, title)
 val com.zionhuang.innertube.models.Artist.displayName: String
-    get() = MetadataNames.resolve(OriginalNameKind.ARTIST, id, name)
+    get() = ArtistDisplayProjection.resolve(ref ?: id)?.name
+        ?: MetadataNames.resolve(OriginalNameKind.ARTIST, ArtistIdentity.onlineId(id), name)
 val com.zionhuang.innertube.models.Album.displayTitle: String
     get() = MetadataNames.resolve(OriginalNameKind.ALBUM, id, name)
 
@@ -72,15 +73,16 @@ val SongEntity.displayAlbumTitle: String?
 val RecentActivityEntity.displayTitle: String
     get() = when (type) {
         RecentActivityType.ALBUM -> MetadataNames.resolve(OriginalNameKind.ALBUM, id, title)
-        RecentActivityType.ARTIST -> MetadataNames.resolve(OriginalNameKind.ARTIST, id, title)
+        RecentActivityType.ARTIST -> ArtistDisplayProjection.resolve(id)?.name
+            ?: MetadataNames.resolve(OriginalNameKind.ARTIST, ArtistIdentity.onlineId(id), title)
         else -> title
     }
 
 fun MediaMetadata.matchesMetadataQuery(query: String): Boolean =
     title.contains(query, ignoreCase = true) || artists.any { artist ->
-        val linked = ArtistDisplayProjection.resolve(artist.id)
-        if (linked != null) linked.name.contains(query, ignoreCase = true) ||
-            MetadataNames.matches(OriginalNameKind.ARTIST, linked.id, query)
+        val projected = ArtistDisplayProjection.resolve(artist.id)
+        if (projected != null) projected.name.contains(query, ignoreCase = true) ||
+            MetadataNames.matches(OriginalNameKind.ARTIST, projected.onlineIdentity, query)
         else artist.name.contains(query, ignoreCase = true)
     } ||
         (!isLocal && (MetadataNames.matches(OriginalNameKind.SONG, id, query) ||

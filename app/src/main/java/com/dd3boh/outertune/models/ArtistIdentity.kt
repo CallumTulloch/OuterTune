@@ -10,6 +10,15 @@ import java.security.MessageDigest
 
 /** Internal identity is independent of the spelling returned by a later artist-page request. */
 object ArtistIdentity {
+    /** Album-scoped display identity, never an online person identifier or a stored credit ref. */
+    fun albumGroupId(albumId: String, name: String): String? {
+        if (!albumId.startsWith("MPRE") && !albumId.startsWith("FEmusic_library_privately_owned_release")) return null
+        val normalizedName = normalizeLocalMetadataText(name).takeIf(String::isNotEmpty) ?: return null
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("album-artist-v1\u0000$albumId\u0000$normalizedName".toByteArray(Charsets.UTF_8))
+        return "AG" + digest.take(16).joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
     fun stableId(videoId: String, name: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest("$videoId\u0000${normalizeLocalMetadataText(name)}".toByteArray(Charsets.UTF_8))

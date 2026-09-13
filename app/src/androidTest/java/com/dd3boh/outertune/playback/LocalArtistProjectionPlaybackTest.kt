@@ -34,11 +34,20 @@ import org.junit.Test
 
 class LocalArtistProjectionPlaybackTest {
     @Test fun linkLanguageChangeAndUnlinkUpdateSessionDisplayWithoutReplacingLocalAudioOrRawTags() = runBlocking {
+        verifyDisplayUpdates(isLocal = true)
+    }
+
+    @Test fun albumGroupingAndLaterOnlineIdentityKeepPlaybackAndOriginalCreditReferences() = runBlocking {
+        verifyDisplayUpdates(isLocal = false)
+    }
+
+    private suspend fun verifyDisplayUpdates(isLocal: Boolean) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val audio = File.createTempFile("local-artist-projection-", ".wav", context.cacheDir)
         val localId = "LA-playback-local-source"
         val onlineId = "UCabcdefghijklmnopqrstuv"
-        val originalName = "ファイルの人物名"
+        val originalName = if (isLocal) "ファイルの人物名" else "翟锦彦"
+        val groupId = "AG-playback-album-artist"
         val errors = CopyOnWriteArrayList<PlaybackException>()
         val discontinuities = CopyOnWriteArrayList<Int>()
         var player: ExoPlayer? = null
@@ -46,11 +55,12 @@ class LocalArtistProjectionPlaybackTest {
             audio.writeBytes(silentWav())
             val raw = MediaMetadata(
                 id = "LS-playback-local-source", title = "Local audio", duration = 12, genre = null,
-                artists = listOf(MediaMetadata.Artist(localId, originalName, isLocal = true)),
-                isLocal = true, localPath = audio.absolutePath,
+                artists = listOf(MediaMetadata.Artist(localId, originalName, isLocal = isLocal)),
+                isLocal = isLocal, localPath = audio.absolutePath.takeIf { isLocal },
                 artistCredit = ArtistCredit(originalName, listOf(Artist(originalName, null, localId)),
-                    ArtistCreditStatus.COMPLETE, "file-tags", "ja"),
+                    ArtistCreditStatus.COMPLETE, if (isLocal) "file-tags" else "queue", "ja"),
             )
+            // Generated WAV transport isolates metadata updates from remote stream availability.
             val original = raw.toMediaItem().buildUpon().setUri(audio.toUri()).setMimeType(MimeTypes.AUDIO_WAV).build()
             val activePlayer = withContext(Dispatchers.Main) {
                 ExoPlayer.Builder(context).setAudioAttributes(AudioAttributes.DEFAULT, false).build().also { value ->
@@ -99,7 +109,7 @@ class LocalArtistProjectionPlaybackTest {
                     assertEquals(original.localConfiguration!!.uri, current.localConfiguration!!.uri)
                     assertEquals(original.localConfiguration!!.customCacheKey, current.localConfiguration!!.customCacheKey)
                     assertEquals(MimeTypes.AUDIO_WAV, current.localConfiguration!!.mimeType)
-                    assertEquals(audio.absolutePath, current.metadata!!.localPath)
+                    assertEquals(audio.absolutePath.takeIf { isLocal }, current.metadata!!.localPath)
                     assertEquals(localId, current.metadata!!.artists.single().id)
                     assertEquals(originalName, current.metadata!!.artistCredit!!.rawText)
                     assertEquals(1, activePlayer.mediaItemCount)
@@ -110,11 +120,23 @@ class LocalArtistProjectionPlaybackTest {
                 assertEquals(originalDiscontinuities, discontinuities.size)
             }
 
-            update("Online selected", onlineId) {
-                ArtistDisplayProjection.publish(listOf(ArtistDisplayMapping(localId, onlineId, "Online selected", null)))
-            }
-            update("言語設定の名前", onlineId) {
-                MetadataNames.publish(mapOf(OriginalNameTarget(OriginalNameKind.ARTIST, onlineId) to "言語設定の名前"))
+            if (isLocal) {
+                update("Online selected", onlineId) {
+                    ArtistDisplayProjection.publish(listOf(ArtistDisplayMapping(localId, onlineId, "Online selected", null)))
+                }
+                update("言語設定の名前", onlineId) {
+                    MetadataNames.publish(mapOf(OriginalNameTarget(OriginalNameKind.ARTIST, onlineId) to "言語設定の名前"))
+                }
+            } else {
+                update(originalName, groupId) {
+                    ArtistDisplayProjection.publish(listOf(ArtistDisplayMapping(localId, groupId, originalName, null)))
+                }
+                update(originalName, groupId) {
+                    MetadataNames.publish(mapOf(OriginalNameTarget(OriginalNameKind.ARTIST, groupId) to "Unverified English name"))
+                }
+                update("Verified performer", onlineId) {
+                    ArtistDisplayProjection.publish(listOf(ArtistDisplayMapping(localId, onlineId, "Verified performer", null)))
+                }
             }
             update(originalName, localId) { ArtistDisplayProjection.publish(emptyList()) }
             withContext(Dispatchers.Main) { activePlayer.seekTo(8_000) }

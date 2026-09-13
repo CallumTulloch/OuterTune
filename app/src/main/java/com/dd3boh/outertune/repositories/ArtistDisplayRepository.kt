@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Publishes database-backed manual identities without changing tags or fetching remote content. */
+/** Publishes database-backed display identities without changing tags or fetching remote content. */
 @Singleton
 class ArtistDisplayRepository internal constructor(
     private val mappings: Flow<List<ArtistDisplayMapping>>,

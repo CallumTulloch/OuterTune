@@ -193,7 +193,16 @@ interface AlbumsDao : ArtistCreditDao {
             SELECT songId FROM song_album_map WHERE albumId = :albumId
         )
     """)
-    fun updateSongAlbumIdentityForAlbum(albumId: String)
+    fun updateSongAlbumIdentityRowsForAlbum(albumId: String)
+
+    @Query("SELECT songId FROM song_album_map WHERE albumId = :albumId")
+    fun songIdsForAlbumGrouping(albumId: String): List<String>
+
+    @Transaction
+    fun updateSongAlbumIdentityForAlbum(albumId: String) {
+        updateSongAlbumIdentityRowsForAlbum(albumId)
+        songIdsForAlbumGrouping(albumId).forEach(::refreshSongAlbumArtistGroups)
+    }
 
     @Transaction
     fun updateSongAlbumMap(oldId: String, newId: String) {
@@ -363,7 +372,13 @@ interface AlbumsDao : ArtistCreditDao {
         SET albumId = :albumId, albumName = :albumTitle
         WHERE id = :songId
     """)
-    fun updateSongAlbumIdentity(songId: String, albumId: String, albumTitle: String)
+    fun updateSongAlbumIdentityRow(songId: String, albumId: String, albumTitle: String)
+
+    @Transaction
+    fun updateSongAlbumIdentity(songId: String, albumId: String, albumTitle: String) {
+        updateSongAlbumIdentityRow(songId, albumId, albumTitle)
+        refreshSongAlbumArtistGroups(songId)
+    }
 
     @Transaction
     @Query(
@@ -422,6 +437,7 @@ interface AlbumsDao : ArtistCreditDao {
     fun insert(map: SongAlbumMap) {
         insertSongAlbumMap(map)
         refreshLocalAlbumStats(map.albumId)
+        refreshSongAlbumArtistGroups(map.songId)
     }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -438,7 +454,10 @@ interface AlbumsDao : ArtistCreditDao {
         val distinctArtists = artists.distinctBy(ArtistEntity::id)
         val previousArtistIds = albumArtistIdsForAlbum(albumId)
         val newArtistIds = distinctArtists.map(ArtistEntity::id)
-        if (previousArtistIds == newArtistIds) return
+        if (previousArtistIds == newArtistIds) {
+            refreshAlbumArtistGroups(newArtistIds)
+            return
+        }
 
         deleteAlbumArtistMaps(albumId)
         distinctArtists.forEachIndexed { index, artist ->
@@ -453,6 +472,7 @@ interface AlbumsDao : ArtistCreditDao {
         previousArtistIds
             .filterNot(newArtistIds::contains)
             .forEach(::safeDeleteArtist)
+        refreshAlbumArtistGroups(previousArtistIds + newArtistIds)
     }
 
     @Transaction
@@ -481,7 +501,6 @@ interface AlbumsDao : ArtistCreditDao {
             label.copy(ref = artist.id, id = artist.onlineArtistId)
         })
         val json = stored.toStoredJson()
-        if (album.artistCreditJson == json && albumArtistIdsForAlbum(albumId) == artists.map { it.id }.distinct()) return
         if (album.artistCreditJson != json) updateAlbumArtistCreditJson(albumId, json)
         replaceAlbumArtistMaps(albumId, artists)
     }
@@ -542,6 +561,7 @@ interface AlbumsDao : ArtistCreditDao {
     fun upsert(map: SongAlbumMap) {
         upsertSongAlbumMap(map)
         refreshLocalAlbumStats(map.albumId)
+        refreshSongAlbumArtistGroups(map.songId)
     }
 
     @Query("""
@@ -569,8 +589,11 @@ interface AlbumsDao : ArtistCreditDao {
     fun updateAlbumArtistMap(oldId: String, newId: String)
 
     @Transaction
-    @Query("DELETE FROM song_artist_map WHERE songId = :songID")
-    fun unlinkSongArtists(songID: String)
+    fun unlinkSongArtists(songID: String) {
+        val artistIds = artistIdsForSong(songID)
+        deleteSongArtistMaps(songID)
+        refreshAlbumArtistGroups(artistIds)
+    }
 
     @Query("SELECT albumId FROM song_album_map WHERE songId = :songID")
     fun albumIdsForSong(songID: String): List<String>
@@ -583,6 +606,7 @@ interface AlbumsDao : ArtistCreditDao {
         val albumIds = albumIdsForSong(songID)
         deleteSongAlbumMaps(songID)
         albumIds.forEach(::refreshLocalAlbumStats)
+        refreshSongAlbumArtistGroups(songID)
     }
 
     @Transaction

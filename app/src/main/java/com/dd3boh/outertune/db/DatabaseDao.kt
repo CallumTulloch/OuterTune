@@ -76,6 +76,7 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
             else stored?.artistCreditJson ?: song.artistCreditJson
         updateSongEntity(song.copy(artistCreditJson = storedJson))
         incoming?.let { applyArtistCredit(song.id, it) }
+        refreshSongAlbumArtistGroups(song.id)
     }
 
     @Transaction
@@ -387,7 +388,10 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
                     index = index
                 )
             }
-            .forEach(::upsert)
+            .forEach { map ->
+                upsert(map)
+                updateSongAlbumIdentity(map.songId, albumPage.album.browseId, albumPage.album.title)
+            }
         applyAlbumArtistCredit(albumPage.album.browseId, albumPage.album.creditForPersistence())
 
         previousAlbum

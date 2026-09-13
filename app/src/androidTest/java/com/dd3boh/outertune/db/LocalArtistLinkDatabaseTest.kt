@@ -1,6 +1,5 @@
 package com.dd3boh.outertune.db
 
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import com.dd3boh.outertune.db.entities.AlbumArtistMap
@@ -268,25 +267,15 @@ class LocalArtistLinkDatabaseTest {
     }
 
     @Test
-    fun applicationBuilderMigratesVersion24WithoutDiscardingSavedMusic() = runBlocking {
-        val filename = "manual-artist-link-migration-${UUID.randomUUID()}.db"
+    fun applicationBuilderPreservesCurrentLinksAcrossReopen() = runBlocking {
+        val filename = "manual-artist-link-reopen-${UUID.randomUUID()}.db"
         var database = InternalDatabase.newTestInstance(context, filename)
         try {
             val source = seed(database)
             database.close()
-            // Remove additions after v24 to reconstruct its committed schema.
-            SQLiteDatabase.openDatabase(context.getDatabasePath(filename).path, null,
-                SQLiteDatabase.OPEN_READWRITE).use { oldDatabase ->
-                for (view in listOf("artist_display", "artist_song", "artist_album", "artist_identity")) {
-                    oldDatabase.execSQL("DROP VIEW $view")
-                }
-                oldDatabase.execSQL("DROP TABLE local_artist_link")
-                oldDatabase.execSQL("UPDATE room_master_table SET identity_hash = '890150d6f95c112fb620a50a4bfb11f9' WHERE id = 42")
-                oldDatabase.version = 24
-            }
             database = InternalDatabase.newTestInstance(context, filename)
             assertSourceUnchanged(database, source)
-            assertEquals(26, database.openHelper.readableDatabase.version)
+            assertEquals(MusicDatabase.MUSIC_DATABASE_VERSION, database.openHelper.readableDatabase.version)
             assertTrue(database.localArtistLinks().first().isEmpty())
             val chosen = link()
             database.setLocalArtistLink(chosen)

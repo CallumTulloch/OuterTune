@@ -7,6 +7,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.db.MusicDatabase
+import com.dd3boh.outertune.models.ArtistIdentity
 import com.dd3boh.outertune.repositories.ArtistCreditRepository
 import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
@@ -55,15 +56,14 @@ class ArtistViewModel internal constructor(
     val libraryAlbums = database.artistAlbumsPreview(artistId)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    private val routeOnlineId = artistId.takeIf {
-        it.startsWith("UC") || it.startsWith("FEmusic_library_privately_owned_artist")
-    }
+    private val routeOnlineId = ArtistIdentity.onlineId(artistId)
     val onlineArtistId = combine(libraryArtist, artistContext) { library, context ->
         // The display row resolves legacy source routes and canonical online routes alike.
-        // An unlinked local row must not fall back to an old network context.
+        // Local rows and provisional album groups must not fall back to an old network context.
         if (library != null) library.artist.onlineArtistId
-        else context?.onlineId ?: routeOnlineId
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, artistContext.value?.onlineId ?: routeOnlineId)
+        else ArtistIdentity.onlineId(context?.onlineId) ?: routeOnlineId
+    }.stateIn(viewModelScope, SharingStarted.Eagerly,
+        ArtistIdentity.onlineId(artistContext.value?.onlineId) ?: routeOnlineId)
 
     val initiallyInternal = onlineArtistId.value == null
     val isLoading = MutableStateFlow(false)
@@ -114,7 +114,7 @@ class ArtistViewModel internal constructor(
         val library = libraryArtist.value
         val link = localArtistLink.value
         val onlineId = if (library != null) library.artist.onlineArtistId
-            else artistContext.value?.onlineId ?: routeOnlineId
+            else ArtistIdentity.onlineId(artistContext.value?.onlineId) ?: routeOnlineId
         if (onlineId == null) return
         if (fetchJob?.isActive == true && fetchedOnlineId == onlineId && fetchedLinkRevision == link?.revision) return
         fetchJob?.cancel()

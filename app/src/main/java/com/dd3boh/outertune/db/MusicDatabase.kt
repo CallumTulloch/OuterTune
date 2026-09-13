@@ -90,7 +90,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 26
+        const val MUSIC_DATABASE_VERSION = 27
     }
 }
 
@@ -175,7 +175,7 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_16_17)
                     .addMigrations(MIGRATION_20_21)
                     .addMigrations(MIGRATION_21_22)
-                    // This development restart intentionally has no 22 -> 23 or 23 -> 24 migration.
+                    // This development restart intentionally has no 22 -> 23, 23 -> 24 or 26 -> 27 migration.
                     // A version-specific fallback conflicts with the retained 21 -> 22 migration.
                     .fallbackToDestructiveMigration(true)
                     .build()

@@ -23,6 +23,39 @@ data class StoredAlbumArtistCredit(val id: String, val artistCreditJson: String?
 /** Updates interpretation without changing the user's library state or playback metadata. */
 @Dao
 interface ArtistCreditDao : ArtistsDao {
+    @Query("""
+        SELECT DISTINCT album.id FROM song_artist_map map
+            JOIN song ON song.id = map.songId AND song.isLocal = 0
+            JOIN album ON album.id = song.albumId AND album.isLocal = 0
+            JOIN song_album_map albumMap ON albumMap.songId = song.id AND albumMap.albumId = album.id
+        WHERE map.artistId = :artistId
+        UNION
+        SELECT map.albumId FROM album_artist_map map
+            JOIN album ON album.id = map.albumId AND album.isLocal = 0
+        WHERE map.artistId = :artistId
+    """)
+    fun albumGroupContexts(artistId: String): List<String>
+
+    @Query("UPDATE artist SET albumGroupId = :groupId WHERE id = :artistId")
+    fun updateArtistAlbumGroup(artistId: String, groupId: String?)
+
+    /** Only established individual credits enter these maps; raw bylines never create groups. */
+    @Transaction
+    fun refreshAlbumArtistGroups(artistIds: List<String>) {
+        artistIds.distinct().forEach { id ->
+            val artist = artistEntityByExactId(id) ?: return@forEach
+            if (artist.isLocal || artist.id.startsWith("AG")) return@forEach
+            // A resolved source keeps this provenance so later refreshes never physically join
+            // its raw identity with a different member of its former provisional group.
+            if (artist.onlineArtistId != null) return@forEach
+            val groupId = albumGroupContexts(id).singleOrNull()?.let { ArtistIdentity.albumGroupId(it, artist.name) }
+            if (artist.albumGroupId != groupId) updateArtistAlbumGroup(id, groupId)
+        }
+    }
+
+    @Transaction
+    fun refreshSongAlbumArtistGroups(videoId: String) = refreshAlbumArtistGroups(artistIdsForSong(videoId))
+
     @Query("SELECT artistCreditJson FROM song WHERE id = :videoId")
     fun artistCreditJson(videoId: String): Flow<String?>
 
@@ -51,15 +84,17 @@ interface ArtistCreditDao : ArtistsDao {
         })
         val json = persisted.toStoredJson()
         val uniqueArtists = resolved.distinctBy(ArtistEntity::id)
-        val sameRelations = artistIdsForSong(videoId) == uniqueArtists.map(ArtistEntity::id)
-        if (song.artistCreditJson == json && sameRelations) return
+        val previousArtistIds = artistIdsForSong(videoId)
+        val sameRelations = previousArtistIds == uniqueArtists.map(ArtistEntity::id)
         // Song insertion, raw display, confirmed people and ordering are committed together.
         if (song.artistCreditJson != json) updateArtistCreditJson(videoId, json)
-        if (sameRelations) return
-        deleteSongArtistMaps(videoId)
-        uniqueArtists.forEachIndexed { index, artist ->
-            insert(SongArtistMap(songId = videoId, artistId = artist.id, position = index))
+        if (!sameRelations) {
+            deleteSongArtistMaps(videoId)
+            uniqueArtists.forEachIndexed { index, artist ->
+                insert(SongArtistMap(songId = videoId, artistId = artist.id, position = index))
+            }
         }
+        refreshAlbumArtistGroups(previousArtistIds + uniqueArtists.map(ArtistEntity::id))
     }
 
     fun resolveCreditArtist(videoId: String, artist: Artist): ArtistEntity {
@@ -69,7 +104,11 @@ interface ArtistCreditDao : ArtistsDao {
             remoteId == null || it.onlineArtistId == null || it.onlineArtistId == remoteId
         }
         val byOnline = remoteId?.let(::artistByOnlineId)
-        val existing = if (byRef != null && byOnline != null && byRef.id != byOnline.id) {
+        val existing = if (byRef?.albumGroupId != null) {
+            // A provisional group is a read projection, never proof that its other sources have
+            // this online ID. Keep this track/header's original ref even after identification.
+            byRef
+        } else if (byRef != null && byOnline != null && byRef.id != byOnline.id) {
             // Keep an existing surrogate over a UC route; between surrogates reuse the older
             // established online identity. Both previous routes remain valid through aliases.
             val canonical = if (byRef.id.startsWith("LA") && !byOnline.id.startsWith("LA")) byRef else byOnline

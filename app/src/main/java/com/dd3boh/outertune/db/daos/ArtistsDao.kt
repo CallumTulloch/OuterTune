@@ -80,9 +80,9 @@ interface ArtistsDao {
     fun artistDisplayById(id: String): ArtistEntity?
 
     @Query("""
-        SELECT link.localArtistId AS sourceArtistId, artist.id AS canonicalArtistId, artist.name, artist.thumbnailUrl
-        FROM local_artist_link link JOIN artist_display artist ON artist.id = link.onlineArtistId
-        WHERE EXISTS (SELECT 1 FROM artist source WHERE source.id = link.localArtistId AND source.isLocal = 1)
+        SELECT identity.sourceArtistId, artist.id AS canonicalArtistId, artist.name, artist.thumbnailUrl
+        FROM artist_identity identity JOIN artist_display artist ON artist.id = identity.canonicalArtistId
+        WHERE identity.sourceArtistId != identity.canonicalArtistId
     """)
     fun artistDisplayMappings(): Flow<List<ArtistDisplayMapping>>
 
@@ -103,7 +103,7 @@ interface ArtistsDao {
     @Query("SELECT * FROM artist WHERE id = :id")
     fun artistEntityByExactId(id: String): ArtistEntity?
 
-    /** Group bookmarks belong to the online representative; local bookmarks survive unlinking. */
+    /** Group bookmarks belong to their representative; raw source favourites remain independent. */
     @Transaction
     fun toggleArtistBookmark(id: String) {
         val display = artistDisplayById(id) ?: return
@@ -406,7 +406,7 @@ interface ArtistsDao {
 
         return _getArtists(query).map { artists ->
             val filtered = if (filterUnsupportedArtists) {
-                artists.filter { it.artist.isYouTubeArtist || it.artist.isLocal } // TODO: add ui to filter by local or remote or something idk
+                artists.filter { it.artist.isYouTubeArtist || it.artist.isLocal || it.artist.albumGroupId != null }
             } else {
                 artists
             }

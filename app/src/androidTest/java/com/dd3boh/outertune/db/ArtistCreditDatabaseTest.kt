@@ -168,7 +168,7 @@ class ArtistCreditDatabaseTest {
     }
 
     @Test
-    fun partialCompleteAndLateIdPreserveTrackAndMergeExistingIdentity() = runBlocking {
+    fun partialCompleteAndLateIdPreserveTrackAndProjectTheExistingOnlineIdentity() = runBlocking {
         val internal = Room.inMemoryDatabaseBuilder(context, InternalDatabase::class.java).build()
         try {
             val database = MusicDatabase(internal)
@@ -197,7 +197,13 @@ class ArtistCreditDatabaseTest {
             assertEquals(alphaRef, resolved.artists[0].ref)
             assertEquals(betaRef, resolved.artists[1].ref)
             assertEquals("UCcreditTestBeta", resolved.artists[1].id)
-            assertEquals(betaRef, database.resolveArtistId("UCcreditTestBeta"))
+            assertEquals("UCcreditTestBeta", database.resolveArtistId("UCcreditTestBeta"))
+            assertEquals("UCcreditTestBeta", database.artist(betaRef).first()!!.id)
+            assertEquals("Beta page name", database.artist(betaRef).first()!!.title)
+            assertEquals("Beta", database.artistEntityByExactId(betaRef)!!.name)
+            assertNotNull(database.artistEntityByExactId(betaRef)!!.albumGroupId)
+            assertNotNull(database.artistEntityByExactId("UCcreditTestBeta"))
+            assertEquals(listOf(alphaRef, betaRef), database.artistIdsForSong(songId))
             assertEquals(2, database.song(songId).first()!!.artists.size)
 
             // A later search/save with only the original string cannot undo accepted names or IDs.
@@ -248,43 +254,65 @@ class ArtistCreditDatabaseTest {
     }
 
     @Test
-    fun lateIdMovesOtherTracksAndAlbumCreditsToTheStableIdentity() = runBlocking {
+    fun lateIdProjectsTracksAndAlbumCreditsTogetherWithoutRewritingTheirSourceRefs() = runBlocking {
         val internal = Room.inMemoryDatabaseBuilder(context, InternalDatabase::class.java).build()
         try {
             val database = MusicDatabase(internal)
             val remoteId = "UCcreditSharedBeta"
             val otherSongId = "other-credit-track"
             val otherAlbumId = "MPRE-other-credit-album"
+            val bookmark = LocalDateTime.of(2026, 9, 7, 13, 0)
             val otherCredit = ArtistCredit("Beta alternate spelling", listOf(Artist("Beta alternate spelling", remoteId)),
                 ArtistCreditStatus.COMPLETE, "other-track", "ja")
             database.insert(MediaMetadata(otherSongId, "Other track", emptyList(), 120, genre = null,
-                album = MediaMetadata.Album(otherAlbumId, "Other album")).withArtistCredit(otherCredit))
+                album = MediaMetadata.Album(otherAlbumId, "Other album")).withArtistCredit(otherCredit)) {
+                it.copy(inLibrary = bookmark)
+            }
             val albumCredit = ArtistCredit("Album Beta", listOf(Artist("Album Beta", remoteId)),
                 ArtistCreditStatus.COMPLETE, "album-header", "ja")
             database.applyAlbumArtistCredit(otherAlbumId, albumCredit)
-            val bookmark = LocalDateTime.of(2026, 9, 7, 13, 0)
             database.update(database.artistById(remoteId)!!.copy(bookmarkedAt = bookmark, thumbnailUrl = "kept-image"))
+            val originalOnline = database.artistEntityByExactId(remoteId)!!
+            val originalTrack = database.songForArtistCredit(otherSongId)!!
+            val originalAlbum = database.albumById(otherAlbumId)!!
 
             val idless = ArtistCredit("Beta", listOf(Artist("Beta", null)), ArtistCreditStatus.COMPLETE, "track", "ja")
-            database.insert(metadata(idless))
+            database.insert(metadata(idless)) { it.copy(inLibrary = bookmark) }
             val stableId = database.artistCredit(songId).first()!!.artists.single().ref!!
+            val originalSource = database.artistEntityByExactId(stableId)!!
             database.applyArtistCredit(songId, idless.copy(artists = listOf(Artist("Beta", remoteId, stableId))))
 
-            assertEquals(stableId, database.resolveArtistId(remoteId))
-            assertEquals(listOf(stableId), database.artistsBySource(false).map { it.id })
-            assertEquals(listOf(stableId), database.artistIdsForSong(otherSongId))
-            assertEquals(listOf(stableId), database.albumArtistIdsForAlbum(otherAlbumId))
+            assertEquals(remoteId, database.resolveArtistId(remoteId))
+            assertEquals(setOf(stableId, remoteId), database.artistsBySource(false).map { it.id }.toSet())
+            assertEquals(listOf(stableId), database.artistIdsForSong(songId))
+            assertEquals(listOf(remoteId), database.artistIdsForSong(otherSongId))
+            assertEquals(listOf(remoteId), database.albumArtistIdsForAlbum(otherAlbumId))
             val restoredTrack = database.artistCredit(otherSongId).first()!!
             assertEquals("Beta alternate spelling", restoredTrack.rawText)
             assertEquals("Beta alternate spelling", restoredTrack.artists.single().name)
-            assertEquals(stableId, restoredTrack.artists.single().ref)
+            assertEquals(remoteId, restoredTrack.artists.single().ref)
             val restoredAlbum = database.albumById(otherAlbumId)!!.artistCredit!!
             assertEquals("Album Beta", restoredAlbum.rawText)
             assertEquals("Album Beta", restoredAlbum.artists.single().name)
-            assertEquals(stableId, restoredAlbum.artists.single().ref)
-            assertEquals(bookmark, database.artistById(stableId)!!.bookmarkedAt)
-            assertEquals("kept-image", database.artistById(stableId)!!.thumbnailUrl)
-            assertEquals(remoteId, database.artistById(stableId)!!.onlineArtistId)
+            assertEquals(remoteId, restoredAlbum.artists.single().ref)
+            assertEquals(originalOnline, database.artistEntityByExactId(remoteId))
+            assertEquals(originalSource.copy(onlineId = remoteId), database.artistEntityByExactId(stableId))
+            assertEquals(originalTrack, database.songForArtistCredit(otherSongId))
+            assertEquals(originalAlbum, database.albumById(otherAlbumId))
+            assertEquals(stableId, database.artistCredit(songId).first()!!.artists.single().ref)
+            assertEquals(remoteId, database.artistCredit(songId).first()!!.artists.single().id)
+            for (route in listOf(remoteId, stableId)) {
+                val visible = database.artist(route).first()!!
+                assertEquals(remoteId, visible.id)
+                assertEquals("Beta alternate spelling", visible.title)
+                assertEquals(bookmark, visible.artist.bookmarkedAt)
+                assertEquals("kept-image", visible.thumbnailUrl)
+                assertEquals(2, visible.songCount)
+                assertEquals(setOf(songId, otherSongId), database.artistSongsPreview(route, 99).first().map { it.id }.toSet())
+            }
+            assertEquals(listOf(remoteId), database.savedArtistsByCreateDateAsc().first().map { it.id })
+            assertEquals(setOf(otherAlbumId, "MPRE-test"), database.artistAlbumsPreview(remoteId, 99)
+                .first().map { it.id }.toSet())
         } finally {
             internal.close()
         }

@@ -13,6 +13,7 @@ import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.LocalArtistLink
 import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
+import com.dd3boh.outertune.models.ArtistIdentity
 import com.dd3boh.outertune.repositories.ArtistCreditRepository
 import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.pages.ArtistPage
@@ -20,6 +21,7 @@ import java.util.UUID
 import java.time.LocalDateTime
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
+import java.util.concurrent.CopyOnWriteArrayList
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -70,6 +72,74 @@ class ArtistPageLinkTest {
             room.close()
             context.deleteSharedPreferences(prefsName)
         }
+    }
+
+    @Test
+    fun provisionalAlbumPageAggregatesSongsWithoutAnOnlinePageOrBorrowedImage() = runBlocking {
+        val fixture = Fixture()
+        var songsObserver: Job? = null
+        val calls = CopyOnWriteArrayList<String>()
+        val group = requireNotNull(ArtistIdentity.albumGroupId("MPRE-album-page", "翟锦彦"))
+        val first = ArtistEntity("LA-album-page-first", "翟锦彦", albumGroupId = group)
+        val second = ArtistEntity("LA-album-page-second", "翟锦彦", albumGroupId = group)
+        try {
+            fixture.database.awaitTransaction {
+                insert(first)
+                insert(second)
+                listOf("album-page-one" to first.id, "album-page-two" to second.id).forEach { (songId, sourceId) ->
+                    insert(SongEntity(songId, songId, duration = 10, localPath = null, inLibrary = LocalDateTime.now()))
+                    insert(SongArtistMap(songId, sourceId, 0))
+                }
+            }
+            fixture.start(routeId = group) { id -> calls += id; Result.success(page(id)) }
+            songsObserver = launch { fixture.model.librarySongs.collect {} }
+            fixture.await { fixture.model.librarySongs.value.size == 2 && fixture.model.libraryArtist.value?.id == group }
+            assertNull(fixture.model.onlineArtistId.value)
+            assertNull(fixture.model.artistPage)
+            assertNull(fixture.model.libraryArtist.value?.artist?.thumbnailUrl)
+            withContext(Dispatchers.Main) { fixture.model.fetchArtistsFromYTM() }
+
+            // Only the specifically resolved source leaves the provisional group.
+            fixture.database.update(first.copy(onlineId = targetA, thumbnailUrl = "https://image.invalid/confirmed"))
+            fixture.await { fixture.model.librarySongs.value.map { it.id } == listOf("album-page-two") }
+            withContext(Dispatchers.Main) { fixture.model.refreshArtistContext(); fixture.model.fetchArtistsFromYTM() }
+            assertNull(fixture.model.onlineArtistId.value)
+            assertNull(fixture.model.libraryArtist.value?.artist?.thumbnailUrl)
+            assertTrue("A provisional group must never fetch an online artist page: $calls", calls.isEmpty())
+            assertEquals(listOf(first.id), fixture.database.artistIdsForSong("album-page-one"))
+            assertEquals(listOf(second.id), fixture.database.artistIdsForSong("album-page-two"))
+        } finally { songsObserver?.cancelAndJoin(); fixture.close() }
+    }
+
+    @Test
+    fun legacyTrackReferenceOpensItsAlbumGroupThenOnlyItsConfirmedOnlineIdentity() = runBlocking {
+        val fixture = Fixture()
+        var songsObserver: Job? = null
+        val calls = CopyOnWriteArrayList<String>()
+        val group = requireNotNull(ArtistIdentity.albumGroupId("MPRE-legacy-page", "翟锦彦"))
+        val first = ArtistEntity("LA-legacy-album-first", "翟锦彦", albumGroupId = group)
+        val second = ArtistEntity("LA-legacy-album-second", "翟锦彦", albumGroupId = group)
+        try {
+            fixture.database.awaitTransaction {
+                insert(first)
+                insert(second)
+                listOf("legacy-page-one" to first.id, "legacy-page-two" to second.id).forEach { (songId, sourceId) ->
+                    insert(SongEntity(songId, songId, duration = 10, localPath = null, inLibrary = LocalDateTime.now()))
+                    insert(SongArtistMap(songId, sourceId, 0))
+                }
+            }
+            fixture.start(routeId = first.id) { id -> calls += id; Result.success(page(id)) }
+            songsObserver = launch { fixture.model.librarySongs.collect {} }
+            fixture.await { fixture.model.librarySongs.value.size == 2 && fixture.model.libraryArtist.value?.id == group }
+            assertTrue(calls.isEmpty())
+            fixture.database.update(first.copy(onlineId = targetA))
+            fixture.await { fixture.model.libraryArtist.value?.id == targetA &&
+                fixture.model.librarySongs.value.map { it.id } == listOf("legacy-page-one") &&
+                fixture.model.artistPage?.artist?.id == targetA }
+            assertEquals(setOf(targetA), calls.toSet())
+            assertEquals(group, fixture.database.artistDisplayById(second.id)?.id)
+            assertEquals(group, fixture.database.artistById(first.id)?.albumGroupId)
+        } finally { songsObserver?.cancelAndJoin(); fixture.close() }
     }
 
     @Test

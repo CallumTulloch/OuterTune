@@ -1,6 +1,5 @@
 package com.dd3boh.outertune.db
 
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import com.dd3boh.outertune.constants.ArtistFilter
@@ -12,7 +11,6 @@ import com.dd3boh.outertune.models.toStoredJson
 import com.zionhuang.innertube.models.ArtistCredit
 import com.zionhuang.innertube.models.ArtistCreditStatus
 import java.time.LocalDateTime
-import java.util.UUID
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
@@ -229,7 +227,10 @@ class ArtistGroupingDatabaseTest {
             assertNotNull(database.artist(onlineId).first()?.artist?.bookmarkedAt)
             assertEquals(surrogate, database.artistEntityByExactId(surrogate.id))
             assertEquals(listOf(surrogate.id), database.artistIdsForSong(fixture.onlineSong.id))
-            assertEquals(setOf(fixture.localA.id, fixture.localB.id), database.artistDisplayMappings().first().map { it.sourceArtistId }.toSet())
+            val mappings = database.artistDisplayMappings().first()
+            assertEquals(setOf(fixture.localA.id, fixture.localB.id, surrogate.id), mappings.map { it.sourceArtistId }.toSet())
+            assertEquals(setOf(onlineId), mappings.map { it.canonicalArtistId }.toSet())
+            assertTrue(mappings.all { it.name == "Online Canonical" && it.thumbnailUrl == "online-image" })
             fixture.assertRawPreserved()
         }
     }
@@ -260,27 +261,4 @@ class ArtistGroupingDatabaseTest {
         }
     }
 
-    @Test
-    fun version25MigrationPreservesLinksAndSourceRowsWithoutAnOnlineTarget() = runBlocking {
-        val filename = "artist-group-migration-${UUID.randomUUID()}.db"
-        var database = InternalDatabase.newTestInstance(context, filename)
-        try {
-            val fixture = Fixture(database, withOnline = false)
-            database.close()
-            // Version 26 adds only these views. Reconstruct the committed v25 table schema.
-            SQLiteDatabase.openDatabase(context.getDatabasePath(filename).path, null, SQLiteDatabase.OPEN_READWRITE).use {
-                for (view in listOf("artist_display", "artist_song", "artist_album", "artist_identity")) it.execSQL("DROP VIEW $view")
-                it.execSQL("UPDATE room_master_table SET identity_hash = 'a9872bd225c698460329e67972fa6d62' WHERE id = 42")
-                it.version = 25
-            }
-            database = InternalDatabase.newTestInstance(context, filename)
-            assertEquals(26, database.openHelper.readableDatabase.version)
-            assertEquals(fixture.localA, database.artistById(fixture.localA.id))
-            assertEquals(fixture.choiceA, database.localArtistLinkById(fixture.localA.id))
-            assertEquals(fixture.localSong, database.songForArtistCredit(fixture.localSong.id))
-            assertNull(database.artistById(onlineId))
-            assertEquals("Chosen Online", database.artist(onlineId).first()?.title)
-            assertEquals(2, database.artistSongsPreview(onlineId, 99).first().size)
-        } finally { database.close(); context.deleteDatabase(filename) }
-    }
 }
