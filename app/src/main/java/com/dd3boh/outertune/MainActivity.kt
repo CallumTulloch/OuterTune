@@ -186,6 +186,7 @@ import com.dd3boh.outertune.ui.screens.settings.SettingsScreen
 import com.dd3boh.outertune.ui.screens.settings.StorageSettings
 import com.dd3boh.outertune.ui.theme.OuterTuneTheme
 import com.dd3boh.outertune.ui.utils.appBarScrollBehavior
+import com.dd3boh.outertune.ui.utils.openSetupIfNeeded
 import com.dd3boh.outertune.utils.ActivityLauncherHelper
 import com.dd3boh.outertune.utils.NetworkConnectivityObserver
 import com.dd3boh.outertune.utils.SyncUtils
@@ -1045,9 +1046,7 @@ class MainActivity : ComponentActivity() {
 
                             // Setup wizard
                             LaunchedEffect(Unit) {
-                                if (oobeStatus < OOBE_VERSION) {
-                                    navController.navigate("setup_wizard")
-                                }
+                                navController.openSetupIfNeeded(oobeStatus)
                             }
 
                             if (BuildConfig.DEBUG) {

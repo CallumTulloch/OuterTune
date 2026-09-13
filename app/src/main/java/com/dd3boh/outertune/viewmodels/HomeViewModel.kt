@@ -1,6 +1,5 @@
 package com.dd3boh.outertune.viewmodels
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.constants.PlaylistFilter
@@ -22,10 +21,10 @@ import com.zionhuang.innertube.pages.ExplorePage
 import com.zionhuang.innertube.pages.HomePage
 import com.zionhuang.innertube.utils.completed
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.TimeoutCancellationException
@@ -33,17 +32,36 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class HomeViewModel @Inject constructor(
-    @ApplicationContext context: Context,
+class HomeViewModel internal constructor(
     val database: MusicDatabase,
-    val syncUtils: SyncUtils
+    val syncUtils: SyncUtils,
+    private val runtime: Runtime,
 ) : ViewModel() {
+    @Inject constructor(database: MusicDatabase, syncUtils: SyncUtils) : this(database, syncUtils, Runtime())
+
+    internal class Runtime(
+        val locales: StateFlow<YouTubeLocale> = YouTube.localeUpdates,
+        val authUpdates: StateFlow<Long> = YouTube.authUpdates,
+        val fetchHome: suspend (String?, String?, YouTubeLocale) -> Result<HomePage> = { token, params, locale ->
+            YouTube.home(token, params, requestLocale = locale)
+        },
+        val fetchExplore: suspend (YouTubeLocale) -> Result<ExplorePage> = { YouTube.explore(requestLocale = it) },
+        val hasAccount: () -> Boolean = { YouTube.cookie != null },
+        val fetchAccountPlaylists: suspend (YouTubeLocale) -> Result<List<PlaylistItem>> = { locale ->
+            YouTube.library("FEmusic_liked_playlists", requestLocale = locale).completed()
+                .map { it.items.filterIsInstance<PlaylistItem>() }
+        },
+    )
+
     val isRefreshing = MutableStateFlow(false)
     val isLoading = MutableStateFlow(false)
 
@@ -52,12 +70,13 @@ class HomeViewModel @Inject constructor(
     val keepListening = MutableStateFlow<List<LocalItem>?>(null)
     val similarRecommendations = MutableStateFlow<List<SimilarRecommendation>?>(null)
     val accountPlaylists = MutableStateFlow<List<PlaylistItem>?>(null)
-    private var contentLocale = YouTube.locale
+    private var contentLocale = runtime.locales.value
+    private var authRevision = runtime.authUpdates.value
     private var refreshJob: Job? = null
     private var refreshGeneration = 0L
     private val feed = HomeFeedLoader(viewModelScope, { token, params ->
         val requestLocale = contentLocale
-        withContext(Dispatchers.IO) { YouTube.home(token, params, requestLocale = requestLocale) }
+        withContext(Dispatchers.IO) { runtime.fetchHome(token, params, requestLocale) }
     })
     val homePage = feed.page
     val selectedChip = feed.selectedChip
@@ -74,9 +93,14 @@ class HomeViewModel @Inject constructor(
     val allLocalItems = MutableStateFlow<List<LocalItem>>(emptyList())
     val allYtItems = MutableStateFlow<List<YTItem>>(emptyList())
 
-    private suspend fun load(requestLocale: YouTubeLocale) {
-        isLoading.value = true
+    /** Serialize online publication with refresh(), which clears the previous account on Main. */
+    private suspend fun publishForRefresh(expected: Long, publish: () -> Unit) = withContext(Dispatchers.Main.immediate) {
+        currentCoroutineContext().ensureActive()
+        if (expected == refreshGeneration && authRevision == runtime.authUpdates.value &&
+            contentLocale == runtime.locales.value) publish()
+    }
 
+    private suspend fun load(requestLocale: YouTubeLocale, expected: Long) {
         quickPicks.value = database.quickPicks()
             .first().shuffled().take(20)
 
@@ -96,12 +120,9 @@ class HomeViewModel @Inject constructor(
             (quickPicks.value.orEmpty() + forgottenFavorites.value.orEmpty() + keepListening.value.orEmpty())
                 .filter { it is Song || it is Album }
 
-        if (YouTube.cookie != null) { // if logged in
-            // InnerTune way is YouTube.likedPlaylists().onSuccess { ... }
-            // OuterTune uses YouTube.library("FEmusic_liked_playlists").completedL().onSuccess { ... }
-            YouTube.library("FEmusic_liked_playlists", requestLocale = requestLocale).completed().onSuccess {
-                currentCoroutineContext().ensureActive()
-                accountPlaylists.value = it.items.filterIsInstance<PlaylistItem>()
+        if (runtime.hasAccount()) {
+            runtime.fetchAccountPlaylists(requestLocale).onSuccess {
+                publishForRefresh(expected) { accountPlaylists.value = it }
             }.onFailure {
                 reportException(it)
             }
@@ -148,12 +169,12 @@ class HomeViewModel @Inject constructor(
                             .ifEmpty { return@mapNotNull null }
                     )
                 }
-        currentCoroutineContext().ensureActive()
-        similarRecommendations.value = (artistRecommendations + songRecommendations).shuffled()
+        publishForRefresh(expected) {
+            similarRecommendations.value = (artistRecommendations + songRecommendations).shuffled()
+        }
 
-        YouTube.explore(requestLocale = requestLocale).onSuccess { page ->
-            currentCoroutineContext().ensureActive()
-            explorePage.value = page
+        runtime.fetchExplore(requestLocale).onSuccess { page ->
+            publishForRefresh(expected) { explorePage.value = page }
         }.onFailure {
             reportException(it)
         }
@@ -161,10 +182,10 @@ class HomeViewModel @Inject constructor(
         syncUtils.syncRecentActivity()
         currentCoroutineContext().ensureActive()
 
-        allYtItems.value = similarRecommendations.value?.flatMap { it.items }.orEmpty() +
+        publishForRefresh(expected) {
+            allYtItems.value = similarRecommendations.value?.flatMap { it.items }.orEmpty() +
                 homePage.value?.sections?.flatMap { it.items }.orEmpty()
-
-        isLoading.value = false
+        }
     }
 
     fun loadMoreYouTubeItems() = feed.loadMore()
@@ -173,38 +194,41 @@ class HomeViewModel @Inject constructor(
 
     fun refresh() {
         if (isRefreshing.value) return
-        refresh(contentLocale, languageChanged = false)
+        refresh(contentLocale, contextChanged = false)
     }
 
-    private fun refresh(requestLocale: YouTubeLocale, languageChanged: Boolean) {
+    private fun refresh(requestLocale: YouTubeLocale, contextChanged: Boolean) {
         val expected = ++refreshGeneration
         refreshJob?.cancel()
         contentLocale = requestLocale
-        if (languageChanged) {
+        if (contextChanged) {
             similarRecommendations.value = null
             accountPlaylists.value = null
             explorePage.value = null
             allYtItems.value = emptyList()
         }
+        isLoading.value = true
         isRefreshing.value = true
         loadFailed.value = false
-        feed.refresh(clearExisting = languageChanged) // Recommendations must not hold up the home feed.
+        feed.refresh(clearExisting = contextChanged) // Recommendations must not hold up the home feed.
         refreshJob = viewModelScope.launch(syncCoroutine) {
             try {
-                withTimeout(60_000) { load(requestLocale) }
+                withTimeout(60_000) { load(requestLocale, expected) }
             } catch (_: TimeoutCancellationException) {
-                if (expected == refreshGeneration) loadFailed.value = true
+                publishForRefresh(expected) { loadFailed.value = true }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                if (expected == refreshGeneration) {
+                publishForRefresh(expected) {
                     loadFailed.value = true
                     reportException(error)
                 }
             } finally {
-                if (expected == refreshGeneration) {
-                    isLoading.value = false
-                    isRefreshing.value = false
+                withContext(NonCancellable + Dispatchers.Main.immediate) {
+                    if (expected == refreshGeneration) {
+                        isLoading.value = false
+                        isRefreshing.value = false
+                    }
                 }
             }
         }
@@ -212,7 +236,16 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            YouTube.localeUpdates.collect { locale -> refresh(locale, languageChanged = locale != contentLocale) }
+            // A fresh install obtains visitor data asynchronously. That publishes a new auth
+            // generation and invalidates any browse already in flight, just like a login change.
+            // Restart from the first page; chips and continuation tokens belong to the old context.
+            combine(runtime.locales, runtime.authUpdates) { locale, revision -> locale to revision }
+                .distinctUntilChanged()
+                .collect { (locale, revision) ->
+                    val changed = locale != contentLocale || revision != authRevision
+                    authRevision = revision
+                    refresh(locale, contextChanged = changed)
+                }
         }
         viewModelScope.launch {
             homePage.collect { page ->

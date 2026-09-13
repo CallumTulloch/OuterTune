@@ -21,7 +21,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -341,10 +340,10 @@ fun SetupWizard(
                         )
                         Spacer(Modifier.height(16.dp))
 
-                        FlowRow(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 16.dp, end = 64.dp),
+                                .padding(horizontal = 48.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             TextButton(
