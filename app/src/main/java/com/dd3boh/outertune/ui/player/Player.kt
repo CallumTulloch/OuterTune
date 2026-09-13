@@ -617,7 +617,7 @@ fun ActionButtons(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
-                    TextButton(onClick = { setLyricsOffset(displayedLyricsOffset - 500L) }) {
+                    TextButton(onClick = { setLyricsOffset(displayedLyricsOffset - 200L) }) {
                         Text(stringResource(R.string.lyrics_timing_earlier))
                     }
                     Text(
@@ -628,7 +628,7 @@ fun ActionButtons(
                         ),
                         modifier = Modifier.padding(horizontal = 8.dp)
                     )
-                    TextButton(onClick = { setLyricsOffset(displayedLyricsOffset + 500L) }) {
+                    TextButton(onClick = { setLyricsOffset(displayedLyricsOffset + 200L) }) {
                         Text(stringResource(R.string.lyrics_timing_later))
                     }
                 }

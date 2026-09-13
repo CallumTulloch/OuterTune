@@ -144,6 +144,7 @@ fun PlayerMenu(
     val currentFormatState = database.format(mediaMetadata.id).collectAsState(initial = null)
     val currentFormat = currentFormatState.value
     val librarySong by database.song(mediaMetadata.id).collectAsState(initial = null)
+    val albumId = mediaMetadata.playerAlbumId(librarySong)
     val coroutineScope = rememberCoroutineScope()
 
     val download by LocalDownloadUtil.current.getDownload(mediaMetadata.id).collectAsState(initial = null)
@@ -475,12 +476,12 @@ fun PlayerMenu(
                 showSelectArtistDialog = true
             }
         }
-        if (mediaMetadata.album != null && !mediaMetadata.isLocal) {
+        if (albumId != null) {
             GridMenuItem(
                 icon = R.drawable.album,
                 title = R.string.view_album
             ) {
-                navController.navigate("album/${mediaMetadata.album.id}")
+                navController.navigate("album/$albumId")
                 playerBottomSheetState.collapseSoft()
                 onDismiss()
             }

@@ -1,0 +1,287 @@
+{
+  "description": "2026-09-13 anonymous JP/ja response excerpts. Album labels are copied from the header; queueRenderers copy selected fields of each queueDatas[n].content.playlistPanelVideoRenderer, with tracking fields removed. No name boundaries or IDs are inferred. The album track rows have an empty artist column. See verification record for full paths.",
+  "sources": [
+    {
+      "file": "build/album-artist-duplicate-20260913/single-album-ja.raw.json",
+      "sha256": "2f7a2692dc6a7705780c0cb1f21fdd4d4ac67fcaee4c213363cf6b0e6ae69db9",
+      "capturedAtUtc": "2026-09-13T01:49:25.668262+00:00"
+    },
+    {
+      "file": "build/album-artist-duplicate-20260913/two-track-queue-ja.raw.json",
+      "sha256": "7c68deb3eecc200a195963047ecc22080f85107f04f1930d5bbcc9c4da5156bd",
+      "capturedAtUtc": "2026-09-13T01:51:36.884655+00:00"
+    },
+    {
+      "file": "build/album-artist-duplicate-20260913/confirmed-8082-artist-ja.raw.json",
+      "sha256": "4f21afd00e22288e3da0510f15b536c87d475b14fb3ab9308c1a31764ba8af0e",
+      "capturedAtUtc": "2026-09-13T01:51:36.887655+00:00"
+    }
+  ],
+  "album": {
+    "id": "MPREb_NUdafp1DlA5",
+    "title": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+    "playlistId": "OLAK5uy_mgidIzxZdcEIBKWY_zyNgecctoSlHxY6s",
+    "rawCredit": "翟锦彦、8082Audio"
+  },
+  "idlessPerformer": "翟锦彦",
+  "verifiedOnlineArtist": {
+    "name": "8082Audio",
+    "id": "UChWKQRswWTLRXp98zmgHtdQ"
+  },
+  "queueRenderers": [
+    {
+      "title": {
+        "runs": [
+          {
+            "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版)"
+          }
+        ]
+      },
+      "lengthText": {
+        "runs": [
+          {
+            "text": "3:58"
+          }
+        ],
+        "accessibility": {
+          "accessibilityData": {
+            "label": "3 分 58 秒"
+          }
+        }
+      },
+      "longBylineText": {
+        "runs": [
+          {
+            "text": "翟锦彦"
+          },
+          {
+            "text": "、"
+          },
+          {
+            "text": "8082Audio",
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "text": " • "
+          },
+          {
+            "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPREb_NUdafp1DlA5",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "text": " • "
+          },
+          {
+            "text": "2024年"
+          }
+        ]
+      },
+      "shortBylineText": {
+        "runs": [
+          {
+            "text": "翟锦彦"
+          },
+          {
+            "text": "、"
+          },
+          {
+            "text": "8082Audio"
+          }
+        ]
+      },
+      "videoId": "TSZhKssbW2g",
+      "selected": false,
+      "thumbnail": {
+        "thumbnails": [
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w60-h60-l90-rj",
+            "width": 60,
+            "height": 60
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w120-h120-l90-rj",
+            "width": 120,
+            "height": 120
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w180-h180-l90-rj",
+            "width": 180,
+            "height": 180
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w226-h226-l90-rj",
+            "width": 226,
+            "height": 226
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w302-h302-l90-rj",
+            "width": 302,
+            "height": 302
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w544-h544-l90-rj",
+            "width": 544,
+            "height": 544
+          }
+        ]
+      },
+      "navigationEndpoint": {
+        "watchEndpoint": {
+          "videoId": "TSZhKssbW2g",
+          "params": "OAHyAQIIAQ%3D%3D",
+          "watchEndpointMusicSupportedConfigs": {
+            "watchEndpointMusicConfig": {
+              "hasPersistentPlaylistPanel": true,
+              "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": {
+        "runs": [
+          {
+            "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告）（It Will Fit Me Just As Well） (特别版伴奏)"
+          }
+        ]
+      },
+      "lengthText": {
+        "runs": [
+          {
+            "text": "3:58"
+          }
+        ],
+        "accessibility": {
+          "accessibilityData": {
+            "label": "3 分 58 秒"
+          }
+        }
+      },
+      "longBylineText": {
+        "runs": [
+          {
+            "text": "翟锦彦"
+          },
+          {
+            "text": "、"
+          },
+          {
+            "text": "8082Audio",
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "UChWKQRswWTLRXp98zmgHtdQ",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "text": " • "
+          },
+          {
+            "text": "我也去当个天命人玩玩（《黑神话：悟空》最终预告） (特别版)",
+            "navigationEndpoint": {
+              "browseEndpoint": {
+                "browseId": "MPREb_NUdafp1DlA5",
+                "browseEndpointContextSupportedConfigs": {
+                  "browseEndpointContextMusicConfig": {
+                    "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "text": " • "
+          },
+          {
+            "text": "2024年"
+          }
+        ]
+      },
+      "shortBylineText": {
+        "runs": [
+          {
+            "text": "翟锦彦"
+          },
+          {
+            "text": "、"
+          },
+          {
+            "text": "8082Audio"
+          }
+        ]
+      },
+      "videoId": "xDWhuDRnevk",
+      "selected": false,
+      "thumbnail": {
+        "thumbnails": [
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w60-h60-l90-rj",
+            "width": 60,
+            "height": 60
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w120-h120-l90-rj",
+            "width": 120,
+            "height": 120
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w180-h180-l90-rj",
+            "width": 180,
+            "height": 180
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w226-h226-l90-rj",
+            "width": 226,
+            "height": 226
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w302-h302-l90-rj",
+            "width": 302,
+            "height": 302
+          },
+          {
+            "url": "https://yt3.googleusercontent.com/JOIjkj6qhAKQj1fjbfZqfb-m5w_Vgdqr2sTrDiiBZbupbZc_nvttgLS2oRYhVIbuf9uaMMSztTOhj-x9Fw=w544-h544-l90-rj",
+            "width": 544,
+            "height": 544
+          }
+        ]
+      },
+      "navigationEndpoint": {
+        "watchEndpoint": {
+          "videoId": "xDWhuDRnevk",
+          "params": "OAHyAQIIAQ%3D%3D",
+          "watchEndpointMusicSupportedConfigs": {
+            "watchEndpointMusicConfig": {
+              "hasPersistentPlaylistPanel": true,
+              "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
