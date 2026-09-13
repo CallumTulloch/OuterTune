@@ -137,7 +137,7 @@ fun ArtistListItem(
     badges = badges,
     thumbnailContent = {
         ArtistThumbnail(
-            thumbnailUrl = artist.artist.thumbnailUrl,
+            thumbnailUrl = artist.thumbnailUrl,
             isLocal = artist.artist.isLocal,
             modifier = Modifier
                 .size(ListThumbnailSize)
@@ -185,7 +185,7 @@ fun ArtistGridItem(
     badges = badges,
     thumbnailContent = {
         ArtistThumbnail(
-            thumbnailUrl = artist.artist.thumbnailUrl,
+            thumbnailUrl = artist.thumbnailUrl,
             isLocal = artist.artist.isLocal,
             modifier = Modifier
                 .fillMaxSize()

@@ -321,6 +321,21 @@ class InnerTube {
         )
     }
 
+    suspend fun resolveArtistUrl(
+        url: String,
+        requestLocale: YouTubeLocale = locale,
+    ): HttpResponse {
+        val canonicalUrl = parseYouTubeArtistUrl(url).canonicalUrl
+        val client = YouTubeClient.WEB_REMIX
+        return post("navigation/resolve_url", rejectStaleResponse = true) { auth ->
+            ytClient(client, auth, setLogin = auth.useLoginForBrowse)
+            setBody(ResolveUrlBody(
+                client.toContext(requestLocale, auth.visitorData, if (auth.useLoginForBrowse) auth.dataSyncId else null),
+                canonicalUrl,
+            ))
+        }
+    }
+
     suspend fun next(
         client: YouTubeClient,
         videoId: String?,

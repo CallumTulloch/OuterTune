@@ -588,6 +588,7 @@ AND NOT EXISTS (
 
         // Song deletion cascades through playlist, queue, history, relation and mapping tables.
         nukeLocalSongs()
+        // Keep explicitly linked local identities so enabling local media can reuse the user's choice.
         nukeLocalArtists()
         nukeLocalAlbums()
         nukeLocalGenre()

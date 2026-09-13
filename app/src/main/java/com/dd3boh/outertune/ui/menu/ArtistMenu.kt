@@ -11,12 +11,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -30,6 +35,7 @@ import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.ArtistListItem
+import com.dd3boh.outertune.ui.dialog.LocalArtistLinkDialog
 import com.zionhuang.innertube.YouTube
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +55,15 @@ fun ArtistMenu(
     val isNetworkConnected = LocalNetworkConnected.current
     val artistState = database.artist(originalArtist.id).collectAsState(initial = originalArtist)
     val artist = artistState.value ?: originalArtist
+    var showLinkDialog by rememberSaveable(artist.id) { mutableStateOf(false) }
+
+    if (showLinkDialog && artist.artist.isLocal) {
+        LocalArtistLinkDialog(
+            localArtist = artist,
+            onDismiss = { showLinkDialog = false },
+            onLinked = { showLinkDialog = false; onDismiss() },
+        )
+    }
 
     ArtistListItem(
         artist = artist,
@@ -80,6 +95,13 @@ fun ArtistMenu(
             bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         )
     ) {
+        if (artist.artist.isLocal) {
+            GridMenuItem(
+                icon = Icons.Rounded.Link,
+                title = if (artist.localLink == null) R.string.local_artist_link_title
+                    else R.string.local_artist_link_manage,
+            ) { showLinkDialog = true }
+        }
         if (artist.songCount > 0) {
             GridMenuItem(
                 icon = Icons.Rounded.PlayArrow,

@@ -17,6 +17,7 @@ import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.ArtistAlias
+import com.dd3boh.outertune.db.entities.LocalArtistLink
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
@@ -38,6 +39,7 @@ import java.time.LocalDateTime
 interface ArtistsDao {
 
     // region Gets
+    @Transaction
     @Query("""
         SELECT 
             artist.*,
@@ -55,6 +57,36 @@ interface ArtistsDao {
 
     @Query("SELECT * FROM artist WHERE id = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)")
     fun artistById(id: String): ArtistEntity?
+
+    @Query("SELECT * FROM local_artist_link WHERE localArtistId = :id")
+    fun localArtistLink(id: String): Flow<LocalArtistLink?>
+
+    @Query("SELECT * FROM local_artist_link WHERE localArtistId = :id")
+    fun localArtistLinkById(id: String): LocalArtistLink?
+
+    @Query("SELECT * FROM local_artist_link ORDER BY localArtistId")
+    fun localArtistLinks(): Flow<List<LocalArtistLink>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertLocalArtistLink(link: LocalArtistLink)
+
+    @Transaction
+    fun setLocalArtistLink(link: LocalArtistLink) {
+        val artist = artistById(link.localArtistId)
+        require(artist != null && artist.id == link.localArtistId && artist.isLocal) {
+            "A local artist must exist before linking"
+        }
+        require(Regex("^UC[A-Za-z0-9_-]{22}$").matches(link.onlineArtistId)) { "A public YouTube artist ID is required" }
+        require(link.onlineName.isNotBlank()) { "The online artist name must not be blank" }
+        require(link.revision.isNotBlank()) { "A link revision is required" }
+        upsertLocalArtistLink(link)
+    }
+
+    @Query("DELETE FROM local_artist_link WHERE localArtistId = :id AND revision = :expectedRevision")
+    fun deleteLocalArtistLink(id: String, expectedRevision: String): Int
+
+    fun removeLocalArtistLink(id: String, expectedRevision: String): Boolean =
+        deleteLocalArtistLink(id, expectedRevision) != 0
 
     @Query("SELECT COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)")
     fun resolveArtistId(id: String): String
@@ -148,6 +180,7 @@ interface ArtistsDao {
     @Query("SELECT * FROM artist WHERE isLocal = 1 AND name LIKE '%' || :name || '%'")
     fun localArtistsByNameFuzzy(name: String): List<ArtistEntity>
 
+    @Transaction
     @Query("""
         SELECT 
             artist.*,
@@ -168,6 +201,7 @@ interface ArtistsDao {
     """)
     fun searchArtists(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Artist>>
 
+    @Transaction
     @Query("""
         SELECT 
             artist.*,
@@ -222,6 +256,7 @@ interface ArtistsDao {
     @Query("SELECT * FROM artist WHERE isLocal = 1")
     fun allLocalArtists(): List<ArtistEntity>
 
+    @Transaction
     @Query("""
         SELECT 
             artist.*,
@@ -245,7 +280,8 @@ interface ArtistsDao {
     """)
     fun mostPlayedArtists(fromYear: Int, fromMonth: Int, limit: Int = 6): Flow<List<Artist>>
 
-    @RawQuery(observedEntities = [ArtistEntity::class, SongEntity::class, SongArtistMap::class])
+    @Transaction
+    @RawQuery(observedEntities = [ArtistEntity::class, SongEntity::class, SongArtistMap::class, LocalArtistLink::class])
     fun _getArtists(query: SupportSQLiteQuery): Flow<List<Artist>>
 
     fun artists(
@@ -447,11 +483,13 @@ interface ArtistsDao {
         AND id = :artistId
         AND bookmarkedAt IS NULL
         AND NOT EXISTS (SELECT 1 FROM artist_alias WHERE artist_alias.artistId = artist.id)
+        AND NOT EXISTS (SELECT 1 FROM local_artist_link WHERE localArtistId = artist.id)
     """)
     fun safeDeleteArtist(artistId: String)
 
     @Transaction
-    @Query("DELETE FROM artist WHERE isLocal = 1")
+    @Query("""DELETE FROM artist WHERE isLocal = 1
+        AND NOT EXISTS (SELECT 1 FROM local_artist_link WHERE localArtistId = artist.id)""")
     fun nukeLocalArtists()
     // endregion
 }

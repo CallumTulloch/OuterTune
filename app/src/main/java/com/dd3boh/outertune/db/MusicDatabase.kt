@@ -25,6 +25,7 @@ import com.dd3boh.outertune.db.entities.Event
 import com.dd3boh.outertune.db.entities.FormatEntity
 import com.dd3boh.outertune.db.entities.GenreEntity
 import com.dd3boh.outertune.db.entities.LyricsEntity
+import com.dd3boh.outertune.db.entities.LocalArtistLink
 import com.dd3boh.outertune.db.entities.MetadataFetchEntity
 import com.dd3boh.outertune.db.entities.MetadataNameEntity
 import com.dd3boh.outertune.db.entities.MetadataTargetEntity
@@ -85,7 +86,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 24
+        const val MUSIC_DATABASE_VERSION = 25
     }
 }
 
@@ -94,6 +95,7 @@ class MusicDatabase(
         SongEntity::class,
         ArtistEntity::class,
         ArtistAlias::class,
+        LocalArtistLink::class,
         MetadataTargetEntity::class,
         MetadataNameEntity::class,
         MetadataFetchEntity::class,
@@ -139,6 +141,7 @@ class MusicDatabase(
         AutoMigration(from = 17, to = 18, spec = Migration17To18::class), // Fix Room nonsense
         AutoMigration(from = 18, to = 19), // Recent activity
         AutoMigration(from = 19, to = 20, spec = Migration19To20::class), // Db optimization, remove totalplaytime, local media fields
+        AutoMigration(from = 24, to = 25), // Preserve saved music while adding manual local artist links.
     ]
 )
 @TypeConverters(Converters::class)

@@ -12,6 +12,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.dd3boh.outertune.constants.ListItemHeight
+import com.dd3boh.outertune.LocalDatabase
 import com.dd3boh.outertune.constants.ListThumbnailSize
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.models.MediaMetadata
@@ -93,6 +97,12 @@ fun ArtistDialog(
             items = artists,
             key = { it.id }
         ) { artist ->
+            val database = LocalDatabase.current
+            val linkedThumbnail = if (artist.isLocal) {
+                val link by remember(database, artist.id) { database.localArtistLink(artist.id) }
+                    .collectAsState(initial = null)
+                link?.thumbnailUrl
+            } else null
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -108,7 +118,7 @@ fun ArtistDialog(
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
-                        model = artist.thumbnailUrl,
+                        model = linkedThumbnail ?: artist.thumbnailUrl,
                         contentDescription = null,
                         modifier = Modifier
                             .size(ListThumbnailSize)

@@ -1549,13 +1549,32 @@ class LocalMediaScanner(val context: Context, scannerImpl: ScannerImpl) {
          */
         suspend fun swapArtists(old: ArtistEntity, new: ArtistEntity, database: MusicDatabase) {
             database.awaitTransaction {
-                if (artistById(old.id) == null) {
+                if (old.id == new.id) return@awaitTransaction
+                val previousArtist = artistById(old.id)
+                if (previousArtist == null) {
                     reportException(Exception("Attempting to swap with non-existent old artist in database with id: ${old.id}"))
                     return@awaitTransaction
                 }
-                if (artistById(new.id) == null) {
+                val survivingArtist = artistById(new.id)
+                if (survivingArtist == null) {
                     reportException(Exception("Attempting to swap with non-existent new artist in database with id: ${new.id}"))
                     return@awaitTransaction
+                }
+
+                val previousLink = localArtistLinkById(old.id)
+                val survivingLink = localArtistLinkById(new.id)
+                if (previousLink != null || survivingLink != null) {
+                    require(previousArtist.isLocal && survivingArtist.isLocal) {
+                        "A manually linked local artist cannot be merged with an online artist"
+                    }
+                    require(previousLink == null || survivingLink == null ||
+                        previousLink.onlineArtistId == survivingLink.onlineArtistId) {
+                        "Local artists with different manual links cannot be merged"
+                    }
+                    if (previousLink != null) {
+                        if (survivingLink == null) setLocalArtistLink(previousLink.copy(localArtistId = new.id))
+                        removeLocalArtistLink(old.id, previousLink.revision)
+                    }
                 }
 
                 // update participation(s)

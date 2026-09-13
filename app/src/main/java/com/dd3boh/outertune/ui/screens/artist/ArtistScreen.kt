@@ -108,6 +108,7 @@ import com.dd3boh.outertune.ui.component.shimmer.ArtistPagePlaceholder
 import com.dd3boh.outertune.ui.menu.AlbumMenu
 import com.dd3boh.outertune.ui.menu.YouTubeAlbumMenu
 import com.dd3boh.outertune.ui.menu.YouTubeArtistMenu
+import com.dd3boh.outertune.ui.menu.ArtistMenu
 import com.dd3boh.outertune.ui.menu.YouTubePlaylistMenu
 import com.dd3boh.outertune.ui.menu.YouTubeSongMenu
 import com.dd3boh.outertune.ui.utils.backToMain
@@ -141,10 +142,12 @@ fun ArtistScreen(
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
 
-    val artistPage = viewModel.artistPage
     val libraryArtist by viewModel.libraryArtist.collectAsState()
+    val localArtistLink by viewModel.localArtistLink.collectAsState()
     val artistContext by viewModel.artistContext.collectAsState()
     val onlineArtistId by viewModel.onlineArtistId.collectAsState()
+    val artistPage = viewModel.artistPage?.takeIf { it.artist.id == onlineArtistId &&
+        (libraryArtist?.artist?.isLocal != true || it.artist.id == localArtistLink?.onlineArtistId) }
     val artistContextToken = viewModel.currentContextToken()
     LaunchedEffect(artistContextToken) { viewModel.refreshArtistContext() }
     val librarySongs by viewModel.librarySongs.collectAsState()
@@ -157,7 +160,8 @@ fun ArtistScreen(
     val librarySongItems = librarySongs.map { it.toMediaMetadata() }
     val suppliedArtistName = if (showLocal) {
         libraryArtist?.artist?.displayName ?: artistContext?.name ?: artistPage?.artist?.displayTitle
-    } else artistPage?.artist?.displayTitle ?: libraryArtist?.artist?.displayName ?: artistContext?.name
+    } else artistPage?.artist?.displayTitle ?: localArtistLink?.onlineName
+        ?: libraryArtist?.artist?.displayName ?: artistContext?.name
     val artistName = (if (showLocal && libraryArtist?.artist?.isLocal == true) {
         suppliedArtistName.orEmpty()
     } else {
@@ -171,16 +175,16 @@ fun ArtistScreen(
     }
 
     LaunchedEffect(libraryArtist, onlineArtistId, isNetworkConnected) {
-        // Local artists and offline sessions can only use the local page. Do not reset a
-        // user's explicit local selection when the library artist arrives asynchronously.
-        if (!isNetworkConnected || libraryArtist?.artist?.isLocal == true || onlineArtistId == null) {
+        // A manual link adds the online page without changing the current page selection.
+        if (!isNetworkConnected || onlineArtistId == null) {
             showLocal = true
         }
     }
 
     val artistHead = @Composable {
         if (artistPage != null || libraryArtist != null || artistContext != null) {
-            val thumbnail = artistPage?.artist?.thumbnail ?: libraryArtist?.artist?.thumbnailUrl
+            val thumbnail = artistPage?.artist?.thumbnail ?: localArtistLink?.thumbnailUrl
+                ?: libraryArtist?.thumbnailUrl
 
             Column {
                 Box(
@@ -327,7 +331,7 @@ fun ArtistScreen(
                     if (librarySongs.isNotEmpty()) {
                         item {
                             NavigationTitle(
-                                title = stringResource(R.string.artist_library_songs),
+                                title = stringResource(R.string.artist_local_songs),
                                 onClick = {
                                     navController.navigate("artist/${viewModel.artistId}/songs")
                                 }
@@ -578,7 +582,7 @@ fun ArtistScreen(
         )
 
         HideOnScrollFAB(
-            visible = isNetworkConnected && onlineArtistId != null && libraryArtist?.artist?.isLocal != true,
+            visible = isNetworkConnected && onlineArtistId != null,
             lazyListState = lazyListState,
             icon = if (showLocal) Icons.Rounded.LibraryMusic else Icons.Rounded.Language,
             onClick = {
@@ -601,6 +605,15 @@ fun ArtistScreen(
                 }
             },
             actions = {
+                libraryArtist?.takeIf { it.artist.isLocal }?.let { local ->
+                    IconButton(onClick = {
+                        menuState.show {
+                            ArtistMenu(local, coroutineScope, onDismiss = menuState::dismiss)
+                        }
+                    }) {
+                        Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.local_artist_link_manage))
+                    }
+                }
                 IconButton(
                     onClick = {
                         database.transaction {

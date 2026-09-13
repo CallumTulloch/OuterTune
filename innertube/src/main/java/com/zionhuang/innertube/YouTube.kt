@@ -39,6 +39,7 @@ import com.zionhuang.innertube.models.response.GetTranscriptResponse
 import com.zionhuang.innertube.models.response.NextResponse
 import com.zionhuang.innertube.models.response.PlayerResponse
 import com.zionhuang.innertube.models.response.SearchResponse
+import com.zionhuang.innertube.models.response.ResolveUrlResponse
 import com.zionhuang.innertube.pages.AlbumPage
 import com.zionhuang.innertube.pages.ArtistItemsContinuationPage
 import com.zionhuang.innertube.pages.ArtistItemsPage
@@ -270,8 +271,11 @@ object YouTube {
         parseSearchSummary(contents, language = requestLocale.hl)
     }
 
-    suspend fun search(query: String, filter: SearchFilter, requestLocale: YouTubeLocale): Result<SearchResult> = metadataRequest(
-        requestLocale, "search", items = { it.items },
+    suspend fun search(query: String, filter: SearchFilter, requestLocale: YouTubeLocale): Result<SearchResult> =
+        search(query, filter, requestLocale, notifyMetadata = true)
+
+    suspend fun search(query: String, filter: SearchFilter, requestLocale: YouTubeLocale, notifyMetadata: Boolean): Result<SearchResult> = metadataRequest(
+        requestLocale, "search", enabled = notifyMetadata, items = { it.items },
     ) {
         val response = innerTube.search(WEB_REMIX, query, filter.value, requestLocale = requestLocale).body<SearchResponse>()
         val items = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
@@ -343,6 +347,13 @@ object YouTube {
     ) {
         val response = innerTube.browse(WEB_REMIX, "VL$playlistId", requestLocale = requestLocale).body<BrowseResponse>()
         completeAlbumTracks(response, null, requestLocale)
+    }
+
+    /** Resolve a supported channel URL through the fixed YouTube API, without metadata writes. */
+    suspend fun resolveArtistUrl(input: String, requestLocale: YouTubeLocale = locale): Result<String> = runCatching {
+        resolveYouTubeArtistUrl(input) { canonical ->
+            innerTube.resolveArtistUrl(canonical, requestLocale).body<ResolveUrlResponse>()
+        }
     }
 
     suspend fun artist(browseId: String, requestLocale: YouTubeLocale = locale, notifyMetadata: Boolean = true): Result<ArtistPage> = metadataRequest(
