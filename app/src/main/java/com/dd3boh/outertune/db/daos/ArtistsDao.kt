@@ -17,6 +17,11 @@ import com.dd3boh.outertune.constants.LibraryContentFilter
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.ArtistAlias
+import com.dd3boh.outertune.db.entities.ArtistDisplayView
+import com.dd3boh.outertune.db.entities.ArtistDisplayMapping
+import com.dd3boh.outertune.db.entities.ArtistSongView
+import com.dd3boh.outertune.db.entities.LocalArtistLinkSource
+import com.dd3boh.outertune.db.entities.LocalArtistLinkSourceRow
 import com.dd3boh.outertune.db.entities.LocalArtistLink
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongArtistMap
@@ -53,7 +58,60 @@ interface ArtistsDao {
         WHERE artist.id = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)
         GROUP BY artist.id
     """)
+    fun rawArtist(id: String): Flow<Artist?>
+
+    @Transaction
+    @Query("""
+        SELECT artist.*, COUNT(song.id) AS songCount,
+            SUM(CASE WHEN song.isLocal = 0 AND song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
+        FROM artist_display artist
+            LEFT JOIN artist_song sam ON artist.id = sam.artistId
+            LEFT JOIN song ON sam.songId = song.id AND (
+                song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1
+            )
+        WHERE artist.id = COALESCE((SELECT canonicalArtistId FROM artist_identity
+            WHERE sourceArtistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)), :id)
+        GROUP BY artist.id
+    """)
     fun artist(id: String): Flow<Artist?>
+
+    @Query("""SELECT * FROM artist_display WHERE id = COALESCE((SELECT canonicalArtistId FROM artist_identity
+        WHERE sourceArtistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)), :id)""")
+    fun artistDisplayById(id: String): ArtistEntity?
+
+    @Query("""
+        SELECT link.localArtistId AS sourceArtistId, artist.id AS canonicalArtistId, artist.name, artist.thumbnailUrl
+        FROM local_artist_link link JOIN artist_display artist ON artist.id = link.onlineArtistId
+        WHERE EXISTS (SELECT 1 FROM artist source WHERE source.id = link.localArtistId AND source.isLocal = 1)
+    """)
+    fun artistDisplayMappings(): Flow<List<ArtistDisplayMapping>>
+
+    @Transaction
+    @Query("""
+        SELECT artist.*, COUNT(DISTINCT song.id) AS songCount, 0 AS downloadCount
+        FROM local_artist_link link JOIN artist ON artist.id = link.localArtistId AND artist.isLocal = 1
+            LEFT JOIN song_artist_map sam ON sam.artistId = artist.id
+            LEFT JOIN song ON song.id = sam.songId AND song.isLocal = 1
+        WHERE :onlineId IS NULL OR link.onlineArtistId = :onlineId
+        GROUP BY artist.id ORDER BY artist.name COLLATE NOCASE, artist.id
+    """)
+    fun localArtistLinkSourceRows(onlineId: String?): Flow<List<LocalArtistLinkSourceRow>>
+
+    fun localArtistLinkSources(onlineId: String? = null): Flow<List<LocalArtistLinkSource>> =
+        localArtistLinkSourceRows(onlineId).map { rows -> rows.map(LocalArtistLinkSourceRow::toSource) }
+
+    @Query("SELECT * FROM artist WHERE id = :id")
+    fun artistEntityByExactId(id: String): ArtistEntity?
+
+    /** Group bookmarks belong to the online representative; local bookmarks survive unlinking. */
+    @Transaction
+    fun toggleArtistBookmark(id: String) {
+        val display = artistDisplayById(id) ?: return
+        val bookmarkedAt = if (display.bookmarkedAt == null) LocalDateTime.now() else null
+        val stored = artistEntityByExactId(display.id)
+        if (stored == null) insert(display.copy(bookmarkedAt = bookmarkedAt))
+        else update(stored.copy(bookmarkedAt = bookmarkedAt))
+    }
 
     @Query("SELECT * FROM artist WHERE id = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)")
     fun artistById(id: String): ArtistEntity?
@@ -186,8 +244,8 @@ interface ArtistsDao {
             artist.*,
             COUNT(song.id) AS songCount,
             SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
-        FROM artist
-            LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
+        FROM artist_display artist
+            LEFT JOIN artist_song sam ON artist.id = sam.artistId
             LEFT JOIN song ON sam.songId = song.id
         WHERE (artist.name LIKE '%' || :query || '%' OR (artist.isLocal = 0 AND EXISTS (
             SELECT 1 FROM metadata_name
@@ -207,8 +265,8 @@ interface ArtistsDao {
             artist.*,
             COUNT(song.id) AS songCount,
             SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
-        FROM artist
-            LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
+        FROM artist_display artist
+            LEFT JOIN artist_song sam ON artist.id = sam.artistId
             LEFT JOIN song ON sam.songId = song.id
         WHERE (artist.name LIKE '%' || :query || '%' OR (artist.isLocal = 0 AND EXISTS (
             SELECT 1 FROM metadata_name
@@ -225,9 +283,9 @@ interface ArtistsDao {
     @Transaction
     @Query("""
         SELECT DISTINCT song.*
-        FROM song_artist_map JOIN song ON song_artist_map.songId = song.id
-        WHERE song_artist_map.artistId IN (
-            SELECT id FROM artist
+        FROM artist_song JOIN song ON artist_song.songId = song.id
+        WHERE artist_song.artistId IN (
+            SELECT id FROM artist_display artist
             WHERE name LIKE '%' || :query || '%' OR (artist.isLocal = 0 AND EXISTS (
                 SELECT 1 FROM metadata_name
                 WHERE kind = 'ARTIST' AND (targetId = artist.onlineId OR targetId = artist.id)
@@ -240,7 +298,7 @@ interface ArtistsDao {
     fun searchArtistSongs(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<Song>>
 
     @Query("""
-        SELECT * FROM artist
+        SELECT * FROM artist_display artist
         WHERE name LIKE '%' || :query || '%' OR (artist.isLocal = 0 AND EXISTS (
             SELECT 1 FROM metadata_name
             WHERE kind = 'ARTIST' AND (targetId = artist.onlineId OR targetId = artist.id)
@@ -262,8 +320,8 @@ interface ArtistsDao {
             artist.*,
             COUNT(song.id) AS songCount,
             SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
-        FROM artist
-            LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
+        FROM artist_display artist
+            LEFT JOIN artist_song sam ON artist.id = sam.artistId
             LEFT JOIN song ON sam.songId = song.id
             LEFT JOIN (
                 SELECT 
@@ -281,7 +339,7 @@ interface ArtistsDao {
     fun mostPlayedArtists(fromYear: Int, fromMonth: Int, limit: Int = 6): Flow<List<Artist>>
 
     @Transaction
-    @RawQuery(observedEntities = [ArtistEntity::class, SongEntity::class, SongArtistMap::class, LocalArtistLink::class])
+    @RawQuery(observedEntities = [ArtistEntity::class, SongEntity::class, SongArtistMap::class, LocalArtistLink::class, ArtistDisplayView::class, ArtistSongView::class])
     fun _getArtists(query: SupportSQLiteQuery): Flow<List<Artist>>
 
     fun artists(
@@ -320,14 +378,17 @@ interface ArtistsDao {
         filterUnsupportedArtists: Boolean,
     ): Flow<List<Artist>> {
         val orderBy = when (sortType) {
-            ArtistSortType.CREATE_DATE -> "artist.rowId ASC"
+            ArtistSortType.CREATE_DATE -> "artist.sortOrder ASC"
             ArtistSortType.NAME -> "artist.name COLLATE NOCASE ASC"
             ArtistSortType.SONG_COUNT -> "songCount ASC"
         }
 
         val where = buildList {
             add("($contentCondition)")
-            localOnly?.let { add("artist.isLocal = ${if (it) 1 else 0}") }
+            localOnly?.let {
+                add("""EXISTS (SELECT 1 FROM artist_identity member JOIN artist source ON source.id = member.sourceArtistId
+                    WHERE member.canonicalArtistId = artist.id AND source.isLocal = ${if (it) 1 else 0})""")
+            }
         }.joinToString(" AND ")
 
         val query = SimpleSQLiteQuery("""
@@ -335,8 +396,8 @@ interface ArtistsDao {
                 artist.*,
                 COUNT(song.id) AS songCount,
                 SUM(CASE WHEN song.isLocal = 0 AND song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
-            FROM artist
-                LEFT JOIN song_artist_map sam ON artist.id = sam.artistId
+            FROM artist_display artist
+                LEFT JOIN artist_song sam ON artist.id = sam.artistId
                 LEFT JOIN song ON sam.songId = song.id
             WHERE $where
             GROUP BY artist.id
@@ -369,12 +430,12 @@ interface ArtistsDao {
             artist.*,
             COUNT(song.id) AS songCount,
             SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
-        FROM artist
-            JOIN song_artist_map sam ON artist.id = sam.artistId
+        FROM artist_display artist
+            JOIN artist_song sam ON artist.id = sam.artistId
             JOIN song ON sam.songId = song.id
         WHERE song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL
         GROUP BY artist.id
-        ORDER BY artist.rowId ASC
+        ORDER BY artist.sortOrder ASC
     """)
     fun savedArtistsByCreateDateAsc(): Flow<List<Artist>>
 
@@ -398,9 +459,9 @@ interface ArtistsDao {
     @Transaction
     @Query("""
         SELECT song.*
-        FROM song_artist_map
-            JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
+        FROM artist_song
+            JOIN song ON artist_song.songId = song.id
+        WHERE artistId = COALESCE((SELECT canonicalArtistId FROM artist_identity WHERE sourceArtistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)), :artistId)
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         ORDER BY COALESCE(inLibrary, dateDownload, dateModified, date)
     """)
@@ -409,9 +470,9 @@ interface ArtistsDao {
     @Transaction
     @Query("""
         SELECT song.*
-        FROM song_artist_map
-            JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
+        FROM artist_song
+            JOIN song ON artist_song.songId = song.id
+        WHERE artistId = COALESCE((SELECT canonicalArtistId FROM artist_identity WHERE sourceArtistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)), :artistId)
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         ORDER BY title COLLATE NOCASE ASC
     """)
@@ -484,6 +545,8 @@ interface ArtistsDao {
         AND bookmarkedAt IS NULL
         AND NOT EXISTS (SELECT 1 FROM artist_alias WHERE artist_alias.artistId = artist.id)
         AND NOT EXISTS (SELECT 1 FROM local_artist_link WHERE localArtistId = artist.id)
+        AND NOT EXISTS (SELECT 1 FROM local_artist_link
+            WHERE onlineArtistId = artist.id OR (artist.isLocal = 0 AND onlineArtistId = artist.onlineId))
     """)
     fun safeDeleteArtist(artistId: String)
 

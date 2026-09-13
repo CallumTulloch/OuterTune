@@ -431,4 +431,14 @@ while also allowing users to translate our app as well. New, specific strings to
     <string name="local_artist_link_invalid_artist">This page could not be confirmed as an artist. Select another result.</string>
     <string name="local_artist_link_context_changed">Your language or account changed. Search and check the artist again.</string>
     <string name="local_artist_link_changed">The saved link changed. Check the current link and select an artist again.</string>
+    <string name="local_artist_links_title">Artist links</string>
+    <string name="local_artist_links_sources">Links from folders</string>
+    <string name="local_artist_links_description">Manage each artist name from your files, including links with no songs currently loaded.</string>
+    <string name="local_artist_links_file_name">Name in files: %1$s</string>
+    <string name="local_artist_links_show_folders">Show folders (%1$d)</string>
+    <string name="local_artist_links_hide_folders">Hide folders (%1$d)</string>
+    <string name="local_artist_links_no_folders">No folder information is currently saved.</string>
+    <string name="local_artist_links_empty">No artist links are saved here.</string>
+    <string name="local_artist_links_load_failed">Could not load artist links. Please try again.</string>
+    <string name="local_artist_links_close">Close</string>
 </resources>

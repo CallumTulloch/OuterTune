@@ -3,11 +3,23 @@ package com.dd3boh.outertune.ui.screens.library
 import com.dd3boh.outertune.constants.FolderSongSortType
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongEntity
+import com.dd3boh.outertune.db.entities.ArtistDisplayMapping
+import com.dd3boh.outertune.db.entities.ArtistEntity
+import com.dd3boh.outertune.models.metadata.OriginalNameKind
+import com.dd3boh.outertune.models.metadata.OriginalNameTarget
+import com.dd3boh.outertune.utils.ArtistDisplayProjection
+import com.dd3boh.outertune.utils.MetadataNames
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class FolderSongsTest {
+    @After
+    fun clearDisplayOverrides() {
+        ArtistDisplayProjection.publish(emptyList())
+        MetadataNames.publish(emptyMap())
+    }
     private fun song(id: String, title: String, track: Int) = Song(
         SongEntity(id, title, isLocal = true, localPath = "/storage/emulated/0/Music/child/$id.wav", trackNumber = track),
         emptyList(),
@@ -35,5 +47,23 @@ class FolderSongsTest {
     fun `disappeared selection never starts an unrelated song or an empty queue`() {
         assertNull(folderSongQueue(emptyList(), "gone", "Search"))
         assertNull(folderSongQueue(listOf(song("a", "Alpha", 1)), "gone", "Search"))
+    }
+
+    @Test
+    fun `artist sort follows the linked display name and language changes without rewriting tags`() {
+        val first = song("first", "First", 1).copy(artists = listOf(ArtistEntity("LA-first", "Alpha file", isLocal = true)))
+        val second = song("second", "Second", 2).copy(artists = listOf(ArtistEntity("LA-second", "Middle file", isLocal = true)))
+        val source = listOf(first, second)
+        val onlineId = "UCabcdefghijklmnopqrstuv"
+        assertEquals(listOf("first", "second"), sortedFolderSongs(source, FolderSongSortType.ARTIST, false).map { it.id })
+        ArtistDisplayProjection.publish(listOf(ArtistDisplayMapping("LA-first", onlineId, "Zulu linked", null)))
+        assertEquals(listOf("second", "first"), sortedFolderSongs(source, FolderSongSortType.ARTIST, false).map { it.id })
+        MetadataNames.publish(mapOf(OriginalNameTarget(OriginalNameKind.ARTIST, onlineId) to "Aardvark localized"))
+        assertEquals(listOf("first", "second"), sortedFolderSongs(source, FolderSongSortType.ARTIST, false).map { it.id })
+        val metadata = folderSongQueue(source, "first", "Folder")!!.items.first()
+        assertEquals("Alpha file", metadata.artists.single().name)
+        assertEquals("LA-first", metadata.artists.single().id)
+        ArtistDisplayProjection.publish(emptyList())
+        assertEquals(listOf("first", "second"), sortedFolderSongs(source, FolderSongSortType.ARTIST, false).map { it.id })
     }
 }

@@ -52,6 +52,8 @@ import com.dd3boh.outertune.ui.utils.cacheDirectoryTree
 import com.dd3boh.outertune.ui.utils.decodeFolderPathArgument
 import com.dd3boh.outertune.ui.utils.getDirectoryTree
 import com.dd3boh.outertune.utils.SyncUtils
+import com.dd3boh.outertune.utils.MetadataNames
+import com.dd3boh.outertune.utils.displayName
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.reportException
 import com.dd3boh.outertune.utils.scanners.LocalMediaScanner.Companion.refreshLocal
@@ -384,7 +386,7 @@ class LibraryViewModel @Inject constructor(
         }
         .distinctUntilChanged()
         .flatMapLatest { (sortType, descending) ->
-            combine(artists, albums, playlists) { artists, albums, playlists ->
+            combine(artists, albums, playlists, MetadataNames.updates) { artists, albums, playlists, _ ->
                 val items = artists + albums + playlists
                 items.sortedBy { item ->
                     when (sortType) {
@@ -397,7 +399,7 @@ class LibraryViewModel @Inject constructor(
 
                         else -> when (item) {
                             is Album -> item.album.title.lowercase()
-                            is Artist -> item.artist.name.lowercase()
+                            is Artist -> item.artist.displayName.lowercase()
                             is Playlist -> item.playlist.name.lowercase()
                             else -> ""
                         }

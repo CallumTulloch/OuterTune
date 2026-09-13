@@ -237,13 +237,13 @@ class LocalArtistLinkDatabaseTest {
     }
 
     @Test
-    fun savedArtistListEmitsLinkedImageChangesAndRestoresItsLocalImageOnUnlink() = runBlocking {
+    fun rawArtistObserverEmitsLinkedImageChangesAndRestoresItsLocalImageOnUnlink() = runBlocking {
         withDatabase { database ->
             val source = seed(database)
             val snapshots = Channel<SavedArtist>(Channel.UNLIMITED)
             val observer = launch {
-                database.artistsInLibraryAsc().collect { artists ->
-                    snapshots.send(artists.single { it.id == source.artist.id })
+                database.rawArtist(source.artist.id).collect { artist ->
+                    snapshots.send(requireNotNull(artist))
                 }
             }
             suspend fun next(revision: String?) = withTimeout(5_000L) {
@@ -274,16 +274,19 @@ class LocalArtistLinkDatabaseTest {
         try {
             val source = seed(database)
             database.close()
-            // Version 25 only adds local_artist_link. Remove it to reconstruct the committed v24 schema.
+            // Remove additions after v24 to reconstruct its committed schema.
             SQLiteDatabase.openDatabase(context.getDatabasePath(filename).path, null,
                 SQLiteDatabase.OPEN_READWRITE).use { oldDatabase ->
+                for (view in listOf("artist_display", "artist_song", "artist_album", "artist_identity")) {
+                    oldDatabase.execSQL("DROP VIEW $view")
+                }
                 oldDatabase.execSQL("DROP TABLE local_artist_link")
                 oldDatabase.execSQL("UPDATE room_master_table SET identity_hash = '890150d6f95c112fb620a50a4bfb11f9' WHERE id = 42")
                 oldDatabase.version = 24
             }
             database = InternalDatabase.newTestInstance(context, filename)
             assertSourceUnchanged(database, source)
-            assertEquals(25, database.openHelper.readableDatabase.version)
+            assertEquals(26, database.openHelper.readableDatabase.version)
             assertTrue(database.localArtistLinks().first().isEmpty())
             val chosen = link()
             database.setLocalArtistLink(chosen)

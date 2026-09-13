@@ -1,7 +1,6 @@
 package com.dd3boh.outertune.ui.screens
 
 import com.dd3boh.outertune.utils.displayTitle
-import com.dd3boh.outertune.utils.displayName
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -96,6 +95,7 @@ import com.dd3boh.outertune.db.entities.Album
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.artistDisplayTargets
 import com.dd3boh.outertune.utils.artistNameSeparator
 import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.dd3boh.outertune.playback.ExoDownloadService
@@ -253,7 +253,7 @@ fun AlbumScreen(
                                     if (credit != null && credit.status != ArtistCreditStatus.COMPLETE) {
                                         append(albumWithSongsLocal.artistDisplayText())
                                     } else {
-                                        val artists = credit?.artists?.map { item ->
+                                        val artists = (credit?.artists?.map { item ->
                                             MediaMetadata.Artist(
                                                 item.ref ?: item.id, item.name,
                                                 isLocal = albumWithSongsLocal.album.isLocal,
@@ -265,13 +265,13 @@ fun AlbumScreen(
                                                 isLocal = albumWithSongsLocal.album.isLocal || it.isLocal,
                                                 onlineId = it.onlineArtistId,
                                             )
-                                        }
+                                        }).artistDisplayTargets(preserveLocalNames = albumWithSongsLocal.album.isLocal)
                                         artists.forEachIndexed { index, artist ->
                                             if (!artist.id.isNullOrBlank()) {
                                                 withLink(LinkAnnotation.Clickable(artist.id) {
                                                     navController.navigate("artist/${artist.id}")
-                                                }) { append(artist.displayName) }
-                                            } else append(artist.displayName)
+                                                }) { append(artist.name) }
+                                            } else append(artist.name)
                                             if (index != artists.lastIndex) {
                                                 append(if (credit == null || albumWithSongsLocal.album.isLocal) ", " else artistNameSeparator())
                                             }

@@ -39,6 +39,7 @@ import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.viewmodels.LocalArtistLinkViewModel
 import com.dd3boh.outertune.viewmodels.LocalArtistLinkViewModel.Busy
 import com.dd3boh.outertune.viewmodels.LocalArtistLinkViewModel.Failure
+import com.dd3boh.outertune.utils.displayArtistTarget
 
 @Composable
 fun LocalArtistLinkDialog(
@@ -49,6 +50,9 @@ fun LocalArtistLinkDialog(
     if (!localArtist.artist.isLocal) return
     val viewModel: LocalArtistLinkViewModel = hiltViewModel(key = "local-artist-link:${localArtist.id}")
     val state by viewModel.state.collectAsState()
+    val currentTarget = state.link?.let { link ->
+        localArtist.artist.displayArtistTarget().takeIf { it.id == link.onlineArtistId }
+    }
     val currentOnLinked by rememberUpdatedState(onLinked)
     val currentOnDismiss by rememberUpdatedState(onDismiss)
     DisposableEffect(viewModel, localArtist.id) {
@@ -79,7 +83,7 @@ fun LocalArtistLinkDialog(
                 Text(stringResource(R.string.local_artist_link_source, localArtist.title, localArtist.songCount))
                 state.link?.let { link ->
                     Text(stringResource(R.string.local_artist_link_current), style = MaterialTheme.typography.labelLarge)
-                    ArtistLinkName(link.onlineName, link.thumbnailUrl)
+                    ArtistLinkName(currentTarget?.name ?: link.onlineName, currentTarget?.thumbnailUrl ?: link.thumbnailUrl)
                     TextButton(onClick = viewModel::askUnlink, enabled = state.loaded && !state.saving) {
                         Text(stringResource(R.string.local_artist_link_remove))
                     }
@@ -165,7 +169,7 @@ fun LocalArtistLinkDialog(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(R.string.local_artist_link_remove_confirmation,
-                        localArtist.title, state.link?.onlineName.orEmpty()))
+                        localArtist.title, currentTarget?.name ?: state.link?.onlineName.orEmpty()))
                     if (state.busy == Busy.UNLINKING) {
                         Text(stringResource(R.string.local_artist_link_removing))
                     }

@@ -35,6 +35,7 @@ import com.dd3boh.outertune.utils.get
 import com.dd3boh.outertune.utils.reportException
 import com.dd3boh.outertune.repositories.MetadataNameRepository
 import com.dd3boh.outertune.repositories.ArtistImageRepository
+import com.dd3boh.outertune.repositories.ArtistDisplayRepository
 import com.dd3boh.outertune.repositories.AlbumMetadataRepository
 import com.dd3boh.outertune.repositories.ContentLocaleRepository
 import com.dd3boh.outertune.repositories.AuthenticationRepository
@@ -52,6 +53,7 @@ import java.net.Proxy
 class App : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var metadataNames: MetadataNameRepository
     @Inject lateinit var artistImages: ArtistImageRepository
+    @Inject lateinit var artistDisplay: ArtistDisplayRepository
     @Inject lateinit var albumMetadata: AlbumMetadataRepository
     @Inject lateinit var contentLocale: ContentLocaleRepository
     @Inject lateinit var authentication: AuthenticationRepository
@@ -85,6 +87,7 @@ class App : Application(), SingletonImageLoader.Factory {
         }
 
         authentication.start()
+        artistDisplay.start()
         albumMetadata.start()
         metadataNames.start()
         artistImages.start()

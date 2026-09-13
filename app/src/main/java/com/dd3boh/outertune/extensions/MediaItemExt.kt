@@ -14,6 +14,13 @@ import com.zionhuang.innertube.models.SongItem
 val MediaItem.metadata: MediaMetadata?
     get() = localConfiguration?.tag as? MediaMetadata
 
+/** Refresh session display fields while retaining the raw tag and the exact playing audio source. */
+fun MediaItem.withCurrentDisplayMetadata(): MediaItem {
+    val raw = metadata ?: return this
+    val displayed = raw.toMediaItem().mediaMetadata
+    return if (displayed == mediaMetadata) this else buildUpon().setMediaMetadata(displayed).build()
+}
+
 fun Song.toMediaItem() = MediaItem.Builder()
     .setMediaId(song.id)
     .setUri(song.id)

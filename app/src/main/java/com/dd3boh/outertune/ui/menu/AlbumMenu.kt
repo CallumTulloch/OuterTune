@@ -55,6 +55,7 @@ import com.dd3boh.outertune.ui.dialog.AddToQueueDialog
 import com.dd3boh.outertune.ui.dialog.ArtistDialog
 import com.dd3boh.outertune.utils.getDownloadState
 import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.artistDisplayTargets
 import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.zionhuang.innertube.YouTube
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +77,7 @@ fun AlbumMenu(
     val scope = rememberCoroutineScope()
     val libraryAlbum by database.album(originalAlbum.id).collectAsState(initial = originalAlbum)
     val album = libraryAlbum ?: originalAlbum
+    val artistTargets = album.artists.artistDisplayTargets(preserveLocalNames = album.album.isLocal)
     var songs by remember {
         mutableStateOf(emptyList<Song>())
     }
@@ -227,9 +229,10 @@ fun AlbumMenu(
             icon = R.drawable.artist,
             title = R.string.view_artist
         ) {
-            if (album.artists.size == 1 && (album.artistCredit == null ||
+            val singleArtist = artistTargets.singleOrNull()?.id?.takeIf { it.isNotBlank() }
+            if (singleArtist != null && (album.album.isLocal || album.artistCredit == null ||
                         album.artistCredit?.status == ArtistCreditStatus.COMPLETE)) {
-                navController.navigate("artist/${album.artists[0].id}")
+                navController.navigate("artist/$singleArtist")
                 onDismiss()
             } else {
                 showSelectArtistDialog = true
@@ -315,6 +318,7 @@ fun AlbumMenu(
         ArtistDialog(
             navController = navController,
             artists = album.artists,
+            preserveLocalNames = album.album.isLocal,
             rawText = album.artistDisplayText(),
             onDismiss = { showSelectArtistDialog = false }
         )

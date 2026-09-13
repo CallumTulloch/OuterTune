@@ -52,11 +52,12 @@ val SongEntity.displayTitle: String
 val AlbumEntity.displayTitle: String
     get() = if (isLocal) title else MetadataNames.resolve(OriginalNameKind.ALBUM, id, title)
 val ArtistEntity.displayName: String
-    get() = if (isLocal) name else MetadataNames.resolve(OriginalNameKind.ARTIST, onlineArtistId, name)
+    get() = ArtistDisplayProjection.resolve(id)?.name
+        ?: if (isLocal) name else MetadataNames.resolve(OriginalNameKind.ARTIST, onlineArtistId, name)
 val MediaMetadata.displayTitle: String
     get() = if (isLocal) title else MetadataNames.resolve(OriginalNameKind.SONG, id, title)
 val MediaMetadata.Artist.displayName: String
-    get() = if (isLocal) name else MetadataNames.resolve(OriginalNameKind.ARTIST,
+    get() = ArtistDisplayProjection.resolve(id)?.name ?: if (isLocal) name else MetadataNames.resolve(OriginalNameKind.ARTIST,
         ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id), name)
 val MediaMetadata.Album.displayTitle: String
     get() = if (isLocal) title else MetadataNames.resolve(OriginalNameKind.ALBUM, id, title)
@@ -76,7 +77,12 @@ val RecentActivityEntity.displayTitle: String
     }
 
 fun MediaMetadata.matchesMetadataQuery(query: String): Boolean =
-    title.contains(query, ignoreCase = true) || artists.any { it.name.contains(query, ignoreCase = true) } ||
+    title.contains(query, ignoreCase = true) || artists.any { artist ->
+        val linked = ArtistDisplayProjection.resolve(artist.id)
+        if (linked != null) linked.name.contains(query, ignoreCase = true) ||
+            MetadataNames.matches(OriginalNameKind.ARTIST, linked.id, query)
+        else artist.name.contains(query, ignoreCase = true)
+    } ||
         (!isLocal && (MetadataNames.matches(OriginalNameKind.SONG, id, query) ||
-            artists.any { MetadataNames.matches(OriginalNameKind.ARTIST,
+            artists.any { ArtistDisplayProjection.resolve(it.id) == null && MetadataNames.matches(OriginalNameKind.ARTIST,
                 ArtistIdentity.onlineId(it.onlineId) ?: ArtistIdentity.onlineId(it.id), query) }))

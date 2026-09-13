@@ -1,6 +1,6 @@
 package com.dd3boh.outertune.ui.player
 
-import com.dd3boh.outertune.utils.displayName
+import com.dd3boh.outertune.utils.displayArtists
 
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -31,12 +31,13 @@ fun PlayerArtistText(
     onNavigate: () -> Unit,
 ) {
     val resolved = rememberResolvedArtistMetadata(metadata)
+    val artists = resolved.displayArtists()
     var showInformation by rememberSaveable(metadata.id) { mutableStateOf(false) }
-    if (resolved.hasCompleteArtistList() && resolved.artists.isNotEmpty()) {
+    if (resolved.hasCompleteArtistList() && artists.isNotEmpty()) {
         Row {
-            resolved.artists.forEachIndexed { index, artist ->
+            artists.forEachIndexed { index, artist ->
                 Text(
-                    text = if (resolved.isLocal) artist.name else artist.displayName,
+                    text = artist.name,
                     style = MaterialTheme.typography.titleMedium,
                     color = color,
                     maxLines = 1,
@@ -49,7 +50,7 @@ fun PlayerArtistText(
                             } else showInformation = true
                         },
                 )
-                if (index != resolved.artists.lastIndex) {
+                if (index != artists.lastIndex) {
                     Text(
                         text = if (resolved.isLocal || resolved.artistCredit == null ||
                             resolved.artistCredit?.isVideoCredit() == true) ", " else artistNameSeparator(),

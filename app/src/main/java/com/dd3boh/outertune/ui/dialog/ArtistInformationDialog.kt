@@ -1,23 +1,28 @@
 package com.dd3boh.outertune.ui.dialog
 
-import com.dd3boh.outertune.utils.displayName
-
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import coil3.compose.AsyncImage
 import com.dd3boh.outertune.R
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.ui.utils.rememberResolvedArtistMetadata
 import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.artistDisplayTargets
 import com.zionhuang.innertube.models.ArtistCreditStatus
 
 /** This dialog remains useful even when no individual page target is known yet. */
@@ -31,8 +36,9 @@ fun ArtistInformationDialog(
     val resolved = rememberResolvedArtistMetadata(metadata, request = true, priority = true)
     val credit = resolved.artistCredit
     val artists = if (credit == null) resolved.artists else credit.artists.map { artist ->
-        MediaMetadata.Artist(id = artist.ref ?: artist.id, name = artist.name, onlineId = artist.id)
+        MediaMetadata.Artist(id = artist.ref ?: artist.id, name = artist.name, onlineId = artist.id, isLocal = resolved.isLocal)
     }
+    val targets = artists.artistDisplayTargets(preserveLocalNames = resolved.isLocal)
     ListDialog(onDismiss = onDismiss) {
         item {
             Text(
@@ -41,7 +47,8 @@ fun ArtistInformationDialog(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
             Text(
-                text = credit?.rawText?.takeIf { it.isNotBlank() } ?: resolved.artistDisplayText(),
+                text = if (resolved.isLocal) resolved.artistDisplayText()
+                    else credit?.rawText?.takeIf { it.isNotBlank() } ?: resolved.artistDisplayText(),
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             )
@@ -69,8 +76,9 @@ fun ArtistInformationDialog(
                 )
             }
         }
-        items(artists) { artist ->
-            Column(
+        items(targets) { artist ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(enabled = !artist.id.isNullOrBlank()) {
@@ -79,9 +87,14 @@ fun ArtistInformationDialog(
                     }
                     .padding(horizontal = 24.dp, vertical = 16.dp)
             ) {
+                artist.thumbnailUrl?.let { thumbnail ->
+                    AsyncImage(model = thumbnail, contentDescription = null, contentScale = ContentScale.Crop,
+                        modifier = Modifier.padding(end = 12.dp).size(40.dp).clip(CircleShape))
+                }
                 Text(
-                    if (resolved.isLocal) artist.name else artist.displayName,
+                    artist.name,
                     style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
                 )
             }
         }

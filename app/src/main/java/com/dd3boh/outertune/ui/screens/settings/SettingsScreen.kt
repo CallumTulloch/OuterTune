@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.rounded.LibraryBooks
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Interests
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Restore
@@ -53,6 +54,7 @@ import com.dd3boh.outertune.constants.UpdateAvailableKey
 import com.dd3boh.outertune.ui.component.ColumnWithContentPadding
 import com.dd3boh.outertune.ui.component.PreferenceEntry
 import com.dd3boh.outertune.ui.component.button.IconButton
+import com.dd3boh.outertune.ui.dialog.LocalArtistLinksDialog
 import com.dd3boh.outertune.ui.utils.backToMain
 import com.dd3boh.outertune.utils.rememberPreference
 
@@ -72,6 +74,8 @@ fun SettingsScreen(
     val (updateAvailable, onUpdateAvailableChange) = rememberPreference(UpdateAvailableKey, defaultValue = false)
 
     var newVersion by remember { mutableStateOf("") }
+    var showArtistLinks by remember { mutableStateOf(false) }
+    if (showArtistLinks) LocalArtistLinksDialog(onDismiss = { showArtistLinks = false })
     ColumnWithContentPadding(
         modifier = Modifier.fillMaxHeight(),
         columnModifier = Modifier
@@ -95,6 +99,11 @@ fun SettingsScreen(
                 title = { Text(stringResource(R.string.local_player_settings_title)) },
                 icon = { Icon(Icons.Rounded.SdCard, null) },
                 onClick = { navController.navigate("settings/local") }
+            )
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.local_artist_links_title)) },
+                icon = { Icon(Icons.Rounded.Link, null) },
+                onClick = { showArtistLinks = true }
             )
         }
         Spacer(modifier = Modifier.height(16.dp))

@@ -143,11 +143,9 @@ fun ArtistScreen(
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
 
     val libraryArtist by viewModel.libraryArtist.collectAsState()
-    val localArtistLink by viewModel.localArtistLink.collectAsState()
     val artistContext by viewModel.artistContext.collectAsState()
     val onlineArtistId by viewModel.onlineArtistId.collectAsState()
-    val artistPage = viewModel.artistPage?.takeIf { it.artist.id == onlineArtistId &&
-        (libraryArtist?.artist?.isLocal != true || it.artist.id == localArtistLink?.onlineArtistId) }
+    val artistPage = viewModel.artistPage?.takeIf { it.artist.id == onlineArtistId }
     val artistContextToken = viewModel.currentContextToken()
     LaunchedEffect(artistContextToken) { viewModel.refreshArtistContext() }
     val librarySongs by viewModel.librarySongs.collectAsState()
@@ -160,8 +158,7 @@ fun ArtistScreen(
     val librarySongItems = librarySongs.map { it.toMediaMetadata() }
     val suppliedArtistName = if (showLocal) {
         libraryArtist?.artist?.displayName ?: artistContext?.name ?: artistPage?.artist?.displayTitle
-    } else artistPage?.artist?.displayTitle ?: localArtistLink?.onlineName
-        ?: libraryArtist?.artist?.displayName ?: artistContext?.name
+    } else artistPage?.artist?.displayTitle ?: libraryArtist?.artist?.displayName ?: artistContext?.name
     val artistName = (if (showLocal && libraryArtist?.artist?.isLocal == true) {
         suppliedArtistName.orEmpty()
     } else {
@@ -183,8 +180,7 @@ fun ArtistScreen(
 
     val artistHead = @Composable {
         if (artistPage != null || libraryArtist != null || artistContext != null) {
-            val thumbnail = artistPage?.artist?.thumbnail ?: localArtistLink?.thumbnailUrl
-                ?: libraryArtist?.thumbnailUrl
+            val thumbnail = artistPage?.artist?.thumbnail ?: libraryArtist?.thumbnailUrl
 
             Column {
                 Box(
@@ -333,7 +329,7 @@ fun ArtistScreen(
                             NavigationTitle(
                                 title = stringResource(R.string.artist_local_songs),
                                 onClick = {
-                                    navController.navigate("artist/${viewModel.artistId}/songs")
+                                    navController.navigate("artist/${libraryArtist?.id ?: viewModel.artistId}/songs")
                                 }
                             )
                         }
@@ -378,7 +374,7 @@ fun ArtistScreen(
                             NavigationTitle(
                                 title = stringResource(R.string.albums),
                                 onClick = {
-                                    navController.navigate("artist/${viewModel.artistId}/albums")
+                                    navController.navigate("artist/${libraryArtist?.id ?: viewModel.artistId}/albums")
                                 }
                             )
                         }
@@ -605,13 +601,13 @@ fun ArtistScreen(
                 }
             },
             actions = {
-                libraryArtist?.takeIf { it.artist.isLocal }?.let { local ->
+                libraryArtist?.let { savedArtist ->
                     IconButton(onClick = {
                         menuState.show {
-                            ArtistMenu(local, coroutineScope, onDismiss = menuState::dismiss)
+                            ArtistMenu(savedArtist, coroutineScope, onDismiss = menuState::dismiss)
                         }
                     }) {
-                        Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.local_artist_link_manage))
+                        Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.options))
                     }
                 }
                 IconButton(
@@ -619,7 +615,7 @@ fun ArtistScreen(
                         database.transaction {
                             val artist = libraryArtist?.artist
                             if (artist != null) {
-                                update(artist.toggleLike())
+                                toggleArtistBookmark(artist.id)
                             } else if (artistContext != null) {
                                 artistContext?.let {
                                     insert(ArtistEntity(

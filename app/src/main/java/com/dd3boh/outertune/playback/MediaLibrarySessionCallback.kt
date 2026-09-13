@@ -3,6 +3,8 @@ package com.dd3boh.outertune.playback
 import com.dd3boh.outertune.utils.displayTitle
 import com.dd3boh.outertune.utils.displayName
 import com.dd3boh.outertune.utils.artistDisplayText
+import com.dd3boh.outertune.utils.artistNavigationId
+import com.dd3boh.outertune.utils.displayThumbnailUrl
 
 import android.content.ContentResolver
 import android.content.Context
@@ -193,10 +195,10 @@ class MediaLibrarySessionCallback @Inject constructor(
                 MusicService.SONG -> database.songsByCreateDateAsc().first().map { it.toMediaItem(parentId) }
                 MusicService.ARTIST -> database.artistsInLibraryAsc().first().map { artist ->
                     browsableMediaItem(
-                        "${MusicService.ARTIST}/${artist.id}",
+                        "${MusicService.ARTIST}/${artist.artist.artistNavigationId}",
                         artist.artist.displayName,
                         context.resources.getQuantityString(R.plurals.n_song, artist.songCount, artist.songCount),
-                        artist.artist.thumbnailUrl?.toUri(),
+                        artist.artist.displayThumbnailUrl?.toUri(),
                         MediaMetadata.MEDIA_TYPE_ARTIST
                     )
                 }

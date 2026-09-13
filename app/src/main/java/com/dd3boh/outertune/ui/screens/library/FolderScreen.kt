@@ -104,6 +104,8 @@ import com.dd3boh.outertune.ui.utils.canNavigateUp
 import com.dd3boh.outertune.utils.fixFilePath
 import com.dd3boh.outertune.utils.rememberEnumPreference
 import com.dd3boh.outertune.utils.rememberPreference
+import com.dd3boh.outertune.utils.ArtistDisplayProjection
+import com.dd3boh.outertune.utils.MetadataNames
 import com.dd3boh.outertune.viewmodels.LibraryFoldersViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -189,7 +191,9 @@ fun FolderScreen(
     val candidates = if (isSearching) {
         searchResult.songs.takeIf { searchResult.query == query.text } ?: emptyList()
     } else currDir.files
-    val visibleSongs = remember(candidates, sortType, sortDescending) {
+    val artistDisplayRevision by ArtistDisplayProjection.updates.collectAsState()
+    val metadataNamesRevision by MetadataNames.updates.collectAsState()
+    val visibleSongs = remember(candidates, sortType, sortDescending, artistDisplayRevision, metadataNamesRevision) {
         sortedFolderSongs(candidates, sortType, sortDescending)
     }
     val songCount = if (isSearching) visibleSongs.size else subDirSongCount

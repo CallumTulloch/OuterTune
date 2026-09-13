@@ -44,21 +44,21 @@ fun artistDisplayText(
 }
 
 fun Song.artistDisplayText(): String = artistDisplayText(
-    artistCredit, artists.map { if (song.isLocal) it.name else it.displayName }, song.isLocal,
+    artistCredit, artists.artistDisplayTargets(preserveLocalNames = song.isLocal).map { it.name }, song.isLocal,
 )
 
 fun SongItem.artistDisplayText(): String = artistDisplayText(artistCredit, artists.map { it.displayName })
 
 fun MediaMetadata.artistDisplayText(): String = artistDisplayText(
-    artistCredit, artists.map { if (isLocal) it.name else it.displayName }, isLocal,
+    artistCredit, displayArtists().map { it.name }, isLocal,
 )
 
 fun Album.artistDisplayText(): String = artistDisplayText(
-    album.artistCredit, artists.map { if (album.isLocal) it.name else it.displayName }, album.isLocal,
+    album.artistCredit, artists.artistDisplayTargets(preserveLocalNames = album.isLocal).map { it.name }, album.isLocal,
 )
 
 fun AlbumWithSongs.artistDisplayText(): String = artistDisplayText(
-    album.artistCredit, artists.map { if (album.isLocal) it.name else it.displayName }, album.isLocal,
+    album.artistCredit, artists.artistDisplayTargets(preserveLocalNames = album.isLocal).map { it.name }, album.isLocal,
 )
 
 fun AlbumItem.artistDisplayText(): String = artistDisplayText(artistCredit, artists.orEmpty().map { it.displayName })
@@ -74,4 +74,4 @@ fun MediaMetadata.hasCompleteArtistList(): Boolean =
     isLocal || artistCredit == null || artistCredit?.status == ArtistCreditStatus.COMPLETE
 
 fun MediaMetadata.singleArtistTarget(): String? =
-    artists.singleOrNull()?.id?.takeIf { it.isNotBlank() && hasCompleteArtistList() }
+    displayArtists().singleOrNull()?.id?.takeIf { it.isNotBlank() && hasCompleteArtistList() }

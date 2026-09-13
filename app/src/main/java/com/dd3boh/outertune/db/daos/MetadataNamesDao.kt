@@ -30,6 +30,8 @@ interface MetadataNamesDao {
             onlineId GLOB 'UC*' OR onlineId GLOB 'FEmusic_library_privately_owned_artist*'
             OR id GLOB 'UC*' OR id GLOB 'FEmusic_library_privately_owned_artist*'
         )
+        UNION
+        SELECT 'ARTIST' AS kind, onlineArtistId AS targetId FROM local_artist_link
     """)
     fun metadataLibraryTargets(): Flow<List<MetadataTargetEntity>>
 

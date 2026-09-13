@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.dd3boh.outertune.db.InternalDatabase
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.db.entities.ArtistEntity
+import com.dd3boh.outertune.db.entities.LocalArtistLink
 import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.models.toStoredJson
@@ -56,8 +57,9 @@ class LocalArtistLinkUiSeedTest {
             assertPlayableWav(audio)
 
             val now = LocalDateTime.now()
+            val canonicalGroup = InstrumentationRegistry.getArguments().getString("seedCanonicalArtistGroup") == "true"
             val artist = ArtistEntity(
-                id = ARTIST_ID, name = "椎名林檎", isLocal = true,
+                id = ARTIST_ID, name = if (canonicalGroup) "フォルダ表記A" else "椎名林檎", isLocal = true,
                 bookmarkedAt = now, lastUpdateTime = now,
             )
             val credit = ArtistCredit(
@@ -89,7 +91,7 @@ class LocalArtistLinkUiSeedTest {
             }
             val savedArtist = database.artistById(ARTIST_ID)!!
             assertTrue(savedArtist.isLocal)
-            assertEquals("椎名林檎", savedArtist.name)
+            assertEquals(artist.name, savedArtist.name)
             assertNull(savedArtist.onlineArtistId)
             assertNull(database.localArtistLinkById(ARTIST_ID))
             val savedSong = database.song(SONG_ID).first()!!
@@ -98,6 +100,29 @@ class LocalArtistLinkUiSeedTest {
             assertEquals(audio.absolutePath, savedSong.song.localPath)
             assertEquals(listOf(ARTIST_ID), savedSong.artists.map { it.id })
             assertEquals(listOf(SONG_ID), database.artistSongsByNameAsc(ARTIST_ID).first().map { it.id })
+
+            if (canonicalGroup) {
+                val secondDirectory = File(directory, "second-folder").apply { mkdirs() }
+                val secondAudio = File(secondDirectory, "second-chime.wav").apply { writeBytes(syntheticWav()) }
+                val second = ArtistEntity("LA_fixture_canonical_second", "フォルダ表記B", isLocal = true)
+                val empty = ArtistEntity("LA_fixture_canonical_empty", "曲なしのフォルダ表記", isLocal = true)
+                database.awaitTransaction {
+                    insert(ArtistEntity(CANONICAL_ID, "Sheena Ringo", bookmarkedAt = now))
+                    insert(second)
+                    insert(empty)
+                    insert(SongEntity("LS_fixture_canonical_second", "別フォルダの合成音声", duration = DURATION_SECONDS,
+                        inLibrary = now, isLocal = true, localPath = secondAudio.absolutePath))
+                    insert(SongArtistMap("LS_fixture_canonical_second", second.id, 0))
+                    insert(SongEntity("canonical-online-fixture-20260913", "保存済みオンライン曲（表示確認用）",
+                        inLibrary = now, localPath = null))
+                    insert(SongArtistMap("canonical-online-fixture-20260913", CANONICAL_ID, 0))
+                    // A starts unlinked for the UI confirmation path; B and a zero-song source already share the target.
+                    setLocalArtistLink(LocalArtistLink(second.id, CANONICAL_ID, "Sheena Ringo", null, "fixture-second"))
+                    setLocalArtistLink(LocalArtistLink(empty.id, CANONICAL_ID, "Sheena Ringo", null, "fixture-empty"))
+                }
+                assertEquals(2, database.artistSongsByNameAsc(CANONICAL_ID).first().size)
+                assertEquals(2, database.localArtistLinkSources(CANONICAL_ID).first().size)
+            }
         } finally {
             internal.close()
         }
@@ -151,6 +176,7 @@ class LocalArtistLinkUiSeedTest {
     companion object {
         const val ARTIST_ID = "LA_fixture_manual_artist_link_20260912"
         const val SONG_ID = "LS_fixture_manual_artist_link_20260912"
+        const val CANONICAL_ID = "UCbrWU0y_rLsEOYgaTX5Y74A"
         private const val SAMPLE_RATE = 44_100
         private const val DURATION_SECONDS = 6
     }

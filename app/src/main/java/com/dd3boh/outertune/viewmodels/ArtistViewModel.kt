@@ -38,6 +38,7 @@ class ArtistViewModel internal constructor(
         this(database, savedStateHandle, artistCreditRepository, Runtime())
 
     internal class Runtime(
+        val authRevision: () -> Long = { YouTube.authRevision },
         val fetch: suspend (String, YouTubeLocale) -> Result<ArtistPage> = { id, locale ->
             YouTube.artist(id, requestLocale = locale)
         },
@@ -57,9 +58,11 @@ class ArtistViewModel internal constructor(
     private val routeOnlineId = artistId.takeIf {
         it.startsWith("UC") || it.startsWith("FEmusic_library_privately_owned_artist")
     }
-    val onlineArtistId = combine(libraryArtist, artistContext, localArtistLink) { library, context, link ->
-        if (library?.artist?.isLocal == true) link?.onlineArtistId
-        else library?.artist?.onlineArtistId ?: context?.onlineId ?: routeOnlineId
+    val onlineArtistId = combine(libraryArtist, artistContext) { library, context ->
+        // The display row resolves legacy source routes and canonical online routes alike.
+        // An unlinked local row must not fall back to an old network context.
+        if (library != null) library.artist.onlineArtistId
+        else context?.onlineId ?: routeOnlineId
     }.stateIn(viewModelScope, SharingStarted.Eagerly, artistContext.value?.onlineId ?: routeOnlineId)
 
     val initiallyInternal = onlineArtistId.value == null
@@ -90,7 +93,7 @@ class ArtistViewModel internal constructor(
         }
     }
 
-    fun currentContextToken(): String = artistCreditRepository.contextToken()
+    fun currentContextToken(): String = "${artistCreditRepository.contextToken()}:${runtime.authRevision()}"
 
     fun refreshArtistContext() {
         val token = currentContextToken()
@@ -108,10 +111,10 @@ class ArtistViewModel internal constructor(
     }
 
     fun fetchArtistsFromYTM() {
-        val local = libraryArtist.value?.artist?.isLocal == true
-        val link = localArtistLink.value.takeIf { local }
-        val onlineId = if (local) link?.onlineArtistId
-            else libraryArtist.value?.artist?.onlineArtistId ?: artistContext.value?.onlineId ?: routeOnlineId
+        val library = libraryArtist.value
+        val link = localArtistLink.value
+        val onlineId = if (library != null) library.artist.onlineArtistId
+            else artistContext.value?.onlineId ?: routeOnlineId
         if (onlineId == null) return
         if (fetchJob?.isActive == true && fetchedOnlineId == onlineId && fetchedLinkRevision == link?.revision) return
         fetchJob?.cancel()
@@ -126,11 +129,11 @@ class ArtistViewModel internal constructor(
                 val page = runtime.fetch(onlineId, requestLocale).getOrThrow()
                 currentCoroutineContext().ensureActive()
                 if (generation != fetchGeneration || requestContext != currentContextToken() ||
-                    (local && link?.revision != localArtistLink.value?.revision)) return@launch
+                    link?.revision != localArtistLink.value?.revision) return@launch
                 if (page.artist.id != onlineId) return@launch
                 artistPage = page
-                // A manual link only supplies a page; it never rewrites the local artist profile.
-                if (!local) database.awaitTransaction {
+                // Update existing online profile fields only; source tags and bookmarks stay intact.
+                database.awaitTransaction {
                     if (generation == fetchGeneration && requestContext == currentContextToken()) saveArtistProfile(page.artist)
                 }
             } catch (cancelled: CancellationException) {

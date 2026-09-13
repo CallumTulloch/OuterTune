@@ -21,6 +21,10 @@ import com.dd3boh.outertune.db.entities.AlbumArtistMap
 import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.ArtistAlias
+import com.dd3boh.outertune.db.entities.ArtistIdentityView
+import com.dd3boh.outertune.db.entities.ArtistDisplayView
+import com.dd3boh.outertune.db.entities.ArtistSongView
+import com.dd3boh.outertune.db.entities.ArtistAlbumView
 import com.dd3boh.outertune.db.entities.Event
 import com.dd3boh.outertune.db.entities.FormatEntity
 import com.dd3boh.outertune.db.entities.GenreEntity
@@ -86,7 +90,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 25
+        const val MUSIC_DATABASE_VERSION = 26
     }
 }
 
@@ -118,6 +122,10 @@ class MusicDatabase(
         RecentActivityEntity::class
     ],
     views = [
+        ArtistIdentityView::class,
+        ArtistDisplayView::class,
+        ArtistSongView::class,
+        ArtistAlbumView::class,
         SortedAlbumArtistMap::class,
         SortedSongArtistMap::class,
         SortedSongAlbumMap::class,
@@ -142,6 +150,7 @@ class MusicDatabase(
         AutoMigration(from = 18, to = 19), // Recent activity
         AutoMigration(from = 19, to = 20, spec = Migration19To20::class), // Db optimization, remove totalplaytime, local media fields
         AutoMigration(from = 24, to = 25), // Preserve saved music while adding manual local artist links.
+        AutoMigration(from = 25, to = 26), // Add read-only artist grouping without rewriting tags or participation.
     ]
 )
 @TypeConverters(Converters::class)

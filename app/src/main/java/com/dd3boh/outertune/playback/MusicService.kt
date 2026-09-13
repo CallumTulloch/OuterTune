@@ -10,6 +10,7 @@
 package com.dd3boh.outertune.playback
 
 import com.dd3boh.outertune.utils.MetadataNames
+import com.dd3boh.outertune.utils.ArtistDisplayProjection
 import kotlinx.coroutines.flow.debounce
 
 import android.app.PendingIntent
@@ -107,6 +108,7 @@ import com.dd3boh.outertune.extensions.collectLatest
 import com.dd3boh.outertune.extensions.currentMetadata
 import com.dd3boh.outertune.extensions.findNextMediaItemById
 import com.dd3boh.outertune.extensions.metadata
+import com.dd3boh.outertune.extensions.withCurrentDisplayMetadata
 import com.dd3boh.outertune.extensions.toMediaItem
 import com.dd3boh.outertune.extensions.setOffloadEnabled
 import com.dd3boh.outertune.lyrics.LyricsHelper
@@ -150,6 +152,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -292,15 +295,13 @@ class MusicService : MediaLibraryService(),
         player.repeatMode = dataStore.get(RepeatModeKey, REPEAT_MODE_OFF)
 
         scope.launch {
-            MetadataNames.updates.debounce(150).collect {
+            merge(MetadataNames.updates, ArtistDisplayProjection.updates).debounce(150).collect {
                 for (index in 0 until player.mediaItemCount) {
                     val item = player.getMediaItemAt(index)
-                    val metadata = item.metadata ?: continue
-                    if (metadata.isLocal) continue
-                    val displayed = metadata.toMediaItem().mediaMetadata
-                    if (displayed != item.mediaMetadata) {
+                    val updated = item.withCurrentDisplayMetadata()
+                    if (updated !== item) {
                         // Change only Media3's display fields; preserve raw tags, URI, queue order and position.
-                        player.replaceMediaItem(index, item.buildUpon().setMediaMetadata(displayed).build())
+                        player.replaceMediaItem(index, updated)
                     }
                 }
                 updateNotification()

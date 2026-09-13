@@ -6,6 +6,7 @@ import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.models.toMediaMetadata
 import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.utils.numberToAlpha
+import com.dd3boh.outertune.utils.artistDisplayText
 import java.time.ZoneOffset
 
 internal fun sortedFolderSongs(songs: List<Song>, sortType: FolderSongSortType, descending: Boolean): List<Song> {
@@ -15,7 +16,7 @@ internal fun sortedFolderSongs(songs: List<Song>, sortType: FolderSongSortType, 
             FolderSongSortType.MODIFIED_DATE -> numberToAlpha(it.song.getDateModifiedLong() ?: -1L)
             FolderSongSortType.RELEASE_DATE -> numberToAlpha(it.song.getDateLong() ?: -1L)
             FolderSongSortType.NAME -> it.song.title.lowercase()
-            FolderSongSortType.ARTIST -> it.artists.joinToString { artist -> artist.name }.lowercase()
+            FolderSongSortType.ARTIST -> it.artistDisplayText().lowercase()
             FolderSongSortType.PLAY_COUNT -> numberToAlpha((it.playCount?.fastSumBy { count -> count.count })?.toLong() ?: 0L)
             FolderSongSortType.TRACK_NUMBER -> numberToAlpha(it.song.trackNumber?.toLong() ?: Long.MAX_VALUE)
         }

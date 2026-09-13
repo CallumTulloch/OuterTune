@@ -19,6 +19,9 @@ import com.dd3boh.outertune.db.entities.AlbumArtistMap
 import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.AlbumWithSongs
 import com.dd3boh.outertune.db.entities.ArtistEntity
+import com.dd3boh.outertune.db.entities.LocalArtistLink
+import com.dd3boh.outertune.db.entities.ArtistDisplayView
+import com.dd3boh.outertune.db.entities.ArtistAlbumView
 import com.dd3boh.outertune.db.entities.Song
 import com.dd3boh.outertune.db.entities.SongAlbumMap
 import com.dd3boh.outertune.db.entities.SongEntity
@@ -259,12 +262,12 @@ interface AlbumsDao : ArtistCreditDao {
         FROM album
             JOIN song_album_map ON song_album_map.albumId = album.id
             JOIN song ON song.id = song_album_map.songId
-            LEFT JOIN album_artist_map
+            LEFT JOIN artist_album album_artist_map
                 ON album_artist_map.albumId = album.id
-                AND album_artist_map.artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
-            LEFT JOIN song_artist_map
+                AND album_artist_map.artistId = COALESCE((SELECT canonicalArtistId FROM artist_identity WHERE sourceArtistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)), :artistId)
+            LEFT JOIN artist_song song_artist_map
                 ON song_artist_map.songId = song.id
-                AND song_artist_map.artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
+                AND song_artist_map.artistId = COALESCE((SELECT canonicalArtistId FROM artist_identity WHERE sourceArtistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)), :artistId)
         WHERE (song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL OR song.isLocal = 1)
             AND (
                 album_artist_map.artistId IS NOT NULL
@@ -290,6 +293,9 @@ interface AlbumsDao : ArtistCreditDao {
             SongAlbumMap::class,
             ArtistEntity::class,
             AlbumArtistMap::class,
+            LocalArtistLink::class,
+            ArtistDisplayView::class,
+            ArtistAlbumView::class,
         ]
     )
     fun _getAlbum(query: SupportSQLiteQuery): Flow<List<Album>>
@@ -310,8 +316,8 @@ interface AlbumsDao : ArtistCreditDao {
             AlbumSortType.NAME -> "album.title COLLATE NOCASE ASC"
             AlbumSortType.ARTIST -> """(
                                         SELECT LOWER(GROUP_CONCAT(name, ''))
-                                        FROM artist
-                                        WHERE id IN (SELECT artistId FROM album_artist_map WHERE albumId = album.id)
+                                        FROM artist_display artist
+                                        WHERE id IN (SELECT artistId FROM artist_album WHERE albumId = album.id)
                                         ORDER BY name
                                     ) COLLATE NOCASE ASC"""
             AlbumSortType.YEAR -> "album.year ASC"

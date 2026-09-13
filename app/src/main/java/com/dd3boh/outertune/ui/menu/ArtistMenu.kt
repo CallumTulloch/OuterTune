@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -36,6 +37,7 @@ import com.dd3boh.outertune.playback.queues.ListQueue
 import com.dd3boh.outertune.ui.component.button.IconButton
 import com.dd3boh.outertune.ui.component.items.ArtistListItem
 import com.dd3boh.outertune.ui.dialog.LocalArtistLinkDialog
+import com.dd3boh.outertune.ui.dialog.LocalArtistLinksDialog
 import com.zionhuang.innertube.YouTube
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,11 +57,25 @@ fun ArtistMenu(
     val isNetworkConnected = LocalNetworkConnected.current
     val artistState = database.artist(originalArtist.id).collectAsState(initial = originalArtist)
     val artist = artistState.value ?: originalArtist
-    var showLinkDialog by rememberSaveable(artist.id) { mutableStateOf(false) }
+    var showLinkDialog by rememberSaveable(originalArtist.id) { mutableStateOf(false) }
+    var showLinkedSources by rememberSaveable(originalArtist.id) { mutableStateOf(false) }
+    val rawSource by remember(database, originalArtist.id) { database.rawArtist(originalArtist.id) }
+        .collectAsState(initial = originalArtist)
+    val onlineId = artist.artist.onlineArtistId
+    val linkedSources = if (onlineId != null) {
+        val sources by remember(database, onlineId) { database.localArtistLinkSources(onlineId) }
+            .collectAsState(initial = emptyList())
+        sources
+    } else emptyList()
 
-    if (showLinkDialog && artist.artist.isLocal) {
+    if (showLinkedSources && onlineId != null) {
+        LocalArtistLinksDialog(onlineArtistId = onlineId, onDismiss = { showLinkedSources = false })
+    }
+
+    val linkSource = rawSource?.takeIf { it.artist.isLocal }
+    if (showLinkDialog && linkSource != null) {
         LocalArtistLinkDialog(
-            localArtist = artist,
+            localArtist = linkSource,
             onDismiss = { showLinkDialog = false },
             onLinked = { showLinkDialog = false; onDismiss() },
         )
@@ -72,7 +88,7 @@ fun ArtistMenu(
             IconButton(
                 onClick = {
                     database.transaction {
-                        update(artist.artist.toggleLike())
+                        toggleArtistBookmark(artist.id)
                     }
                 }
             ) {
@@ -101,6 +117,11 @@ fun ArtistMenu(
                 title = if (artist.localLink == null) R.string.local_artist_link_title
                     else R.string.local_artist_link_manage,
             ) { showLinkDialog = true }
+        }
+        if (linkedSources.isNotEmpty()) {
+            GridMenuItem(icon = Icons.Rounded.Link, title = R.string.local_artist_links_sources) {
+                showLinkedSources = true
+            }
         }
         if (artist.songCount > 0) {
             GridMenuItem(

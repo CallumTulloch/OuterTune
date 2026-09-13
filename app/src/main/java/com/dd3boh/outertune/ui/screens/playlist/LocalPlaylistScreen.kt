@@ -1,6 +1,7 @@
 package com.dd3boh.outertune.ui.screens.playlist
 
 import com.dd3boh.outertune.utils.MetadataNames
+import com.dd3boh.outertune.utils.ArtistDisplayProjection
 import com.dd3boh.outertune.utils.matchesMetadataQuery
 
 import android.util.Log
@@ -197,6 +198,7 @@ fun LocalPlaylistScreen(
         mutableStateOf(TextFieldValue())
     }
     val metadataRevision by MetadataNames.updates.collectAsState()
+    val artistDisplayRevision by ArtistDisplayProjection.updates.collectAsState()
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(isSearching) {
         if (isSearching) {
@@ -210,7 +212,7 @@ fun LocalPlaylistScreen(
         }
     }
 
-    LaunchedEffect(playlistWithSongs.second, searchQuery.text, metadataRevision, isSearching) {
+    LaunchedEffect(playlistWithSongs.second, searchQuery.text, metadataRevision, artistDisplayRevision, isSearching) {
         if (isSearching) {
             val matches = playlistWithSongs.second.filter { song ->
                 searchQuery.text.isEmpty() || song.song.toMediaMetadata().matchesMetadataQuery(searchQuery.text)

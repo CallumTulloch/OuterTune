@@ -140,8 +140,8 @@ interface SongsDao {
         WHERE inLibrary IS NOT NULL OR liked OR (isLocal = 0 AND dateDownload IS NOT NULL)
         ORDER BY (
             SELECT LOWER(GROUP_CONCAT(name, ''))
-            FROM artist
-            WHERE id IN (SELECT artistId FROM song_artist_map WHERE songId = song.id)
+            FROM artist_display artist
+            WHERE id IN (SELECT artistId FROM artist_song WHERE songId = song.id)
             ORDER BY name
         ) COLLATE NOCASE
     """)
@@ -197,8 +197,8 @@ interface SongsDao {
         WHERE inLibrary IS NOT NULL 
         ORDER BY (
             SELECT LOWER(GROUP_CONCAT(name, ''))
-            FROM artist
-            WHERE id IN (SELECT artistId FROM song_artist_map WHERE songId = song.id)
+            FROM artist_display artist
+            WHERE id IN (SELECT artistId FROM artist_song WHERE songId = song.id)
             ORDER BY name
         ) COLLATE NOCASE
     """)
@@ -207,9 +207,9 @@ interface SongsDao {
     @Transaction
     @Query("""
         SELECT song.*
-        FROM song_artist_map
-            JOIN song ON song_artist_map.songId = song.id
-        WHERE artistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)
+        FROM artist_song
+            JOIN song ON artist_song.songId = song.id
+        WHERE artistId = COALESCE((SELECT canonicalArtistId FROM artist_identity WHERE sourceArtistId = COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :artistId), :artistId)), :artistId)
             AND (inLibrary IS NOT NULL OR dateDownload IS NOT NULL OR isLocal = 1)
         LIMIT :previewSize
     """)
@@ -259,8 +259,8 @@ interface SongsDao {
         WHERE isLocal = 1 AND inLibrary IS NOT NULL
         ORDER BY (
             SELECT LOWER(GROUP_CONCAT(name, ''))
-            FROM artist
-            WHERE id IN (SELECT artistId FROM song_artist_map WHERE songId = song.id)
+            FROM artist_display artist
+            WHERE id IN (SELECT artistId FROM artist_song WHERE songId = song.id)
             ORDER BY name
         ) COLLATE NOCASE
     """)
@@ -377,8 +377,8 @@ interface SongsDao {
         WHERE liked 
         ORDER BY (
             SELECT LOWER(GROUP_CONCAT(name, ''))
-            FROM artist
-            WHERE id IN (SELECT artistId FROM song_artist_map WHERE songId = song.id)
+            FROM artist_display artist
+            WHERE id IN (SELECT artistId FROM artist_song WHERE songId = song.id)
             ORDER BY name
         ) COLLATE NOCASE
     """)
@@ -470,8 +470,8 @@ interface SongsDao {
         WHERE isLocal = 0 AND dateDownload IS NOT NULL
         ORDER BY (
             SELECT LOWER(GROUP_CONCAT(name, ''))
-            FROM artist
-            WHERE id IN (SELECT artistId FROM song_artist_map WHERE songId = song.id)
+            FROM artist_display artist
+            WHERE id IN (SELECT artistId FROM artist_song WHERE songId = song.id)
             ORDER BY name
         ) COLLATE NOCASE
     """)
