@@ -1,0 +1,175 @@
+{
+  "responseContext": {},
+  "contents": {
+    "twoColumnBrowseResultsRenderer": {
+      "tabs": [
+        {
+          "tabRenderer": {
+            "content": {
+              "sectionListRenderer": {
+                "contents": [
+                  {
+                    "musicResponsiveHeaderRenderer": {
+                      "title": {
+                        "runs": [
+                          {
+                            "text": "Chop Suey!"
+                          }
+                        ]
+                      },
+                      "subtitle": {
+                        "runs": [
+                          {
+                            "text": "シングル"
+                          },
+                          {
+                            "text": " • "
+                          },
+                          {
+                            "text": "2001年"
+                          }
+                        ]
+                      },
+                      "straplineTextOne": {
+                        "runs": [
+                          {
+                            "text": "System Of A Down",
+                            "navigationEndpoint": {
+                              "browseEndpoint": {
+                                "browseId": "UCDJftX2zx_UT_QSnBGIF96w",
+                                "browseEndpointContextSupportedConfigs": {
+                                  "browseEndpointContextMusicConfig": {
+                                    "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "buttons": [],
+                      "thumbnail": {
+                        "musicThumbnailRenderer": {
+                          "thumbnail": {
+                            "thumbnails": [
+                              {
+                                "url": "https://yt3.googleusercontent.com/9ExAIaDGPwcTGNSbtA8vRnUJGgO1I_8IaEmf1WDKpz7-RDLpWjXfmfn9wt6jJ5M23POPK2-lHdHUw5bz=w544-h544-l90-rj",
+                                "width": 544,
+                                "height": 544
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "secondaryContents": {
+        "sectionListRenderer": {
+          "contents": [
+            {
+              "musicShelfRenderer": {
+                "contents": [
+                  {
+                    "musicResponsiveListItemRenderer": {
+                      "flexColumns": [
+                        {
+                          "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {
+                              "runs": [
+                                {
+                                  "text": "Chop Suey!",
+                                  "navigationEndpoint": {
+                                    "showDialogCommand": {}
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {}
+                          }
+                        }
+                      ],
+                      "fixedColumns": [
+                        {
+                          "musicResponsiveListItemFixedColumnRenderer": {
+                            "text": {
+                              "runs": [
+                                {
+                                  "text": "3:31"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ],
+                      "playlistItemData": {
+                        "videoId": "-cid1qHuy_U"
+                      },
+                      "musicItemRendererDisplayPolicy": "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT"
+                    }
+                  },
+                  {
+                    "musicResponsiveListItemRenderer": {
+                      "flexColumns": [
+                        {
+                          "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {
+                              "runs": [
+                                {
+                                  "text": "Sugar (Live at Irving Plaza, NYC, NY - January 1999)",
+                                  "navigationEndpoint": {
+                                    "showDialogCommand": {}
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "musicResponsiveListItemFlexColumnRenderer": {
+                            "text": {}
+                          }
+                        }
+                      ],
+                      "fixedColumns": [
+                        {
+                          "musicResponsiveListItemFixedColumnRenderer": {
+                            "text": {
+                              "runs": [
+                                {
+                                  "text": "2:29"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ],
+                      "playlistItemData": {
+                        "videoId": "cmna-FAi6t0"
+                      },
+                      "musicItemRendererDisplayPolicy": "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "microformat": {
+    "microformatDataRenderer": {
+      "urlCanonical": "https://music.youtube.com/playlist?list=OLAK5uy_notW8F-ma1CpcsAfygNE4bUCGzJLjOqiY"
+    }
+  }
+}

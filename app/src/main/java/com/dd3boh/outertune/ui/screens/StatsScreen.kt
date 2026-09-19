@@ -125,7 +125,8 @@ fun StatsScreen(
                     playerConnection.playQueue(
                         ListQueue(
                             title = mostPlayedSongTitle,
-                            items = mostPlayedSongs.map { it.toMediaMetadata() }
+                            items = mostPlayedSongs.map { it.toMediaMetadata() },
+                            startIndex = mostPlayedSongs.indexOf(song),
                         )
                     )
                 },

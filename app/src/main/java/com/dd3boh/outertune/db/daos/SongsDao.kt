@@ -15,9 +15,7 @@ import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.extensions.reversed
 import com.dd3boh.outertune.utils.fixFilePath
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
@@ -73,15 +71,13 @@ interface SongsDao {
 
     @Transaction
     @Query("""
-        SELECT *
-        FROM song
-        WHERE id IN (SELECT songId
-                     FROM event
-                     WHERE timestamp > :fromTimeStamp
-                     GROUP BY songId
-                     ORDER BY SUM(playTime) DESC
-                     LIMIT :limit
-                     OFFSET :offset)
+        SELECT song.*
+        FROM song JOIN event ON event.songId = song.id
+        WHERE event.timestamp > :fromTimeStamp
+        GROUP BY song.id
+        HAVING SUM(event.playTime) > 0
+        ORDER BY SUM(event.playTime) DESC, song.id
+        LIMIT :limit OFFSET :offset
     """)
     fun mostPlayedSongs(fromTimeStamp: Long, limit: Int = 6, offset: Int = 0): Flow<List<Song>>
 
@@ -529,15 +525,10 @@ interface SongsDao {
         if (!songExists(songId)) return
 
         val time = LocalDateTime.now().atOffset(ZoneOffset.UTC)
-        var oldCount: Int
-        runBlocking {
-            oldCount = getPlayCountByMonth(songId, time.year, time.monthValue).first()
-        }
-
-        // add new
-        if (oldCount <= 0) {
-            insert(PlayCountEntity(songId, time.year, time.monthValue, 0))
-        }
+        // Never collect a Room Flow while holding this synchronous transaction: its read can
+        // need a query worker that is already waiting for this transaction to finish.
+        // INSERT IGNORE preserves an existing count; both statements use this connection.
+        insert(PlayCountEntity(songId, time.year, time.monthValue, 0))
         incrementPlayCount(songId, time.year, time.monthValue)
     }
 

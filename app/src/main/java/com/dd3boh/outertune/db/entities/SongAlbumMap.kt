@@ -24,5 +24,6 @@ import androidx.room.ForeignKey
 data class SongAlbumMap(
     @ColumnInfo(index = true) val songId: String,
     @ColumnInfo(index = true) val albumId: String,
+    // Negative means album association only; a nonnegative index is an album track position.
     val index: Int,
 )

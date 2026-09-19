@@ -37,6 +37,8 @@ data class AlbumEntity(
     @ColumnInfo(name = "isLocal", defaultValue = false.toString())
     val isLocal: Boolean = false,
     val artistCreditJson: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val hasTrackList: Boolean = false,
 ) {
     @get:Ignore
     val artistCredit: ArtistCredit?

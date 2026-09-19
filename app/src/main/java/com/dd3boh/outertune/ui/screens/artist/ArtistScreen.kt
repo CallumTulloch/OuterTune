@@ -601,15 +601,6 @@ fun ArtistScreen(
                 }
             },
             actions = {
-                libraryArtist?.let { savedArtist ->
-                    IconButton(onClick = {
-                        menuState.show {
-                            ArtistMenu(savedArtist, coroutineScope, onDismiss = menuState::dismiss)
-                        }
-                    }) {
-                        Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.options))
-                    }
-                }
                 IconButton(
                     onClick = {
                         database.transaction {
@@ -665,6 +656,15 @@ fun ArtistScreen(
                         Icons.Rounded.Share,
                         contentDescription = null
                     )
+                }
+                libraryArtist?.let { savedArtist ->
+                    IconButton(onClick = {
+                        menuState.show {
+                            ArtistMenu(savedArtist, coroutineScope, onDismiss = menuState::dismiss)
+                        }
+                    }) {
+                        Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.options))
+                    }
                 }
             },
             windowInsets = TopBarInsets,

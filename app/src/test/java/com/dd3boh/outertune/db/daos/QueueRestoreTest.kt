@@ -71,4 +71,30 @@ class QueueRestoreTest {
 
         assertEquals(null, retainOnlineQueueSongs(queue))
     }
+
+    @Test
+    fun `filtering an earlier local song preserves the current duplicate occurrence and position`() {
+        val queue = MultiQueueObject(
+            id = 3,
+            title = "duplicate occurrences",
+            queue = mutableListOf(
+                song("removed-local", 1, isLocal = true),
+                song("same-online", 2),
+                song("same-online", 0),
+            ),
+            shuffled = true,
+            queuePos = 2,
+            lastSongPos = 8_765,
+            index = 0,
+        )
+
+        val repaired = retainQueueSongs(queue) { it.id != "removed-local" }!!
+
+        assertEquals(1, repaired.queuePos)
+        assertEquals(listOf(1, 0), repaired.queue.map { it.shuffleIndex })
+        assertEquals(8_765L, repaired.lastSongPos)
+        assertEquals(2, queue.queuePos)
+        assertEquals(listOf(1, 2, 0), queue.queue.map { it.shuffleIndex })
+        assertEquals(3, queue.queue.size)
+    }
 }

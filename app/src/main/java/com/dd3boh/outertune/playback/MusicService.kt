@@ -138,11 +138,16 @@ import com.zionhuang.innertube.models.WatchEndpoint
 import dagger.hilt.android.AndroidEntryPoint
 import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -181,6 +186,13 @@ class MusicService : MediaLibraryService(),
     lateinit var artistCredits: ArtistCreditRepository
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val offloadScope = CoroutineScope(SupervisorJob() + playerCoroutine)
+    // These jobs perform only I/O. onDestroy can join them without waiting for the Main thread.
+    private val queueIoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private data class RestoredQueueState(val queues: List<MultiQueueObject>, val persistent: Boolean)
+    private var queueInitialization: Deferred<RestoredQueueState>? = null
+    private var queuePurgeCompletion: CompletableDeferred<Unit>? = null
+    private var queueServiceDestroyed = false
+    private var queuePlaybackGeneration = 0L
 
     // Critical player components
     @Inject
@@ -196,7 +208,7 @@ class MusicService : MediaLibraryService(),
     private lateinit var connectivityManager: ConnectivityManager
 
     val qbInit = MutableStateFlow(false)
-    var queueBoard = MutableStateFlow(QueueBoard(this, maxQueues = 1))
+    var queueBoard = MutableStateFlow(QueueBoard(this, maxQueues = 1, canSave = false))
     var queuePlaylistId: String? = null
 
     @Inject
@@ -509,20 +521,15 @@ class MusicService : MediaLibraryService(),
         isRadio: Boolean = false,
         title: String? = null
     ) {
-        if (!qbInit.value) {
-            runBlocking(Dispatchers.IO) {
-                initQueue()
-            }
-        }
-
-        var queueTitle = title
-        queuePlaylistId = queue.playlistId
-        var q: MultiQueueObject? = null
-        val preloadItem = queue.preloadItem?.let(artistCredits::adopt)
-        // do not use scope.launch ... it breaks randomly... why is this bug back???
-        CoroutineScope(Dispatchers.Main).launch {
+        scope.launch {
             Log.d(TAG, "playQueue: Resolving additional queue data...")
             try {
+                if (!qbInit.value || queuePurgeCompletion != null) initQueue()
+                val playbackGeneration = queuePlaybackGeneration
+                var queueTitle = title
+                queuePlaylistId = queue.playlistId
+                var q: MultiQueueObject? = null
+                val preloadItem = queue.preloadItem?.let(artistCredits::adopt)
                 if (preloadItem != null) {
                     q = queueBoard.value.addQueue(
                         queueTitle ?: "Radio\u2060temp",
@@ -534,7 +541,9 @@ class MusicService : MediaLibraryService(),
                     queueBoard.value.setCurrQueue(q, true)
                 }
 
-                val initialStatus = withContext(Dispatchers.IO) { queue.getInitialStatus() }.let { status ->
+                val loadedStatus = withContext(Dispatchers.IO) { queue.getInitialStatus() }
+                if (playbackGeneration != queuePlaybackGeneration) return@launch
+                val initialStatus = loadedStatus.let { status ->
                     status.items.getOrNull(status.mediaItemIndex.coerceAtLeast(0))?.let {
                         artistCredits.request(it, priority = true)
                     }
@@ -571,6 +580,8 @@ class MusicService : MediaLibraryService(),
 
                 player.prepare()
                 player.playWhenReady = playWhenReady
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 reportException(e)
                 Toast.makeText(this@MusicService, "plr: ${e.message}", Toast.LENGTH_LONG)
@@ -629,41 +640,107 @@ class MusicService : MediaLibraryService(),
         updateNotification()
     }
 
-    suspend fun initQueue() {
-        Log.i(TAG, "+initQueue()")
-        val persistQueue = dataStore.get(PersistentQueueKey, true)
-        val maxQueues = dataStore.get(MaxQueuesKey, 19)
-        if (persistQueue) {
-            queueBoard.value = QueueBoard(this, queueBoard.value.masterQueues, database.readQueue().toMutableList(), maxQueues)
-        } else {
-            queueBoard.value = QueueBoard(this, queueBoard.value.masterQueues, maxQueues = maxQueues)
+    suspend fun initQueue() = withContext(Dispatchers.Main.immediate) {
+        queuePurgeCompletion?.await()
+        if (!queueServiceDestroyed) initializeQueueOnMain()
+    }
+
+    /** The caller owns Main; the shared reload job never needs Main to complete. */
+    private suspend fun initializeQueueOnMain() {
+        val task = queueInitialization ?: run {
+            queuePlaybackGeneration++
+            val board = queueBoard.value
+            val persistQueue = dataStore.get(PersistentQueueKey, true)
+            val snapshot = if (persistQueue && board.canSave) {
+                board.snapshotForSave(player.currentPosition)
+            } else null
+            board.stopWrites()
+            qbInit.value = false
+            queueIoScope.async {
+                board.awaitShutdown()
+                if (snapshot != null) database.awaitTransaction { saveQueueSnapshot(snapshot) }
+                RestoredQueueState(if (persistQueue) database.readQueue() else emptyList(), persistQueue)
+            }.also { queueInitialization = it }
         }
-        Log.d(TAG, "Queue with $maxQueues queue limit. Persist queue = $persistQueue. Queues loaded = ${queueBoard.value.masterQueues.size}")
-        qbInit.value = true
-        Log.i(TAG, "-initQueue()")
+        try {
+            val restored = task.await()
+            // Shutdown invalidates this token before waiting for I/O. A late Main continuation
+            // must not install a new board after the service has stopped.
+            if (queueInitialization === task) {
+                val previous = queueBoard.value
+                previous.shutdown()
+                val maxQueues = dataStore.get(MaxQueuesKey, 19)
+                queueBoard.value = QueueBoard(this, previous.masterQueues, restored.queues.toMutableList(),
+                    maxQueues, canSave = restored.persistent)
+                queueInitialization = null
+                qbInit.value = true
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Cancellation of one waiter must not abandon I/O still shared by another waiter.
+            if (task.isCompleted && queueInitialization === task) queueInitialization = null
+            throw e
+        }
+    }
+
+    /** Flush pending online/local queue changes before the caller removes local database rows. */
+    suspend fun prepareQueueForLocalMediaRemoval() = withContext(Dispatchers.Main.immediate) {
+        if (queueServiceDestroyed) return@withContext
+        check(queuePurgeCompletion == null)
+        queuePurgeCompletion = CompletableDeferred()
+        queuePlaybackGeneration++
+        if (queueInitialization != null) initializeQueueOnMain()
+        val board = queueBoard.value
+        val snapshot = if (dataStore.get(PersistentQueueKey, true) && board.canSave) {
+            board.snapshotForSave(player.currentPosition)
+        } else null
+        // Unlike normal reload, service shutdown must never save this board again.
+        board.shutdown()
+        qbInit.value = false
+        try {
+            withContext(NonCancellable + Dispatchers.IO) {
+                board.awaitShutdown()
+                if (snapshot != null) database.awaitTransaction { saveQueueSnapshot(snapshot) }
+            }
+        } catch (e: Throwable) {
+            // The purge has not started. Keep unsaved queue edits eligible for the cleanup
+            // reload/final shutdown instead of replacing them with stale database rows.
+            if (snapshot != null) board.allowSaveAfterFailedRemoval()
+            throw e
+        }
+    }
+
+    /** Called from non-cancellable cleanup, after the purge committed or rolled back. */
+    suspend fun finishQueueForLocalMediaRemoval() = withContext(Dispatchers.Main.immediate) {
+        try {
+            if (!queueServiceDestroyed) initializeQueueOnMain()
+        } finally {
+            queuePurgeCompletion?.complete(Unit)
+            queuePurgeCompletion = null
+        }
     }
 
     fun deInitQueue() {
         Log.i(TAG, "+deInitQueue()")
-        val pos = player.currentPosition
-        queueBoard.value.shutdown()
-        if (dataStore.get(PersistentQueueKey, true)) {
-            runBlocking(Dispatchers.IO) {
-                saveQueueToDisk(pos)
-            }
+        queuePlaybackGeneration++
+        val board = queueBoard.value
+        // Capture mutable queue state on the player thread, before shutting down the writer.
+        val snapshot = if (dataStore.get(PersistentQueueKey, true) && board.canSave) {
+            board.snapshotForSave(player.currentPosition)
+        } else null
+        val initializing = queueInitialization
+        queueInitialization = null
+        board.shutdown()
+        runBlocking(Dispatchers.IO) {
+            initializing?.join()
+            board.awaitShutdown()
+            if (snapshot != null) database.awaitTransaction { saveQueueSnapshot(snapshot) }
         }
         // do not replace the object. Can lead to entire queue being deleted even though it is supposed to be saved already
         qbInit.value = false
         Log.i(TAG, "-deInitQueue()")
     }
-
-    suspend fun saveQueueToDisk(currentPosition: Long) {
-        val data = queueBoard.value.getAllQueues()
-        if (data.isEmpty()) return
-        data.last().lastSongPos = currentPosition
-        database.updateAllQueues(data)
-    }
-
 
 // Audio playback
 
@@ -1189,10 +1266,12 @@ class MusicService : MediaLibraryService(),
 
     override fun onDestroy() {
         Log.i(TAG, "Terminating MusicService.")
+        queueServiceDestroyed = true
         if (::connectivityObserver.isInitialized) connectivityObserver.unregister()
         scope.cancel()
         offloadScope.cancel()
         deInitQueue()
+        queueIoScope.cancel()
 
         mediaSession.player.stop()
         mediaSession.release()

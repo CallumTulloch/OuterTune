@@ -399,7 +399,7 @@ class AlbumArtistGroupingDatabaseTest {
             }
             var database = InternalDatabase.newTestInstance(context, filename)
             try {
-                assertEquals(27, database.openHelper.readableDatabase.version)
+                assertEquals(MusicDatabase.MUSIC_DATABASE_VERSION, database.openHelper.readableDatabase.version)
                 assertTrue(database.artistsBySource(false).isEmpty())
                 database.openHelper.readableDatabase.query(
                     "SELECT name FROM sqlite_master WHERE name = 'old_artist_group_marker'",

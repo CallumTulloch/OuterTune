@@ -79,7 +79,7 @@ class MusicDatabase(
     /**
      * Runs a database transaction and resumes only after it has committed.
      *
-     * Scanner jobs use this instead of [transaction] so their cleanup and completion state cannot
+     * Scanner and queue save jobs use this instead of [transaction] so their cleanup and completion state cannot
      * race ahead of queued writes.
      */
     suspend fun awaitTransaction(block: MusicDatabase.() -> Unit) =
@@ -90,7 +90,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 27
+        const val MUSIC_DATABASE_VERSION = 28
     }
 }
 
@@ -151,6 +151,7 @@ class MusicDatabase(
         AutoMigration(from = 19, to = 20, spec = Migration19To20::class), // Db optimization, remove totalplaytime, local media fields
         AutoMigration(from = 24, to = 25), // Preserve saved music while adding manual local artist links.
         AutoMigration(from = 25, to = 26), // Add read-only artist grouping without rewriting tags or participation.
+        AutoMigration(from = 27, to = 28), // Preserve saved music while distinguishing confirmed album track lists.
     ]
 )
 @TypeConverters(Converters::class)

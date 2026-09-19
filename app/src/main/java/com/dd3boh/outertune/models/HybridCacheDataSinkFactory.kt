@@ -26,10 +26,11 @@ class HybridCacheDataSinkFactory(
             private var delegate: CacheDataSink? = null
 
             override fun open(dataSpec: DataSpec) {
-                if (shouldCache(dataSpec)) {
-                    delegate = CacheDataSink(cache, CacheDataSink.DEFAULT_FRAGMENT_SIZE)
-                    delegate?.open(dataSpec)
-                }
+                delegate = if (shouldCache(dataSpec)) {
+                    CacheDataSink(cache, CacheDataSink.DEFAULT_FRAGMENT_SIZE)
+                } else null
+                // Keep this delegate if open fails: DataSink callers must still close it.
+                delegate?.open(dataSpec)
             }
 
             override fun write(buffer: ByteArray, offset: Int, length: Int) {
@@ -37,7 +38,11 @@ class HybridCacheDataSinkFactory(
             }
 
             override fun close() {
-                delegate?.close()
+                val closing = delegate
+                // A skipped request must never write through a previously closed sink, even
+                // when flushing that request's cache file failed.
+                delegate = null
+                closing?.close()
             }
         }
     }

@@ -13,6 +13,7 @@ import com.dd3boh.outertune.db.daos.AlbumsDao
 import com.dd3boh.outertune.db.daos.MetadataNamesDao
 import com.dd3boh.outertune.db.daos.PlaylistsDao
 import com.dd3boh.outertune.db.daos.QueueDao
+import com.dd3boh.outertune.db.daos.retainQueueSongs
 import com.dd3boh.outertune.db.daos.SongsDao
 import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.Event
@@ -344,7 +345,7 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
                 SongAlbumMap(
                     songId = mediaMetadata.id,
                     albumId = album.id,
-                    index = 0
+                    index = if (mediaMetadata.isLocal) 0 else -1
                 )
             )
             updateSongAlbumIdentity(mediaMetadata.id, album.id, album.title)
@@ -363,6 +364,8 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
 
     @Transaction
     fun upsert(albumPage: AlbumPage, previousAlbum: AlbumEntity? = null) {
+        // Header-only/incomplete responses must not invalidate a previously confirmed list.
+        if (albumPage.songs.isEmpty()) return
         val currentAlbum = albumById(albumPage.album.browseId)
         val preservedAlbum = currentAlbum ?: previousAlbum
         upsert(
@@ -377,8 +380,12 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
                 duration = albumPage.songs.sumOf { it.duration ?: 0 },
                 bookmarkedAt = preservedAlbum?.bookmarkedAt,
                 artistCreditJson = preservedAlbum?.artistCreditJson,
+                hasTrackList = true,
             )
         )
+        // Replace only track-list membership, not song rows or their album provenance. A
+        // later queue/metadata insert uses INSERT IGNORE and cannot reset a confirmed order.
+        clearAlbumTrackOrder(albumPage.album.browseId)
         albumPage.songs.map(SongItem::toMediaMetadata)
             .onEach(::insert)
             .mapIndexed { index, song ->
@@ -436,11 +443,13 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
      * WARNING: This removes all queue song data and re-adds the queue. Did you mean to use updateQueue()?
      */
     @Transaction
-    fun saveQueue(mq: MultiQueueObject) {
-        if (mq.queue.isEmpty()) {
-            return
-        }
-
+    fun saveQueue(queue: MultiQueueObject): MultiQueueObject {
+        // A scan may delete a local song after the player captured it. Queues can introduce new
+        // online songs, but only the scanner may create local rows. Keep remapped headers for
+        // the subsequent batch update as well as the song mappings written here.
+        val mq = retainQueueSongs(queue) { !it.isLocal || songExists(it.id) }
+            ?: queue.copy(queue = mutableListOf(), queuePos = -1,
+                lastSongPos = androidx.media3.common.C.TIME_UNSET)
         insert(
             QueueEntity(
                 id = mq.id,
@@ -470,6 +479,13 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
             )
             i ++
         }
+        return mq
+    }
+
+    /** Commit a final, detached queue snapshot before a service releases its queue board. */
+    @Transaction
+    fun saveQueueSnapshot(queues: List<MultiQueueObject>) {
+        updateAllQueues(queues.map(::saveQueue))
     }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)

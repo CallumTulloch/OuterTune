@@ -316,27 +316,25 @@ interface ArtistsDao {
 
     @Transaction
     @Query("""
-        SELECT 
+        WITH played AS (
+            SELECT sam.artistId, COUNT(event.id) AS totalPlays
+            FROM artist_song sam JOIN event ON event.songId = sam.songId
+            WHERE event.timestamp > :fromTimeStamp AND event.playTime > 0
+            GROUP BY sam.artistId
+        )
+        SELECT
             artist.*,
-            COUNT(song.id) AS songCount,
-            SUM(CASE WHEN song.dateDownload IS NOT NULL THEN 1 ELSE 0 END) AS downloadCount
+            COUNT(DISTINCT song.id) AS songCount,
+            COUNT(DISTINCT CASE WHEN song.dateDownload IS NOT NULL THEN song.id END) AS downloadCount
         FROM artist_display artist
+            JOIN played ON played.artistId = artist.id
             LEFT JOIN artist_song sam ON artist.id = sam.artistId
-            LEFT JOIN song ON sam.songId = song.id
-            LEFT JOIN (
-                SELECT 
-                    song AS songId, 
-                    SUM(count) AS songTotalPlays
-                FROM playCount
-                WHERE year > :fromYear OR (year = :fromYear AND month >= :fromMonth)
-                GROUP BY song
-            ) AS pc ON sam.songId = pc.songId
-        WHERE song.inLibrary IS NOT NULL
+            LEFT JOIN song ON sam.songId = song.id AND song.inLibrary IS NOT NULL
         GROUP BY artist.id
-        ORDER BY SUM(pc.songTotalPlays) DESC
+        ORDER BY played.totalPlays DESC, artist.id
         LIMIT :limit
     """)
-    fun mostPlayedArtists(fromYear: Int, fromMonth: Int, limit: Int = 6): Flow<List<Artist>>
+    fun mostPlayedArtists(fromTimeStamp: Long, limit: Int = 6): Flow<List<Artist>>
 
     @Transaction
     @RawQuery(observedEntities = [ArtistEntity::class, SongEntity::class, SongArtistMap::class, LocalArtistLink::class, ArtistDisplayView::class, ArtistSongView::class])

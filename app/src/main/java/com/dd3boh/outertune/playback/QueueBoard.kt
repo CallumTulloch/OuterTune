@@ -26,17 +26,6 @@ import com.dd3boh.outertune.models.MultiQueueObject
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.get
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import java.util.PriorityQueue
 import kotlin.math.max
 import kotlin.math.min
 
@@ -49,9 +38,15 @@ class QueueBoard(
     private val player: MusicService,
     val masterQueues: SnapshotStateList<MultiQueueObject> = mutableStateListOf(),
     queues: MutableList<MultiQueueObject> = ArrayList(),
-    private var maxQueues: Int
+    private var maxQueues: Int,
+    canSave: Boolean = true,
 ) {
     private val TAG = QueueBoard::class.simpleName.toString()
+
+    // A board stopped for destructive removal must never recreate songs during service shutdown.
+    var canSave: Boolean = canSave
+        private set
+    private var writesStopped = false
 
     /** Refresh credit data while preserving queue order, shuffle indexes and playback position. */
     fun updateArtistMetadata(videoId: String, transform: (MediaMetadata) -> MediaMetadata) {
@@ -219,7 +214,7 @@ class QueueBoard(
 
                 match.playlistId = continuationEndpoint
 
-                saveQueue(match)
+                if (shuffled) saveQueueSongs(match) else saveQueue(match)
                 return match
             } else if (delta) {
                 if (QUEUE_DEBUG)
@@ -465,9 +460,9 @@ class QueueBoard(
                 masterIndex = -1
             }
 
-            CoroutineScope(Dispatchers.IO).launch {
-                player.database.deleteQueue(match.id)
-            }
+            regenerateIndexes()
+            // Deletion must be ordered with delayed saves, otherwise an old save can recreate it.
+            saveAllQueues(masterQueues)
         } else {
             Log.w(TAG, "Cannot find queue to delete: ${item.title}")
         }
@@ -846,111 +841,69 @@ class QueueBoard(
      * ========================
      */
 
-    class PriorityJob(val priority: Int, val job: Job) : Comparable<PriorityJob> {
-        override fun compareTo(other: PriorityJob): Int = this.priority - other.priority
-    }
-
-    var queueEntity = PriorityQueue<PriorityJob>()
-    var queueSongMap = PriorityQueue<PriorityJob>()
-    var jobActive = Mutex()
-    val coroutineScope = CoroutineScope(Dispatchers.IO)
-
-    /**
-     * Execute the most recent save request, with a 5 second delay from function call
-     */
-    private suspend fun databaseDispatcher() {
-        Log.d(TAG, "Starting database save task")
-        if (jobActive.isLocked) {
-            Log.d(TAG, "Database save task is already active, aborting")
-            return
+    private val saves = QueueSaveScheduler(
+        reportFailure = { Log.e(TAG, "Could not save queues; retaining the latest state for retry", it) },
+    ) { batch ->
+        player.database.awaitTransaction {
+            val saved: Map<Long, MultiQueueObject> = batch.queues.filter { it.id in batch.songQueueIds }
+                .associate { queue -> queue.id to this.saveQueue(queue) }
+            this.updateAllQueues(batch.queues.map { saved[it.id] ?: it })
         }
-
-        jobActive.withLock {
-            while (queueEntity.isNotEmpty() || queueSongMap.isNotEmpty()) {
-                runBlocking {
-                    delay(5000L)
-                }
-                Log.d(TAG, "Running database save task")
-
-                // saving songs nukes the queue entity in the process, about it shouldn't matter since are same queue object
-                if (!queueSongMap.isEmpty()) {
-                    queueSongMap.last().job.start()
-                    queueSongMap.clear()
-                    continue
-                }
-
-                if (!queueEntity.isEmpty()) {
-                    queueEntity.last().job.start()
-                    queueEntity.clear()
-                    continue
-                }
-            }
-        }
-        Log.d(TAG, "Exiting database save task")
     }
 
     fun shutdown() {
         // Queue save jobs may re-insert SongEntity rows through DatabaseDao.saveQueue(). Cancel
         // the complete board scope before a destructive local-media purge drops those songs.
-        coroutineScope.cancel()
-        queueSongMap.clear()
-        queueEntity.clear()
+        canSave = false
+        stopWrites()
+    }
+
+    /** Stop the worker while retaining the current state for a normal reload/final save. */
+    fun stopWrites() {
+        writesStopped = true
+        saves.shutdown()
+    }
+
+    /** Only used when the pre-purge flush failed, before any local rows were removed. */
+    internal fun allowSaveAfterFailedRemoval() {
+        canSave = true
     }
 
     /** Wait until all database writes owned by this queue board have stopped. */
     suspend fun awaitShutdown() {
-        coroutineScope.coroutineContext[Job]?.join()
+        saves.awaitShutdown()
     }
 
+    /** Call before shutdown on the player thread, then persist only after awaitShutdown(). */
+    fun snapshotForSave(currentPosition: Long? = null): List<MultiQueueObject> =
+        snapshotQueuesForSave(masterQueues, player.artistCredits::withCredit).also { queues ->
+            if (currentPosition != null) queues.lastOrNull()?.lastSongPos = currentPosition
+        }
+
     private fun saveQueueSongs(mq: MultiQueueObject) {
-        if (player.dataStore.get(PersistentQueueKey, true)) {
-            queueSongMap.add(
-                PriorityJob(
-                    0,
-                    coroutineScope.launch(start = CoroutineStart.DEFAULT) {
-                        player.database.awaitTransaction {
-                            saveQueue(mq.copy(queue = mq.queue.map(player.artistCredits::withCredit).toMutableList()))
-                        }
-                    }
-                )
-            )
-            CoroutineScope(Dispatchers.IO).launch {
-                databaseDispatcher()
-            }
+        if (canRequestSave()) {
+            saves.request(masterQueues, setOf(mq.id), player.artistCredits::withCredit)
         }
     }
 
     private fun saveQueue(mq: MultiQueueObject) {
-        if (player.dataStore.get(PersistentQueueKey, true)) {
-            queueEntity.add(
-                PriorityJob(
-                    0,
-                    coroutineScope.launch(start = CoroutineStart.DEFAULT) {
-                        player.database.updateQueue(mq)
-                    }
-                )
-            )
-            CoroutineScope(Dispatchers.IO).launch {
-                databaseDispatcher()
-            }
+        if (canRequestSave()) {
+            saves.request(masterQueues, enrich = player.artistCredits::withCredit)
         }
     }
 
     private fun saveAllQueues(mq: MutableList<MultiQueueObject>) {
-        if (player.dataStore.get(PersistentQueueKey, true)) {
-            queueEntity.add(
-                // we select most recent task, therefore "lowest" numeric priority at the end of the list == "highest" priority
-                PriorityJob(
-                    -1,
-                    coroutineScope.launch(start = CoroutineStart.DEFAULT) {
-                        player.database.updateAllQueues(mq)
-                    }
-                )
-            )
-            CoroutineScope(Dispatchers.IO).launch {
-                databaseDispatcher()
-            }
+        if (canRequestSave()) {
+            saves.request(mq, enrich = player.artistCredits::withCredit)
         }
+    }
+
+    private fun canRequestSave(): Boolean {
+        if (writesStopped || !player.dataStore.get(PersistentQueueKey, true)) return false
+        // A board created with persistence disabled has never loaded stored queues. Merely
+        // enabling the preference must not flush its empty state over them on service shutdown.
+        canSave = true
+        return true
     }
 
     companion object {

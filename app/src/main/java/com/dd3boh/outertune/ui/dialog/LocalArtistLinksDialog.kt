@@ -1,20 +1,33 @@
 package com.dd3boh.outertune.ui.dialog
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -30,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -56,16 +70,34 @@ fun LocalArtistLinksDialog(onlineArtistId: String? = null, onDismiss: () -> Unit
     }
     AlertDialog(
         onDismissRequest = dismiss,
-        properties = DialogProperties(dismissOnBackPress = state.editing == null,
-            dismissOnClickOutside = state.editing == null),
-        title = { Text(stringResource(if (onlineArtistId == null) R.string.local_artist_links_title
-            else R.string.local_artist_links_sources)) },
+        modifier = Modifier.padding(horizontal = 16.dp).widthIn(max = 560.dp).fillMaxWidth(),
+        properties = DialogProperties(
+            dismissOnBackPress = state.editing == null,
+            dismissOnClickOutside = state.editing == null,
+            usePlatformDefaultWidth = false,
+        ),
+        title = {
+            Text(stringResource(if (onlineArtistId == null) R.string.local_artist_links_title
+                else R.string.local_artist_links_sources))
+        },
         text = {
-            Column(modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(stringResource(R.string.local_artist_links_description))
+            Column(
+                modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    stringResource(R.string.local_artist_links_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 when {
-                    state.loading -> CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    state.loading -> Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Text(stringResource(R.string.local_artist_link_loading))
+                    }
                     state.failed -> {
                         Text(stringResource(R.string.local_artist_links_load_failed), color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = viewModel::retry) { Text(stringResource(R.string.retry)) }
@@ -73,7 +105,6 @@ fun LocalArtistLinksDialog(onlineArtistId: String? = null, onDismiss: () -> Unit
                     state.sources.isEmpty() -> Text(stringResource(R.string.local_artist_links_empty))
                     else -> state.sources.forEach { source ->
                         key(source.localArtist.id) {
-                            HorizontalDivider()
                             LocalArtistLinkSourceDetails(source, onEdit = { viewModel.edit(source.localArtist.id) })
                         }
                     }
@@ -95,34 +126,110 @@ fun LocalArtistLinksDialog(onlineArtistId: String? = null, onDismiss: () -> Unit
 private fun LocalArtistLinkSourceDetails(source: LocalArtistLinkSource, onEdit: () -> Unit) {
     val localArtist = source.localArtist
     var showFolders by rememberSaveable(localArtist.id) { mutableStateOf(false) }
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.local_artist_links_file_name, localArtist.artist.name),
-            style = MaterialTheme.typography.titleSmall)
-        Text(pluralStringResource(R.plurals.n_song, localArtist.songCount, localArtist.songCount))
-        localArtist.localLink?.let { link ->
-            val target = localArtist.artist.displayArtistTarget().takeIf { it.id == link.onlineArtistId }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AsyncImage(model = target?.thumbnailUrl ?: link.thumbnailUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(40.dp).clip(CircleShape))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.local_artist_link_current), style = MaterialTheme.typography.labelMedium)
-                    Text(target?.name ?: link.onlineName)
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    stringResource(R.string.local_artist_links_file_name),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    localArtist.artist.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    pluralStringResource(R.plurals.n_song, localArtist.songCount, localArtist.songCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (localArtist.songCount == 0) {
+                    Text(
+                        stringResource(R.string.local_artist_links_no_songs),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-        }
-        if (source.folders.isEmpty()) {
-            Text(stringResource(R.string.local_artist_links_no_folders), style = MaterialTheme.typography.bodySmall)
-        } else {
-            TextButton(onClick = { showFolders = !showFolders }) {
-                Text(stringResource(if (showFolders) R.string.local_artist_links_hide_folders
-                    else R.string.local_artist_links_show_folders, source.folders.size))
-            }
-            if (showFolders) SelectionContainer {
-                Column(modifier = Modifier.padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    source.folders.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            localArtist.localLink?.let { link ->
+                val target = localArtist.artist.displayArtistTarget().takeIf { it.id == link.onlineArtistId }
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.artist),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                            )
+                            AsyncImage(
+                                model = target?.thumbnailUrl ?: link.thumbnailUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(40.dp).clip(CircleShape),
+                            )
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(stringResource(R.string.local_artist_link_current), style = MaterialTheme.typography.labelMedium)
+                            Text(target?.name ?: link.onlineName, style = MaterialTheme.typography.titleSmall)
+                        }
+                    }
                 }
             }
+            HorizontalDivider()
+            if (source.folders.isEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.local_artist_links_no_folders),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                TextButton(
+                    onClick = { showFolders = !showFolders },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Text(
+                        stringResource(if (showFolders) R.string.local_artist_links_hide_folders
+                            else R.string.local_artist_links_show_folders, source.folders.size),
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    )
+                    Icon(if (showFolders) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, contentDescription = null)
+                }
+                if (showFolders) SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        source.folders.forEach { folder ->
+                            Text(folder, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            OutlinedButton(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(stringResource(R.string.local_artist_link_manage), modifier = Modifier.padding(start = 8.dp))
+            }
         }
-        TextButton(onClick = onEdit) { Text(stringResource(R.string.local_artist_link_manage)) }
     }
 }

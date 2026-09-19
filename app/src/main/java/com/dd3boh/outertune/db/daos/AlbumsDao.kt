@@ -245,11 +245,13 @@ interface AlbumsDao : ArtistCreditDao {
         WHERE album.id = :albumId
         GROUP BY album.id
     """)
-    fun albumWithSongs(albumId: String): Flow<AlbumWithSongs?>
+    fun albumWithSongRelations(albumId: String): Flow<AlbumWithSongs?>
 
-    @Transaction
-    @Query("SELECT song.* FROM song JOIN song_album_map ON song.id = song_album_map.songId WHERE song_album_map.albumId = :albumId")
-    fun albumSongs(albumId: String): Flow<List<Song>>
+    fun albumWithSongs(albumId: String): Flow<AlbumWithSongs?> =
+        albumWithSongRelations(albumId).map { it?.withTrackOrder() }
+
+    fun albumSongs(albumId: String): Flow<List<Song>> =
+        albumWithSongs(albumId).map { it?.songs.orEmpty() }
 
     @Transaction
     @Query("""
@@ -547,7 +549,10 @@ interface AlbumsDao : ArtistCreditDao {
         val incoming = artistCreditFromJson(album.artistCreditJson)
         val storedJson = if (stored != null && incoming?.isEmptyByline() == true) stored.artistCreditJson
             else stored?.artistCreditJson ?: album.artistCreditJson
-        updateAlbumEntity(album.copy(artistCreditJson = storedJson))
+        updateAlbumEntity(album.copy(
+            artistCreditJson = storedJson,
+            hasTrackList = stored?.hasTrackList ?: album.hasTrackList,
+        ))
         incoming?.let { applyAlbumArtistCredit(album.id, it) }
     }
 
@@ -556,6 +561,10 @@ interface AlbumsDao : ArtistCreditDao {
 
     @Upsert
     fun upsertSongAlbumMap(map: SongAlbumMap)
+
+    /** Retain association/history for old recording IDs without keeping them in the track list. */
+    @Query("UPDATE song_album_map SET `index` = -1 WHERE albumId = :albumId")
+    fun clearAlbumTrackOrder(albumId: String)
 
     @Transaction
     fun upsert(map: SongAlbumMap) {

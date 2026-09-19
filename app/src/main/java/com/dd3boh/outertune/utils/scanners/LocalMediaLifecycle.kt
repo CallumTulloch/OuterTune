@@ -24,12 +24,12 @@ import com.dd3boh.outertune.db.daos.retainOnlineQueueSongs
 import com.dd3boh.outertune.extensions.metadata
 import com.dd3boh.outertune.extensions.toEnum
 import com.dd3boh.outertune.playback.PlayerConnection
-import com.dd3boh.outertune.playback.QueueBoard
 import com.dd3boh.outertune.ui.utils.clearDtCache
 import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.reportException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -65,16 +65,16 @@ object LocalMediaLifecycle {
         lifecycleMutex.withLock {
             _state.value = LocalMediaLifecycleState.REMOVING
             var queueNeedsReload = false
-            var queueBoardToAwait: QueueBoard? = null
             try {
                 LocalMediaScanner.cancelScannerAndAwaitIdle()
                 val hadLocalSongs = database.hasLocalSongs()
                 queueNeedsReload = hadLocalSongs
 
                 if (hadLocalSongs) {
+                    // Commit the latest detached snapshot before dropping local rows. Cancelling
+                    // the delayed writer alone would discard recent online queue edits as well.
+                    playerConnection?.service?.prepareQueueForLocalMediaRemoval()
                     withContext(Dispatchers.Main) {
-                        queueBoardToAwait = playerConnection?.service?.queueBoard?.value
-                        queueBoardToAwait?.shutdown()
                         val player = playerConnection?.player
                         val activeQueueContainsLocalSongs = player != null &&
                             (0 until player.mediaItemCount).any { index ->
@@ -85,9 +85,6 @@ object LocalMediaLifecycle {
                             player.clearMediaItems()
                         }
                     }
-                    // A delayed QueueBoard save can insert its in-memory SongEntity objects. Wait
-                    // for every such write before deleting local rows.
-                    queueBoardToAwait?.awaitShutdown()
                 }
 
                 val affectedQueues = if (hadLocalSongs) {
@@ -118,8 +115,8 @@ object LocalMediaLifecycle {
                     if (queueNeedsReload) {
                         // Rebuild only from the surviving queue rows. A mixed active queue was
                         // stopped above; online-only playback is left uninterrupted.
-                        withContext(Dispatchers.Main) {
-                            playerConnection?.service?.initQueue()
+                        withContext(NonCancellable + Dispatchers.Main) {
+                            playerConnection?.service?.finishQueueForLocalMediaRemoval()
                         }
                     }
                 } catch (e: CancellationException) {

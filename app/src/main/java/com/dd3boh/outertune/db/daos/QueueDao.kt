@@ -13,11 +13,8 @@ import com.dd3boh.outertune.db.entities.QueueSongMap
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.MultiQueueObject
 import com.dd3boh.outertune.models.toMediaMetadata
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 internal fun normalizeRestoredQueueShuffleOrder(
     songs: MutableList<MediaMetadata>,
@@ -34,35 +31,36 @@ internal fun normalizeRestoredQueueShuffleOrder(
  * is preserved; if the current song was local, the next surviving playback-order item is selected.
  */
 internal fun retainOnlineQueueSongs(queue: MultiQueueObject): MultiQueueObject? {
-    if (queue.queue.none(MediaMetadata::isLocal)) return queue
+    return retainQueueSongs(queue) { !it.isLocal }
+}
 
-    val currentSong = queue.queue.getOrNull(queue.queuePos)
+/** Filter occurrences without mutating the captured queue; preserve its surviving playback order. */
+internal fun retainQueueSongs(
+    queue: MultiQueueObject,
+    keep: (MediaMetadata) -> Boolean,
+): MultiQueueObject? {
+    val surviving = queue.queue.indices.filter { keep(queue.queue[it]) }
+    if (surviving.size == queue.queue.size) return queue
+    if (surviving.isEmpty()) return null
+    val survivingSet = surviving.toSet()
     val playbackOrder = if (queue.shuffled) {
-        queue.queue.sortedBy(MediaMetadata::shuffleIndex)
-    } else {
-        queue.queue.toList()
-    }
-    val currentPlaybackIndex = playbackOrder.indexOf(currentSong)
-    val fallbackSong = if (currentPlaybackIndex >= 0) {
-        playbackOrder.drop(currentPlaybackIndex + 1).firstOrNull { !it.isLocal }
-            ?: playbackOrder.take(currentPlaybackIndex).lastOrNull { !it.isLocal }
-    } else {
-        null
-    }
-    val targetSong = currentSong?.takeUnless(MediaMetadata::isLocal) ?: fallbackSong
-    val survivingSongs = queue.queue.filterNot(MediaMetadata::isLocal).toMutableList()
-    if (survivingSongs.isEmpty()) return null
-
-    survivingSongs.sortedBy(MediaMetadata::shuffleIndex).forEachIndexed { index, song ->
-        song.shuffleIndex = index
-    }
-    queue.queue.clear()
-    queue.queue.addAll(survivingSongs)
-    queue.queuePos = targetSong?.let(survivingSongs::indexOf)?.takeIf { it >= 0 } ?: 0
-    if (currentSong?.isLocal != false) {
-        queue.lastSongPos = androidx.media3.common.C.TIME_UNSET
-    }
-    return queue
+        queue.queue.indices.sortedBy { queue.queue[it].shuffleIndex }
+    } else queue.queue.indices.toList()
+    val currentPlaybackIndex = playbackOrder.indexOf(queue.queuePos)
+    val target = if (queue.queuePos in survivingSet) queue.queuePos else if (currentPlaybackIndex >= 0) {
+        playbackOrder.drop(currentPlaybackIndex + 1).firstOrNull { it in survivingSet }
+            ?: playbackOrder.take(currentPlaybackIndex).lastOrNull { it in survivingSet }
+            ?: surviving.first()
+    } else surviving.first()
+    val shuffleIndexes = surviving.sortedBy { queue.queue[it].shuffleIndex }
+        .withIndex().associate { (index, originalIndex) -> originalIndex to index }
+    return queue.copy(
+        queue = surviving.map { index ->
+            queue.queue[index].copy(shuffleIndex = shuffleIndexes.getValue(index))
+        }.toMutableList(),
+        queuePos = surviving.indexOf(target),
+        lastSongPos = if (queue.queuePos in survivingSet) queue.lastSongPos else androidx.media3.common.C.TIME_UNSET,
+    )
 }
 
 @Dao
@@ -162,12 +160,8 @@ interface QueueDao {
 
     @Transaction
     fun updateAllQueues(mqs: List<MultiQueueObject>) {
-        val mqs = mqs.toList() // please no more ConcurrentModificationException I beg you
-        mqs.forEachIndexed { index, q -> q.index = index }
-        CoroutineScope(Dispatchers.IO).launch {
-            nukeAliens(mqs.map { it.id })
-            mqs.forEach { updateQueue(it) }
-        }
+        nukeAliens(mqs.map { it.id })
+        mqs.forEachIndexed { index, queue -> updateQueue(queue.copy(index = index)) }
     }
 
     // endregion

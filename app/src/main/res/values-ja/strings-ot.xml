@@ -292,7 +292,7 @@
     <string name="backup_in_progress">バックアップを作成しています…</string>
     <string name="album_no_tracks">このアルバムの曲を取得できませんでした。</string>
     <string name="album_track_unavailable">現在、再生が制限されています。</string>
-    <string name="local_artist_link_title">YouTubeアーティストを紐付け</string>
+    <string name="local_artist_link_title">オンライン紐づけ</string>
     <string name="local_artist_link_manage">紐付け先を変更・解除</string>
     <string name="local_artist_link_source">端末内のアーティスト：%1$s（%2$d曲）</string>
     <string name="local_artist_link_current">現在の紐付け先</string>
@@ -320,11 +320,12 @@
     <string name="local_artist_link_changed">保存済みの紐付けが変わりました。現在の紐付け先を確認し、候補を選び直してください。</string>
     <string name="local_artist_links_title">アーティストの紐付け</string>
     <string name="local_artist_links_sources">フォルダ由来の紐付け</string>
-    <string name="local_artist_links_description">ファイル内の表記ごとに紐付けを管理できます。現在読み込まれている曲がない紐付けも表示します。</string>
-    <string name="local_artist_links_file_name">ファイル内の表記：%1$s</string>
+    <string name="local_artist_links_description">ファイル内のアーティスト名と、現在の紐付け先を確認できます。変更・解除するには、各カードのボタンを押してください。</string>
+    <string name="local_artist_links_file_name">ファイル内のアーティスト名</string>
+    <string name="local_artist_links_no_songs">現在読み込まれている曲はありません</string>
     <string name="local_artist_links_show_folders">フォルダを表示（%1$d）</string>
     <string name="local_artist_links_hide_folders">フォルダを閉じる（%1$d）</string>
-    <string name="local_artist_links_no_folders">現在、フォルダ情報は保存されていません。</string>
+    <string name="local_artist_links_no_folders">フォルダ情報なし</string>
     <string name="local_artist_links_empty">該当する紐付けはありません。</string>
     <string name="local_artist_links_load_failed">紐付けを読み込めませんでした。もう一度お試しください。</string>
     <string name="local_artist_links_close">閉じる</string>
