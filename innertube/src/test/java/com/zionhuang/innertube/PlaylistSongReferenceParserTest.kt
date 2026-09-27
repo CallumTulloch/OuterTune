@@ -13,6 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlaylistSongReferenceParserTest {
@@ -35,6 +36,8 @@ class PlaylistSongReferenceParserTest {
         assertEquals(13, result.references.size)
         assertEquals(13, result.sourceSongs.size)
         assertEquals(0, result.targetSongs.size)
+        assertTrue(result.hasCompleteIdentityCoverage)
+        assertTrue(result.unavailableSourceEntries.isEmpty())
         assertEquals(PlaylistSongReference(playlistId, "5A39A74538F3ADE6", "ox_BG6sLPq8", "J6EDW5WFb2M"),
             result.references.single { it.targetVideoId == "J6EDW5WFb2M" })
         assertEquals(PlaylistSongReference(playlistId, "2A09C19594D466EF", "_oWUgfpGi0M", "pkcJEvMcnEg"),
@@ -95,7 +98,7 @@ class PlaylistSongReferenceParserTest {
         assertNull(parse(next = Json.parseToJsonElement(next.toString().replace("PbgKEjNBHqM", "hTWKbfoikeg"))))
     }
 
-    @Test fun `missing rows and mismatched stable keys cannot become a partial success`() {
+    @Test fun `missing sources missing current target and mismatched stable keys cannot become a partial success`() {
         assertNull(parse(browse = browse.update(shelfPath + "contents") { JsonArray(it.jsonArray.dropLast(1)) }))
         assertNull(parse(next = next.update(panelPath + "contents") { JsonArray(it.jsonArray.drop(1)) }))
         assertNull(parse(next = Json.parseToJsonElement(next.toString().replace("89EB92D23D2DDB11", "differentEntry"))))

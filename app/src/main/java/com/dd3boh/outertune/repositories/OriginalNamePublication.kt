@@ -12,29 +12,26 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * Prepare one completed publication batch from a coherent, fully assessed candidate snapshot.
- * Null means assessment is still pending, not a completed UNKNOWN decision. The caller compares
- * the captured input generation and saves this result with its assessments in one transaction.
+ * Prepare independently completed display decisions from a coherent candidate snapshot.
+ * Pending targets are omitted, preserving their last publication. The caller compares each
+ * target's full dependency set before saving it with its assessments in one transaction.
  * Existing targets are included so removal of their final source commits a null verdict.
  */
 internal fun prepareOriginalPublications(
     rows: List<MetadataNameEntity>,
     previous: List<MetadataOriginalPublicationEntity>,
     evaluatedAt: Long,
-): List<MetadataOriginalPublicationEntity>? {
+): List<MetadataOriginalPublicationEntity> {
     require(evaluatedAt > 0)
-    val originals = latestOriginalRows(rows)
-    val inputs = originalAssessmentInputs(originals)
-    if (originals.any { !hasCurrentOriginalAssessmentInputs(it, inputs) }) return null
+    val inputs = OriginalPublicationInputs(rows)
     val assessments = originalAssessmentsByTarget(rows)
     // A source snapshot can support its song, album, artists and provider references. Decode
     // each source once here instead of scanning every original again for every display target.
-    val originalsBySource = originals.mapNotNull { row ->
-        originalCandidate(row)?.sourceVideoId?.let { it to row }
-    }.groupBy({ it.first }, { it.second })
+    val originalsBySource = inputs.bySource
     val grouped = rows.groupBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
     val previousByTarget = previous.associateBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
-    return (grouped.keys + previousByTarget.keys).sortedWith(compareBy({ it.kind.name }, { it.id })).map { target ->
+    return (grouped.keys + previousByTarget.keys).sortedWith(compareBy({ it.kind.name }, { it.id })).mapNotNull { target ->
+        if (!inputs.ready(target)) return@mapNotNull null
         val candidates = grouped[target].orEmpty()
         val evidence = assessments[target].orEmpty()
         // An empty requested language cannot match a stored alias. The normal selector therefore

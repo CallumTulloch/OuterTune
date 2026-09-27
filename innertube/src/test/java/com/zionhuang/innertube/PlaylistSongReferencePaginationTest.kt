@@ -107,7 +107,10 @@ class PlaylistSongReferencePaginationTest {
         assertTrue(runCatching { loadPlaylistSongReferences(id, "en", fetchBrowse = { browse }, fetchNext = { token ->
             if (token == null) initialNext(targets.take(5), "remaining") else throw IOException("page unavailable")
         }) }.isFailure)
-        assertTrue(runCatching { loadPlaylistSongReferences(id, "en", fetchBrowse = { browse }, fetchNext = { token ->
+        val noRestrictionEvidence = browse.update(shelf + listOf("contents", "12", "musicResponsiveListItemRenderer")) {
+            JsonObject(it.jsonObject - "musicItemRendererDisplayPolicy")
+        }
+        assertTrue(runCatching { loadPlaylistSongReferences(id, "en", fetchBrowse = { noRestrictionEvidence }, fetchNext = { token ->
             if (token == null) initialNext(targets.take(5), "remaining") else nextContinuation(targets.drop(5).dropLast(1))
         }) }.isFailure)
     }

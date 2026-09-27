@@ -193,4 +193,78 @@ class ArtTrackOriginalNamesTest {
         val retained = retainCorroboratedOriginalContext(original(), missingArtists, previous, incoming)
         assertFalse(retained.any { it.target.kind == OriginalNameKind.ARTIST })
     }
+
+    @Test fun artistlessAlbumAndCompleteQueueConvergeInEitherOrderWithoutBorrowingIds() {
+        val detail = song.copy(album = Album("Original Album (Deluxe)", "MPREdeluxe"))
+        val album = detail.copy(artists = emptyList())
+        val main = original()
+        val detailFirst = reconcileOriginalSourceSnapshot(main, detail, emptyList(), false).names
+        assertNull(detailFirst.single { it.target.kind == OriginalNameKind.SONG }.albumId)
+        val detailThenAlbum = reconcileOriginalSourceSnapshot(main, album, detailFirst, true).names
+        val albumFirst = reconcileOriginalSourceSnapshot(main, album, emptyList(), true).names
+        assertEquals(listOf(OriginalNameKind.SONG), albumFirst.map { it.target.kind })
+        val albumThenDetail = reconcileOriginalSourceSnapshot(main, detail, albumFirst, false).names
+
+        assertEquals(detailThenAlbum.toSet(), albumThenDetail.toSet())
+        assertEquals(setOf(OriginalNameKind.SONG, OriginalNameKind.ARTIST), detailThenAlbum.map { it.target.kind }.toSet())
+        assertTrue(detailThenAlbum.all { it.albumId == "MPREdeluxe" })
+        assertEquals("UCartist", detailThenAlbum.single { it.target.kind == OriginalNameKind.ARTIST }.target.id)
+    }
+
+    @Test fun partialIdentityCannotCombineChangedTitleWithOldRelatedProof() {
+        val prior = reconcileOriginalSourceSnapshot(original(), song, emptyList(), true).names
+        for (partial in listOf(song.copy(artists = emptyList()), song.copy(album = null))) {
+            val result = reconcileOriginalSourceSnapshot(original(title = "Changed Title"), partial, prior, false)
+            assertTrue(result.names.isEmpty())
+            assertTrue(result.incompleteMusicIdentities)
+        }
+    }
+
+    @Test fun missingAlbumOrArtistFieldsRetainOnlySameSourceCorroboratedNames() {
+        val prior = reconcileOriginalSourceSnapshot(original(), song, emptyList(), true).names
+        for (partial in listOf(song.copy(artists = emptyList()),
+            song.copy(artists = listOf(Artist("", "UCartist"))), song.copy(album = null))) {
+            assertEquals(prior.toSet(), reconcileOriginalSourceSnapshot(original(), partial, prior, false).names.toSet())
+        }
+        val artistless = song.copy(artists = emptyList())
+        val changedArtist = reconcileOriginalSourceSnapshot(original(credit = "New Performer"), artistless, prior, true).names
+        assertTrue(changedArtist.any { it.target.kind == OriginalNameKind.SONG })
+        assertFalse(changedArtist.any { it.target.kind == OriginalNameKind.ARTIST })
+        val changedAlbum = reconcileOriginalSourceSnapshot(original(album = "New Album"), song.copy(album = null), prior, false).names
+        assertFalse(changedAlbum.any { it.target.kind == OriginalNameKind.ALBUM })
+        assertTrue(reconcileOriginalSourceSnapshot(original().copy(videoId = "12345678901"), artistless, prior, true).names.isEmpty())
+    }
+
+    @Test fun missingArtistIdsCannotReuseAnotherSourcesOrConflictingCurrentIds() {
+        val prior = reconcileOriginalSourceSnapshot(original(), song, emptyList(), true).names
+        val unrelated = prior.map { it.copy(sourceVideoId = "12345678901") }
+        val partial = song.copy(artists = emptyList())
+        assertFalse(reconcileOriginalSourceSnapshot(original(), partial, unrelated, true).names.any {
+            it.target.kind == OriginalNameKind.ARTIST
+        })
+        val conflict = song.copy(artists = listOf(Artist("Artist · Name", "UCanother"), Artist("", null)))
+        assertFalse(reconcileOriginalSourceSnapshot(original(), conflict, prior, true).names.any {
+            it.target.kind == OriginalNameKind.ARTIST
+        })
+    }
+
+    @Test fun retainingCreditsUsesWholeKnownNamesAndDoesNotDependOnDatabaseIdOrder() {
+        val multiple = song.copy(artists = listOf(Artist("X", "UCz"), Artist("X · Y", "UCa")))
+        val main = original(credit = "X · X · Y")
+        val prior = reconcileOriginalSourceSnapshot(main, multiple, emptyList(), true).names.sortedBy { it.target.id }
+        val result = reconcileOriginalSourceSnapshot(main, multiple.copy(artists = emptyList()), prior, true)
+        assertEquals(prior.toSet(), result.names.toSet())
+        val changed = reconcileOriginalSourceSnapshot(original(credit = "X · Y"), multiple.copy(artists = emptyList()), prior, true)
+        assertFalse(changed.names.any { it.target.kind == OriginalNameKind.ARTIST })
+    }
+
+    @Test fun normalQueueAlsoRejectsMalformedSourceAndAlbumIdentities() {
+        for (albumId in listOf("", "MPRE", "UCperson", "MPREbad id", "MPREvalid?query")) {
+            val names = artTrackOriginalNames(original(), song.copy(album = Album("Original Album", albumId)))
+            assertFalse(names.any { it.target.kind == OriginalNameKind.ALBUM })
+            assertTrue(names.all { it.albumId == null })
+        }
+        assertTrue(artTrackOriginalNames(original().copy(videoId = "bad"), song.copy(id = "bad")).isEmpty())
+        assertTrue(artTrackOriginalNames(original(title = "Title\nAnother line"), song).isEmpty())
+    }
 }

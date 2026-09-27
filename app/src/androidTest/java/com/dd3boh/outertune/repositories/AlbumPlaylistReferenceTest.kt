@@ -24,6 +24,7 @@ import com.zionhuang.innertube.models.ArtTrackOriginalMetadata
 import com.zionhuang.innertube.models.PlaylistSongReference
 import com.zionhuang.innertube.models.PlaylistSongReferences
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.UnavailablePlaylistSourceEntry
 import com.zionhuang.innertube.models.WatchEndpoint
 import com.zionhuang.innertube.models.YouTubeLocale
 import java.io.IOException
@@ -291,12 +292,148 @@ class AlbumPlaylistReferenceTest {
         }
     }
 
-    private suspend fun fixture(block: suspend (Fixture) -> Unit) {
-        val fixture = Fixture()
+    @Test fun nineteenTracksCompleteThroughSixteenPairedEntriesAndThreeIndependentRestrictedOriginals(): Unit = runBlocking {
+        fixture(trackCount = 19, directIndices = (16 until 19).toSet()) { f ->
+            f.restrictedIndices = (16 until 19).toSet()
+            val raw = f.rawSongs()
+            f.start()
+            f.awaitNames(f.originalTitles)
+            f.awaitAlbum(MetadataFetchEntity.SUCCESS)
+            f.awaitIdle()
+            assertEquals(16, f.validReferences().size)
+            assertEquals(f.targetIds.take(16).toSet(), f.validReferences().map { it.targetVideoId }.toSet())
+            assertTrue(latestOriginalRows(f.database.metadataNameSnapshot())
+                .filter { it.kind == "SONG" }.map { it.targetId }.containsAll(f.targetIds.takeLast(3)))
+            assertEquals(MetadataFetchEntity.SUCCESS, f.database.metadataFetch("ALBUM", ALBUM_ID, "und",
+                "album-playlist-reference:JP:playlist-fixture:v2")?.status)
+            assertEquals(raw, f.rawSongs())
+            assertEquals(f.targetIds, f.database.albumSongs(ALBUM_ID).first().map { it.id })
+            assertEquals(f.targetIds.toSet(), f.storedSongIds())
+        }
+    }
+
+    @Test fun partialCoverageRetainsOnlyTheSameRestrictedEntryAndWithdrawsChangedAndRemovedIdentities(): Unit = runBlocking {
+        fixture { f ->
+            f.start()
+            f.awaitNames(TITLES)
+            f.awaitAlbum(MetadataFetchEntity.SUCCESS)
+            f.awaitIdle()
+            val restrictedBefore = f.validReferences().single { it.sourceVideoId == SOURCE_IDS.last() }
+            f.restrictedIndices = setOf(12)
+            f.removedIndices = setOf(11)
+            val newTarget = "new00000000"
+            f.mappingTargets = listOf(newTarget) + TARGET_IDS.drop(1)
+            // Fresh identities remain authoritative even when source renewal fails.
+            f.failedSources = setOf(SOURCE_IDS.first())
+            f.clock.addAndGet(7 * 24 * 60 * 60_000L + 1)
+            f.repository.refreshTargets()
+            f.awaitAlbum(MetadataFetchEntity.FAILED)
+            f.awaitIdle()
+            f.awaitNames(listOf(CONFIGURED.first()) + TITLES.subList(1, 11) + CONFIGURED[11] + TITLES[12])
+            val references = f.validReferences()
+            assertEquals(restrictedBefore, references.single { it.sourceVideoId == SOURCE_IDS.last() })
+            assertTrue(references.none { it.targetVideoId in setOf(TARGET_IDS.first(), TARGET_IDS[11]) })
+            assertTrue(references.any { it.targetVideoId == newTarget })
+            assertEquals(TARGET_IDS, f.database.albumSongs(ALBUM_ID).first().map { it.id })
+            assertEquals(TARGET_IDS.toSet(), f.storedSongIds())
+        }
+    }
+
+    @Test fun restrictedOmissionCannotRetainATargetFreshlyAssignedToAnotherStableEntry(): Unit = runBlocking {
+        fixture { f ->
+            f.start()
+            f.awaitNames(TITLES)
+            f.awaitAlbum(MetadataFetchEntity.SUCCESS)
+            f.awaitIdle()
+            f.restrictedIndices = setOf(12)
+            f.mappingTargets = listOf(TARGET_IDS.last()) + TARGET_IDS.drop(1)
+            f.clock.addAndGet(7 * 24 * 60 * 60_000L + 1)
+            f.repository.refreshTargets()
+            f.awaitAlbum(MetadataFetchEntity.FAILED)
+            f.awaitIdle()
+            val latest = f.validReferences().filter { it.targetVideoId == TARGET_IDS.last() }
+            assertEquals(1, latest.size)
+            assertEquals(SOURCE_IDS.first(), latest.single().sourceVideoId)
+            assertTrue(f.validReferences().none { it.sourceVideoId == SOURCE_IDS.last() })
+            assertEquals(TARGET_IDS.toSet(), f.storedSongIds())
+        }
+    }
+
+    @Test fun sameEntryRetainsItsStoredProofWhenSourceEvidenceIsTemporarilyUnavailable(): Unit = runBlocking {
+        fixture { f ->
+            f.start()
+            f.awaitNames(TITLES)
+            f.awaitAlbum(MetadataFetchEntity.SUCCESS)
+            f.awaitIdle()
+            val oldReference = f.validReferences().single { it.sourceVideoId == SOURCE_IDS.first() }
+            val oldRow = f.database.metadataNameSnapshot().single { PlaylistSongReferenceCodec.decode(it) == oldReference }
+            // Simulate a missing source record followed by a failed network recovery. This must
+            // neither invent a new original nor turn unchanged playlist identity into withdrawal.
+            f.database.openHelper.writableDatabase.execSQL("DELETE FROM metadata_name WHERE source = ?",
+                arrayOf(ORIGINAL_NAME_SOURCE_PREFIX + SOURCE_IDS.first()))
+            f.failedSources = setOf(SOURCE_IDS.first())
+            f.clock.addAndGet(7 * 24 * 60 * 60_000L + 1)
+            f.repository.refreshTargets()
+            f.awaitAlbum(MetadataFetchEntity.FAILED)
+            f.awaitIdle()
+            assertTrue(f.validReferences().contains(oldReference))
+            assertEquals(oldRow, f.database.metadataNameSnapshot().single {
+                it.targetId == oldRow.targetId && it.source == oldRow.source && it.name == oldRow.name
+            })
+            assertTrue(latestOriginalRows(f.database.metadataNameSnapshot()).none { it.targetId == SOURCE_IDS.first() })
+            assertEquals(TARGET_IDS.toSet(), f.storedSongIds())
+        }
+    }
+
+    @Test fun malformedRestrictedCoverageFailsBeforeCreatingAnyReferences(): Unit = runBlocking {
+        val invalid = listOf(
+            listOf(UnavailablePlaylistSourceEntry("bad entry", "src00000099")),
+            listOf(UnavailablePlaylistSourceEntry("new-entry", "invalid")),
+            listOf(UnavailablePlaylistSourceEntry("stable-entry-0", "src00000099")),
+            listOf(UnavailablePlaylistSourceEntry("new-entry", SOURCE_IDS.first())),
+            List(2) { UnavailablePlaylistSourceEntry("duplicate", "src00000099") },
+        )
+        for (omissions in invalid) fixture { f ->
+            f.playlistResponder = { Result.success(it.copy(unavailableSourceEntries = omissions)) }
+            f.start()
+            f.awaitAlbum(MetadataFetchEntity.FAILED)
+            f.awaitIdle()
+            assertTrue(f.validReferences().isEmpty())
+            assertEquals(MetadataFetchEntity.FAILED, f.database.metadataFetch("ALBUM", ALBUM_ID, "und",
+                "album-playlist-reference:JP:playlist-fixture:v2")?.status)
+            assertEquals(TARGET_IDS.toSet(), f.storedSongIds())
+        }
+    }
+
+    @Test fun newerExplicitWithdrawalCannotBeBypassedByAnOlderDecodedNameDuringRecovery(): Unit = runBlocking {
+        fixture { f ->
+            f.start()
+            f.awaitNames(TITLES)
+            f.awaitAlbum(MetadataFetchEntity.SUCCESS)
+            f.awaitIdle()
+            val previous = f.database.metadataNameSnapshot().single {
+                it.targetId == TARGET_IDS.first() && PlaylistSongReferenceCodec.decode(it) != null
+            }
+            f.database.recordMetadataNames(listOf(previous.copy(name = "Withdrawn observation",
+                observedAt = f.clock.incrementAndGet(), originEvidenceJson = "{}")))
+            f.playlistResponder = { Result.failure(IOException("Playlist refresh unavailable")) }
+            f.fallbackTargets.clear()
+            f.clock.addAndGet(7 * 24 * 60 * 60_000L + 1)
+            f.repository.refreshTargets()
+            f.awaitAlbum(MetadataFetchEntity.FAILED)
+            f.awaitIdle()
+            assertTrue("A withdrawn reference must allow the recovery path to run",
+                TARGET_IDS.first() in f.fallbackTargets)
+            assertTrue(f.validReferences().none { it.targetVideoId == TARGET_IDS.first() })
+        }
+    }
+
+    private suspend fun fixture(trackCount: Int = 13, directIndices: Set<Int> = emptySet(), block: suspend (Fixture) -> Unit) {
+        val fixture = Fixture(trackCount, directIndices)
         try { block(fixture) } finally { fixture.close() }
     }
 
-    private class Fixture {
+    private class Fixture(trackCount: Int, private val directIndices: Set<Int>) {
         private val context = InstrumentationRegistry.getInstrumentation().targetContext
         private val databaseName = "album-playlist-reference-${UUID.randomUUID()}.db"
         val database = MusicDatabase(Room.databaseBuilder(context, InternalDatabase::class.java, databaseName).build())
@@ -310,10 +447,16 @@ class AlbumPlaylistReferenceTest {
         val frames = CopyOnWriteArrayList<Map<OriginalNameTarget, String>>()
         val playlistCalls = AtomicInteger()
         val queueCalls = AtomicInteger()
-        var originalTitles: List<String> = TITLES
+        val fallbackTargets = CopyOnWriteArrayList<String>()
+        val sourceIds = (0 until trackCount).map { "src%08d".format(it) }
+        val targetIds = (0 until trackCount).map { if (it in directIndices) sourceIds[it] else "tgt%08d".format(it) }
+        val configuredTitles = (0 until trackCount).map { "コンテンツ表記 ${it + 1}" }
+        var originalTitles: List<String> = (0 until trackCount).map { "Original Song Number ${it + 1}" }
         var musicTitles: List<String>? = null
         var nextTitles: List<String>? = null
-        var mappingTargets: List<String> = TARGET_IDS
+        var mappingTargets: List<String> = targetIds
+        var restrictedIndices: Set<Int> = emptySet()
+        var removedIndices: Set<Int> = emptySet()
         var albumReturnsSources = false
         var omitNextNames = false
         var failedSources = emptySet<String>()
@@ -323,19 +466,19 @@ class AlbumPlaylistReferenceTest {
             private set
 
         init {
-            database.insert(AlbumEntity(ALBUM_ID, title = ALBUM_TITLE, songCount = 13, duration = 2600,
+            database.insert(AlbumEntity(ALBUM_ID, title = ALBUM_TITLE, songCount = trackCount, duration = 200 * trackCount,
                 hasTrackList = true, bookmarkedAt = LocalDateTime.of(2026, 9, 20, 0, 0)))
-            TARGET_IDS.forEachIndexed { index, id ->
-                database.insert(SongEntity(id, CONFIGURED[index], duration = 200, localPath = null,
+            targetIds.forEachIndexed { index, id ->
+                database.insert(SongEntity(id, configuredTitles[index], duration = 200, localPath = null,
                     albumId = ALBUM_ID, albumName = ALBUM_TITLE))
                 database.insert(SongAlbumMap(id, ALBUM_ID, index))
-                database.recordMetadataNames(listOf(MetadataNameEntity("SONG", id, "ja", CONFIGURED[index],
+                database.recordMetadataNames(listOf(MetadataNameEntity("SONG", id, "ja", configuredTitles[index],
                     "album", 50, clock.get())))
             }
         }
 
         fun seedTargetEnglishAliases(except: String? = null) {
-            database.recordMetadataNames(TARGET_IDS.mapIndexedNotNull { index, id ->
+            database.recordMetadataNames(targetIds.mapIndexedNotNull { index, id ->
                 if (id == except) null else MetadataNameEntity("SONG", id, "en", originalTitles[index],
                     "album", 50, clock.get())
             })
@@ -353,12 +496,12 @@ class AlbumPlaylistReferenceTest {
             }
         }
 
-        private fun sourceSongs(albumId: String = ALBUM_ID) = SOURCE_IDS.mapIndexed { index, id ->
+        private fun sourceSongs(albumId: String = ALBUM_ID) = sourceIds.mapIndexed { index, id ->
             song(id, (musicTitles ?: originalTitles)[index], "MUSIC_VIDEO_TYPE_ATV", albumId)
         }
 
         private fun targetSongs(ids: List<String> = mappingTargets, albumId: String = ALBUM_ID) = ids.mapIndexed { index, id ->
-            song(id, (musicTitles ?: originalTitles)[index], when (index) {
+            song(id, (musicTitles ?: originalTitles)[index], if (index in directIndices) "MUSIC_VIDEO_TYPE_ATV" else when (index) {
                 0 -> "MUSIC_VIDEO_TYPE_UGC"
                 1 -> null
                 else -> "MUSIC_VIDEO_TYPE_OMV"
@@ -369,10 +512,15 @@ class AlbumPlaylistReferenceTest {
             val secondary = playlistId == SECOND_PLAYLIST_ID
             val albumId = if (secondary) SECOND_ALBUM_ID else ALBUM_ID
             val targets = if (secondary) SECOND_TARGET_IDS else mappingTargets
+            val excluded = restrictedIndices + removedIndices
             return PlaylistSongReferences(playlistId,
-                SOURCE_IDS.mapIndexed { index, id -> PlaylistSongReference(playlistId, "stable-entry-$index", id, targets[index]) },
-                sourceSongs(albumId), if (omitNextNames) emptyList() else targetSongs(targets, albumId)
-                    .mapIndexed { index, item -> nextTitles?.let { item.copy(title = it[index]) } ?: item })
+                sourceIds.mapIndexedNotNull { index, id -> if (index in excluded) null else
+                    PlaylistSongReference(playlistId, "stable-entry-$index", id, targets[index]) },
+                sourceSongs(albumId).filterIndexed { index, _ -> index !in excluded },
+                if (omitNextNames) emptyList() else targetSongs(targets, albumId)
+                    .mapIndexed { index, item -> nextTitles?.let { item.copy(title = it[index]) } ?: item }
+                    .filterIndexed { index, _ -> index !in excluded },
+                restrictedIndices.sorted().map { UnavailablePlaylistSourceEntry("stable-entry-$it", sourceIds[it]) })
         }
 
         fun start() {
@@ -395,17 +543,17 @@ class AlbumPlaylistReferenceTest {
                 albumContext = { id, _ ->
                     check(id in setOf(ALBUM_ID, SECOND_ALBUM_ID))
                     Result.success(if (albumReturnsSources) sourceSongs(id)
-                        else targetSongs(if (id == SECOND_ALBUM_ID) SECOND_TARGET_IDS else TARGET_IDS, id))
+                        else targetSongs(if (id == SECOND_ALBUM_ID) SECOND_TARGET_IDS else targetIds, id))
                 },
                 playlistReferences = { id, _ ->
                     check(id in setOf(PLAYLIST_ID, SECOND_PLAYLIST_ID))
                     playlistCalls.incrementAndGet()
                     playlistResponder(snapshot(id))
                 },
-                albumSongSources = { _, _ -> Result.success(emptyList()) },
+                albumSongSources = { item, _ -> fallbackTargets += item.id; Result.success(emptyList()) },
                 mainSongReference = { _, _ -> Result.success(null) },
                 main = { id, _ ->
-                    val index = SOURCE_IDS.indexOf(id)
+                    val index = sourceIds.indexOf(id)
                     when {
                         id in failedSources -> Result.failure(IOException("Synthetic partial source failure"))
                         index < 0 -> Result.success(ArtTrackOriginalMetadata(id, "Ordinary video title", null, null, "Video description"))
@@ -429,13 +577,17 @@ class AlbumPlaylistReferenceTest {
             )).also { it.start() }
         }
 
-        fun validReferences() = database.metadataNameSnapshot().mapNotNull(PlaylistSongReferenceCodec::decode)
-        suspend fun rawSongs() = TARGET_IDS.map { database.song(it).first()!!.song }
+        fun validReferences() = database.metadataNameSnapshot()
+            .filter { it.source.startsWith(PLAYLIST_SONG_REFERENCE_SOURCE_PREFIX) }
+            .groupBy { it.targetId to it.source }.values.flatMap { rows ->
+                rows.filter { it.observedAt == rows.maxOf { row -> row.observedAt } }.mapNotNull(PlaylistSongReferenceCodec::decode)
+            }
+        suspend fun rawSongs() = targetIds.map { database.song(it).first()!!.song }
         fun storedSongIds(): Set<String> = database.openHelper.readableDatabase.query("SELECT id FROM song").use { cursor ->
             buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
         }
         suspend fun awaitNames(expected: List<String>) {
-            withTimeout(30_000) { names.first { selected -> TARGET_IDS.indices.all { selected[target(TARGET_IDS[it])] == expected[it] } } }
+            withTimeout(30_000) { names.first { selected -> targetIds.indices.all { selected[target(targetIds[it])] == expected[it] } } }
         }
         suspend fun awaitAlbum(status: String, albumId: String = ALBUM_ID) = awaitCondition {
             database.metadataFetch("ALBUM", albumId, "und", albumOriginalContextKey("${locales.value.gl}:playlist-fixture"))?.status == status

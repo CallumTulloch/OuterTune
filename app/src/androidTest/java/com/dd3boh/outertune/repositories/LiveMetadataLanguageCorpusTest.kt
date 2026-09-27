@@ -194,8 +194,11 @@ class LiveMetadataLanguageCorpusTest {
                     val publications = database.metadataOriginalPublicationSnapshot()
                     val originalsAttempted = database.metadataFetchStates("ALBUM", albumId).any { it.language == "und" }
                     val completed = prepareOriginalPublications(rows, publications, System.currentTimeMillis())
+                    val originals = latestOriginalRows(rows)
+                    val inputs = originalAssessmentInputs(originals)
                     val ready = originalsAttempted && repository.pendingRequestCount == 0 &&
-                        repository.initialized.value && completed != null && completed.toSet() == publications.toSet()
+                        repository.initialized.value && originals.all { hasCurrentOriginalAssessmentInputs(it, inputs) } &&
+                        completed.toSet() == publications.toSet()
                     if (ready) {
                         val now = SystemClock.elapsedRealtime()
                         if (idleSince == null) idleSince = now

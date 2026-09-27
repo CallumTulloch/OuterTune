@@ -14,6 +14,8 @@ import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.MetadataFetchEntity
 import com.dd3boh.outertune.db.entities.MetadataNameEntity
+import com.dd3boh.outertune.db.entities.PlaylistEntity
+import com.dd3boh.outertune.db.entities.PlaylistSongMap
 import com.dd3boh.outertune.db.entities.SongAlbumMap
 import com.dd3boh.outertune.db.entities.SongArtistMap
 import com.dd3boh.outertune.db.entities.SongEntity
@@ -90,6 +92,7 @@ class AlbumProviderSongReferenceTest {
         withFixture { f ->
             f.seedKnownOriginals()
             f.database.update(requireNotNull(f.database.albumById(ALBUM_ID)).copy(bookmarkedAt = null))
+            f.saveRowsInPlaylist(MV_IDS)
             f.albumReturnsAudio = true
             f.database.recordMetadataNames(MV_IDS.flatMapIndexed { index, id -> listOf(
                 MetadataNameEntity("SONG", id, "en", ENGLISH_TITLES[index] + " (Official Music Video)",
@@ -174,6 +177,7 @@ class AlbumProviderSongReferenceTest {
             f.database.update(requireNotNull(f.database.albumById(ALBUM_ID)).copy(bookmarkedAt = null))
             f.database.insert(SongEntity(unrelatedId, unrelatedJapanese, duration = 180, localPath = null,
                 albumId = ALBUM_ID, albumName = JAPANESE_ALBUM))
+            f.saveRowsInPlaylist(listOf(unrelatedId) + MV_IDS)
             // Persist the competing English candidate first; it has the same album and title,
             // but Main's card points only to hTWKbfoikeg, never to this earlier candidate.
             f.database.recordMetadataNames(listOf(
@@ -398,6 +402,21 @@ class AlbumProviderSongReferenceTest {
                 ), MetadataFetchEntity("SONG", id, "und", MetadataFetchEntity.SUCCESS,
                     clock.get() - 1, originalMetadataContextKey(locale)))
             }
+        }
+
+        suspend fun saveRowsInPlaylist(ids: List<String>) {
+            // Queue/database persistence alone is not a saved interest. Saving this playlist
+            // schedules the exact video rows while leaving the unbookmarked album's complete
+            // track list ineligible, which is the behavior these two recovery tests exercise.
+            val playlistId = "LP_provider_saved_fixture"
+            database.insert(PlaylistEntity(id = playlistId, name = "Saved video choices",
+                bookmarkedAt = LocalDateTime.of(2026, 9, 20, 0, 0)))
+            ids.forEachIndexed { index, id ->
+                database.insert(PlaylistSongMap(playlistId = playlistId, songId = id, position = index))
+            }
+            assertEquals(ids.toSet(), database.metadataRefreshTargets().first()
+                .filter { it.kind == "SONG" }.map { it.targetId }.toSet())
+            assertFalse(database.isAlbumOriginalContextEligible(ALBUM_ID))
         }
 
         fun start() {

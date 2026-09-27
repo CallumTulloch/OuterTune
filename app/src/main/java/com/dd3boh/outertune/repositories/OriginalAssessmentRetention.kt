@@ -17,12 +17,12 @@ import kotlinx.serialization.json.put
 import java.security.MessageDigest
 
 private const val INPUT_SET_FIELD = "assessmentInputSet"
-private const val INPUT_SET_VERSION = 2
+private const val INPUT_SET_VERSION = 3
 
 /**
  * Index once per snapshot. Language detection depends on a name and the songs directly linked to
- * its album, not every previously browsed album. Same-target observations are included as well so
- * adding or withdrawing a conflicting source cannot retain an assessment across that change.
+ * its album, not every previously browsed album. Conflicts between observations of a shared
+ * target are resolved at publication; they do not change another candidate's language estimate.
  */
 internal class OriginalAssessmentInputs internal constructor(
     internal val candidates: Set<ArtTrackOriginalName>,
@@ -49,10 +49,8 @@ internal fun originalAssessmentInputs(rows: List<MetadataNameEntity>): OriginalA
     // Hash each shared group once. Repeating the entire album/artist input in every row would
     // turn this lightweight invalidation check into quadratic work on large libraries.
     val albumFingerprints = songsByAlbum.mapValues { (_, songs) -> inputSetFingerprint(songs) }
-    val targetFingerprints = candidates.groupBy { it.target }
-        .mapValues { (_, names) -> inputSetFingerprint(names) }
     val fingerprints = candidates.associateWith { candidate ->
-        fingerprint(listOf(encodedCandidate(candidate), targetFingerprints.getValue(candidate.target),
+        fingerprint(listOf(encodedCandidate(candidate),
             candidate.albumId?.let(albumFingerprints::get).orEmpty()))
     }
     return OriginalAssessmentInputs(candidates, songsByAlbum, fingerprints)

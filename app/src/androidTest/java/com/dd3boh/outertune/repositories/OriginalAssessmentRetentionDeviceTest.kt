@@ -214,7 +214,7 @@ class OriginalAssessmentRetentionDeviceTest {
     }
 
     @Test(timeout = 45_000)
-    fun unrelatedAlbumArrivingDuringClassificationReusesCompletedWorkBeforeCoherentPublication() = runBlocking {
+    fun unrelatedAlbumArrivingDuringClassificationCannotDelayCompletedPublication() = runBlocking {
         verifyDelayedAssessment(sameAlbumChange = false)
     }
 
@@ -308,9 +308,17 @@ class OriginalAssessmentRetentionDeviceTest {
                 assertTrue("Independent completed assessments must already be persisted",
                     firstRows.all { hasCurrentOriginalAssessmentInputs(it, currentInputs) })
             }
-            assertTrue("A stale publication must not escape while the current snapshot is unfinished",
-                database.metadataOriginalPublicationSnapshot().none { it.englishName != null })
-            assertTrue(publicationHistory.all { selected -> firstAlbum.none { selected[it.target] == it.name } })
+            if (sameAlbumChange) {
+                assertTrue("Changed album context must still wait for its current assessment",
+                    database.metadataOriginalPublicationSnapshot().none { it.englishName != null })
+                assertTrue(publicationHistory.all { selected -> firstAlbum.none { selected[it.target] == it.name } })
+            } else {
+                withTimeout(5_000) { published.first { selected -> firstAlbum.all { selected[it.target] == it.name } } }
+                assertTrue("A completed album must publish while unrelated classification is held",
+                    firstAlbum.all { candidate -> database.metadataOriginalPublicationSnapshot()
+                        .any { it.targetId == candidate.target.id && it.englishName == candidate.name } })
+                assertTrue(additions.all { published.value[it.target] == localized(it) })
+            }
 
             releaseSecond.complete(Unit)
             withTimeout(10_000) {
@@ -341,9 +349,9 @@ class OriginalAssessmentRetentionDeviceTest {
                     assertEquals("Unrelated updates must not classify the completed album again", 1,
                         evaluations.count { candidate in it })
                 }
-                assertTrue("English names from A and B must become visible together",
-                    publicationHistory.filter { selected -> firstAlbum.any { selected[it.target] == it.name } }
-                        .all { selected -> all.all { selected[it.target] == it.name } })
+                assertTrue("Independent A must have become visible before B completed",
+                    publicationHistory.any { selected -> firstAlbum.all { selected[it.target] == it.name } &&
+                        additions.all { selected[it.target] == localized(it) } })
             }
         } finally {
             releaseFirst.complete(Unit)

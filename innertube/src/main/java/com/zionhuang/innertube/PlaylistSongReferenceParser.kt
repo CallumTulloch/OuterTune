@@ -5,8 +5,11 @@ import com.zionhuang.innertube.models.PlaylistPanelVideoRenderer
 import com.zionhuang.innertube.models.PlaylistSongReference
 import com.zionhuang.innertube.models.PlaylistSongReferences
 import com.zionhuang.innertube.models.SongItem
+import com.zionhuang.innertube.models.UnavailablePlaylistSourceEntry
 import com.zionhuang.innertube.pages.AlbumPage
 import com.zionhuang.innertube.pages.NextPage
+import java.net.URI
+import java.net.URLDecoder
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -24,7 +27,12 @@ private const val MAX_REFERENCE_ENTRIES = 10_000
 @OptIn(ExperimentalSerializationApi::class)
 private val playlistReferenceJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
-private data class ReferenceEntry(val entryId: String, val videoId: String, val song: SongItem?)
+private data class ReferenceEntry(
+    val entryId: String,
+    val videoId: String,
+    val song: SongItem?,
+    val explicitlyUnavailable: Boolean = false,
+)
 private data class ReferencePage(
     val entries: List<ReferenceEntry>,
     val continuation: String?,
@@ -47,9 +55,10 @@ internal fun parsePlaylistSongReferences(
 
 /**
  * Follow only tokens issued by the verified playlist's own response chain. Nothing is published
- * until both chains terminate and every stable entry has exactly one source and one target.
+ * until both chains terminate and every target has exactly one matching source.
  * Continuation pages may omit their outer playlist ID; next row endpoints still bind each target
- * to the requested playlist, and the complete stable-entry set must agree with browse exactly.
+ * to the requested playlist. Only explicitly restricted browse rows may be absent from the
+ * terminal queue; their unobserved target identities are returned separately, never inferred.
  */
 internal suspend fun loadPlaylistSongReferences(
     expectedPlaylistId: String,
@@ -105,18 +114,21 @@ private fun completePlaylistReferences(
         require(entries.map { it.entryId }.distinct().size == entries.size)
         require(entries.map { it.videoId }.distinct().size == entries.size)
     }
-    require(sources.map { it.entryId }.toSet() == targets.map { it.entryId }.toSet()) {
-        "Incomplete or inconsistent playlist identity sets"
-    }
+    val sourceEntryIds = sources.map { it.entryId }.toSet()
     val targetsByEntry = targets.associateBy { it.entryId }
+    require(targetsByEntry.keys.all { it in sourceEntryIds }) { "Foreign target playlist entries" }
+    val omittedSources = sources.filter { it.entryId !in targetsByEntry }
+    require(omittedSources.all { it.explicitlyUnavailable }) { "Unexplained playlist identity omissions" }
     nextPages.mapNotNull { it.current }.forEach { (entryId, videoId) ->
         require(targetsByEntry[entryId]?.videoId == videoId) { "Foreign current playlist entry" }
     }
+    val matchedSources = sources.filter { it.entryId in targetsByEntry }
     return PlaylistSongReferences(
         playlistId,
-        sources.map { PlaylistSongReference(playlistId, it.entryId, it.videoId, targetsByEntry.getValue(it.entryId).videoId) },
-        sources.map { requireNotNull(it.song) },
+        matchedSources.map { PlaylistSongReference(playlistId, it.entryId, it.videoId, targetsByEntry.getValue(it.entryId).videoId) },
+        matchedSources.map { requireNotNull(it.song) },
         targets.mapNotNull { it.song },
+        omittedSources.map { UnavailablePlaylistSourceEntry(it.entryId, it.videoId) },
     )
 }
 
@@ -134,6 +146,7 @@ private fun parseBrowseReferencePage(
         val section = root.playlistPath("contents", "twoColumnBrowseResultsRenderer", "secondaryContents",
             "sectionListRenderer") as? JsonObject ?: error("Missing playlist browse section")
         require(section.playlistText("targetId") == "VL$playlistId")
+        section.requireOptionalPlaylistText("playlistId", playlistId)
         val shelf = section.referenceShelf()
         require(shelf.playlistText("targetId") == playlistId)
         shelf.requireOptionalPlaylistText("playlistId", playlistId)
@@ -177,12 +190,23 @@ private fun parseBrowseReferencePage(
         val renderer = playlistReferenceJson.decodeFromJsonElement<MusicResponsiveListItemRenderer>(row)
         val song = AlbumPage.getSong(renderer, language = language) ?: error("Incomplete source song metadata")
         require(song.id == videoId)
-        song.endpoint?.let { endpoint ->
+        // PageHelper may prefer one endpoint or discard a conflicting video ID. Identity parsing
+        // must validate every direct playback endpoint instead of silently choosing a good one.
+        val navigationEndpoints = listOfNotNull(
+            renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer
+                ?.playNavigationEndpoint,
+            renderer.navigationEndpoint,
+        ) + renderer.flexColumns.firstOrNull()?.musicResponsiveListItemFlexColumnRenderer?.text
+            ?.runs.orEmpty().mapNotNull { it.navigationEndpoint }
+        val endpoints = navigationEndpoints.flatMap { listOfNotNull(it.watchEndpoint, it.watchPlaylistEndpoint) }
+        endpoints.forEach { endpoint ->
             require(endpoint.videoId == null || endpoint.videoId == videoId)
             require(endpoint.playlistId == null || endpoint.playlistId == playlistId)
             require(endpoint.playlistSetVideoId == null || endpoint.playlistSetVideoId == entryId)
         }
-        ReferenceEntry(entryId, videoId, song.copy(setVideoId = entryId))
+        ReferenceEntry(entryId, videoId, song.copy(setVideoId = entryId),
+            explicitlyUnavailable = renderer.musicItemRendererDisplayPolicy == "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT" &&
+                endpoints.isEmpty())
     }
     require(entries.isNotEmpty()) { "Empty playlist browse page" }
     return ReferencePage(entries, token)
@@ -224,6 +248,17 @@ private fun parseNextReferencePage(
             require(item["automixPreviewVideoRenderer"] is JsonObject)
             return@mapNotNull null
         }
+        if (item.keys == setOf("playlistExpandableMessageRenderer")) {
+            val message = item["playlistExpandableMessageRenderer"] as? JsonObject
+                ?: error("Malformed playlist availability message")
+            // Music returns this informational row when a finite queue omits restricted items.
+            // Its button must address this same canonical playlist. The message contributes no
+            // identity and cannot justify an omission without the browse row's own restriction.
+            val url = message.playlistPath("button", "buttonRenderer", "navigationEndpoint", "urlEndpoint")
+                .playlistText("url")
+            require(isCanonicalPlaylistNoticeUrl(url, playlistId)) { "Foreign or missing playlist availability link" }
+            return@mapNotNull null
+        }
         require(item.keys == setOf("playlistPanelVideoRenderer"))
         val row = item["playlistPanelVideoRenderer"] as? JsonObject ?: error("Malformed playlist next row")
         val videoId = row.playlistText("videoId") ?: error("Missing target video ID")
@@ -233,6 +268,8 @@ private fun parseNextReferencePage(
         require(endpoint.playlistText("videoId") == videoId)
         require(endpoint.playlistText("playlistSetVideoId") == entryId)
         require(endpoint.playlistText("playlistId") == playlistId)
+        (row.playlistField("navigationEndpoint") as JsonObject)
+            .requireAdditionalWatchIdentity(videoId, entryId, playlistId)
         val renderer = playlistReferenceJson.decodeFromJsonElement<PlaylistPanelVideoRenderer>(row)
         // Restricted rows retain identity while omitting their names. Never copy the source name.
         val song = NextPage.fromPlaylistPanelVideoRenderer(renderer, language)?.also { require(it.id == videoId) }
@@ -245,6 +282,8 @@ private fun parseNextReferencePage(
         val entry = endpoint.playlistText("playlistSetVideoId") ?: error("Missing current entry ID")
         val video = endpoint.playlistText("videoId") ?: error("Missing current video ID")
         require(playlistReferenceToken.matches(entry) && playlistReferenceVideoId.matches(video))
+        (root.playlistField("currentVideoEndpoint") as JsonObject)
+            .requireAdditionalWatchIdentity(video, entry, playlistId)
         entry to video
     } else null
     return ReferencePage(entries, token, current)
@@ -322,6 +361,27 @@ private fun JsonObject.referenceBoolean(name: String): Boolean? = (get(name) as?
 private fun JsonObject.requireOptionalPlaylistText(name: String, expected: String) {
     if (containsKey(name)) require(playlistText(name) == expected)
 }
+private fun JsonObject.requireAdditionalWatchIdentity(videoId: String, entryId: String, playlistId: String) {
+    if (!containsKey("watchPlaylistEndpoint")) return
+    val endpoint = get("watchPlaylistEndpoint") as? JsonObject ?: error("Malformed secondary playback endpoint")
+    endpoint.requireOptionalPlaylistText("videoId", videoId)
+    endpoint.requireOptionalPlaylistText("playlistSetVideoId", entryId)
+    endpoint.requireOptionalPlaylistText("playlistId", playlistId)
+}
+private fun isCanonicalPlaylistNoticeUrl(value: String?, playlistId: String): Boolean = runCatching {
+    val uri = URI(value ?: return false)
+    if (uri.scheme == null) require(uri.rawAuthority == null)
+    else require(uri.scheme.equals("https", ignoreCase = true) && uri.userInfo == null &&
+        uri.host?.lowercase() in setOf("youtube.com", "www.youtube.com", "music.youtube.com") &&
+        uri.port in setOf(-1, 443))
+    require(uri.rawPath == "/playlist")
+    val playlistValues = uri.rawQuery.orEmpty().split('&').mapNotNull { parameter ->
+        val parts = parameter.split('=', limit = 2)
+        if (URLDecoder.decode(parts.first(), "UTF-8") != "list") null
+        else URLDecoder.decode(parts.getOrElse(1) { "" }, "UTF-8")
+    }
+    playlistValues.size == 1 && playlistValues.single() == playlistId
+}.getOrDefault(false)
 private fun JsonObject.requireOptionalPlaylistScope(expected: String) {
     requireOptionalPlaylistText("playlistId", expected)
     if (containsKey("targetId")) require(playlistText("targetId") in setOf(expected, "VL$expected"))

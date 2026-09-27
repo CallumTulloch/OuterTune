@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Test
+import java.time.LocalDateTime
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -39,7 +40,7 @@ class MetadataNameRepositoryTest {
         val calls = AtomicInteger()
         val fixture = Fixture("en")
         try {
-            fixture.database.insert(SongEntity("track", "Raw", localPath = null))
+            fixture.database.insert(SongEntity("track", "Raw", localPath = null, inLibrary = SAVED_AT))
             val repository = fixture.start { _, _ ->
                 if (calls.incrementAndGet() == 1) { firstStarted.complete(Unit); firstReply.await() }
                 else { secondStarted.complete(Unit); secondReply.await() }
@@ -61,7 +62,7 @@ class MetadataNameRepositoryTest {
         val calls = AtomicInteger()
         val fixture = Fixture("en")
         try {
-            fixture.database.insert(SongEntity("track", "Raw", localPath = null))
+            fixture.database.insert(SongEntity("track", "Raw", localPath = null, inLibrary = SAVED_AT))
             val repository = fixture.start { ids, _ ->
                 if (calls.incrementAndGet() == 1) Result.failure(java.io.IOException("previous login failed"))
                 else Result.success(ids.map { SongItem(it, "Recovered", emptyList(), thumbnail = "") })
@@ -84,7 +85,7 @@ class MetadataNameRepositoryTest {
     @Test fun detailDiscoveredArtistsAndAlbumsAcquireBothLanguagesWithoutWaitingForPeriodicRefresh() = runBlocking {
         val fixture = Fixture()
         try {
-            fixture.database.insert(SongEntity("track", "Raw title", localPath = null))
+            fixture.database.insert(SongEntity("track", "Raw title", localPath = null, inLibrary = SAVED_AT))
             fixture.start()
             withTimeout(10_000) {
                 fixture.names.first { it[fixture.artist] == "人物の正式名" && it[fixture.album] == "アルバムの正式名" }
@@ -104,7 +105,7 @@ class MetadataNameRepositoryTest {
         val releaseEn = CompletableDeferred<Unit>()
         val fixture = Fixture("en")
         try {
-            fixture.database.insert(SongEntity("track", "日本語の元表記", localPath = null))
+            fixture.database.insert(SongEntity("track", "日本語の元表記", localPath = null, inLibrary = SAVED_AT))
             fixture.start { ids, locale ->
                 if (locale.hl == "en") { enStarted.complete(Unit); releaseEn.await() }
                 Result.success(ids.map { SongItem(it, if (locale.hl == "ja") "日本語の取得名" else "English", emptyList(), thumbnail = "") })
@@ -126,7 +127,7 @@ class MetadataNameRepositoryTest {
     @Test fun failedConfiguredLanguageNeverPublishesAnEnglishFallbackOverRawText(): Unit = runBlocking {
         val fixture = Fixture()
         try {
-            fixture.database.insert(SongEntity("track", "日本語の元表記", localPath = null))
+            fixture.database.insert(SongEntity("track", "日本語の元表記", localPath = null, inLibrary = SAVED_AT))
             fixture.start { ids, locale ->
                 if (locale.hl == "ja") Result.failure(java.io.IOException("offline"))
                 else Result.success(ids.map { SongItem(it, "Unverified English", emptyList(), thumbnail = "") })
@@ -329,6 +330,8 @@ class MetadataNameRepositoryTest {
     }
 
     companion object {
+        private val SAVED_AT = LocalDateTime.of(2026, 9, 27, 0, 0)
+
         private fun preferences(language: String): Preferences = preferencesOf(
             ContentCountryKey to "JP", ContentLanguageKey to language, PreferEnglishOriginalKey to false,
         )

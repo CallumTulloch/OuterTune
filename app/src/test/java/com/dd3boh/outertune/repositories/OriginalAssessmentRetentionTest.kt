@@ -94,8 +94,8 @@ class OriginalAssessmentRetentionTest {
             "not-json",
             valid.originEvidenceJson!!.replace("\"resolverVersion\":2", "\"resolverVersion\":1"),
             valid.originEvidenceJson!!.replace(OriginalAlbumLanguageResolver.METHOD_VERSION, "obsolete-model"),
-            valid.originEvidenceJson!!.replace("\"version\":2,\"model\"", "\"version\":1,\"model\""),
-            valid.originEvidenceJson!!.replace("\"version\":2,\"model\"", "\"version\":999,\"model\""),
+            valid.originEvidenceJson!!.replace("\"version\":3,\"model\"", "\"version\":2,\"model\""),
+            valid.originEvidenceJson!!.replace("\"version\":3,\"model\"", "\"version\":999,\"model\""),
             valid.originEvidenceJson!!.replace("\"fingerprint\":\"", "\"fingerprint\":\"altered-"),
         )
         invalidPayloads.forEach { payload ->
@@ -160,7 +160,7 @@ class OriginalAssessmentRetentionTest {
     }
 
     @Test
-    fun `shared artist source addition and withdrawal invalidate only that target and affected album`() {
+    fun `shared artist conflict preserves independent model work but blocks publication until assessed`() {
         val previous = assessed(candidates)
         val outsideSong = unrelatedSongs(1).single()
         val outsideArtist = artist.copy(name = "Another original artist", sourceVideoId = outsideSong.sourceVideoId,
@@ -169,12 +169,14 @@ class OriginalAssessmentRetentionTest {
         val inputs = originalAssessmentInputs(expanded)
 
         previous.forEach { original ->
-            assertEquals(original.kind != "ARTIST", hasCurrentOriginalAssessmentInputs(original, inputs))
+            assertTrue(hasCurrentOriginalAssessmentInputs(original, inputs))
         }
+        assertTrue(prepareOriginalPublications(expanded, emptyList(), 200).none { it.kind == "ARTIST" })
         val together = assessed(candidates + outsideSong + outsideArtist)
+        assertNull(prepareOriginalPublications(together, emptyList(), 200).single { it.kind == "ARTIST" }.englishName)
         val remaining = together.filterNot { it.source.endsWith(outsideSong.sourceVideoId) }
         remaining.forEach { original ->
-            assertEquals(original.kind != "ARTIST", hasCurrentOriginalAssessmentInputs(original, remaining))
+            assertTrue(hasCurrentOriginalAssessmentInputs(original, remaining))
         }
     }
 

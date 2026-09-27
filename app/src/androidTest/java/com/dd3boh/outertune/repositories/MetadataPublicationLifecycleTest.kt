@@ -42,6 +42,21 @@ import org.junit.Test
 /** Real Room and repository collectors, with deterministic pauses at the classifier boundary. */
 class MetadataPublicationLifecycleTest {
     @Test(timeout = 45_000)
+    fun failedOrMissingAssessmentOfAnotherSourceCannotBlockAnIndependentFirstPublication(): Unit = runBlocking {
+        for (throws in listOf(false, true)) withFixture { f ->
+            f.seedDirect()
+            f.replaceOriginal(OTHER, "Another Original Title", "MPREother")
+            if (throws) f.failedTargets = setOf(OTHER.id) else f.omittedTargets = setOf(OTHER.id)
+            f.start()
+            f.awaitName(SONG, ENGLISH)
+            f.awaitPersisted(SONG, ENGLISH)
+            assertTrue(f.assessedIds.any { OTHER.id in it })
+            assertTrue("Unfinished output is not a completed UNKNOWN verdict",
+                f.database.metadataOriginalPublicationSnapshot().none { it.targetId == OTHER.id })
+        }
+    }
+
+    @Test(timeout = 45_000)
     fun firstUnconfirmedOriginalUsesConfiguredNameUntilItsFirstCompletedAssessment(): Unit = runBlocking {
         withFixture { f ->
             f.seedDirect()
@@ -286,6 +301,9 @@ class MetadataPublicationLifecycleTest {
 
         fun pauseEvaluation(fail: Boolean = false) = Gate(fail).also { gate = it }
 
+        var failedTargets: Set<String> = emptySet()
+        var omittedTargets: Set<String> = emptySet()
+
         fun start() {
             MetadataNameRepository(database, context, MetadataNameRepository.Runtime(
                 scope = CoroutineScope(job + Dispatchers.IO),
@@ -311,7 +329,8 @@ class MetadataPublicationLifecycleTest {
                     try {
                         currentGate?.release?.await()
                         if (currentGate?.fail == true) throw IOException("Classifier temporarily unavailable")
-                        resolver.assess(originals, at)
+                        if (originals.any { it.target.id in failedTargets }) throw IOException("One source is unavailable")
+                        resolver.assess(originals, at).filterNot { it.target.id in omittedTargets }
                     } finally {
                         currentGate?.finished?.complete(Unit)
                     }

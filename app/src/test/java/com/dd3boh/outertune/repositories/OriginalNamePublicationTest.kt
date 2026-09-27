@@ -41,7 +41,7 @@ class OriginalNamePublicationTest {
         val previous = completed(before).single()
         val changed = original.copy(name = "A New Original Name")
         val pending = aliases + alias(changed.name, "en", "detail") + raw(changed, 300)
-        assertNull(prepareOriginalPublications(pending, listOf(previous), 300))
+        assertTrue(prepareOriginalPublications(pending, listOf(previous), 300).isEmpty())
         assertEquals(original.name, display(pending, previous))
         val finished = aliases + alias(changed.name, "en", "detail") + assessed(listOf(changed), at = 300)
         val next = completed(finished, listOf(previous), 400).single()
@@ -70,7 +70,7 @@ class OriginalNamePublicationTest {
     }
 
     @Test fun `first unassessed original and conflicting completed originals keep the configured name`() {
-        assertNull(prepareOriginalPublications(aliases + raw(original), emptyList(), 200))
+        assertTrue(prepareOriginalPublications(aliases + raw(original), emptyList(), 200).isEmpty())
         assertEquals("設定名", display(aliases + raw(original), null))
         val conflicting = original.copy(name = "A Conflicting Name")
         val rows = aliases + alias(conflicting.name, "en") + assessed(listOf(original, conflicting))
@@ -102,7 +102,7 @@ class OriginalNamePublicationTest {
         val unrelated = original.copy(target = OriginalNameTarget(OriginalNameKind.SONG, "12345678901"),
             sourceVideoId = "12345678901", albumId = "MPREdifferent", name = "Another Original")
         val pending = rows + raw(unrelated, 300)
-        assertNull(prepareOriginalPublications(pending, previous, 300))
+        assertEquals(previous, prepareOriginalPublications(pending, previous, 300))
         assertEquals(original.name, selectPublishedMetadataDisplayName(referencedTarget,
             referenceAliases, "ja", true, committed))
         val finished = aliases + referenceAliases + assessed(listOf(original, unrelated), at = 300) +
@@ -127,13 +127,54 @@ class OriginalNamePublicationTest {
         assertTrue(next.evidenceJson.contains("relations"))
     }
 
+    @Test fun `first completed album publishes independently but changed own album context stays pending`() {
+        val ready = aliases + assessed(listOf(original))
+        val other = original.copy(target = OriginalNameTarget(OriginalNameKind.SONG, "12345678901"),
+            sourceVideoId = "12345678901", name = "Another Title", albumId = "MPREdifferent")
+        val unrelatedPending = ready + raw(other, 300)
+        assertEquals(original.name, completed(unrelatedPending).single { it.targetId == target.id }.englishName)
+        assertTrue(completed(unrelatedPending).none { it.targetId == other.target.id })
+        val ownContextPending = ready + raw(other.copy(albumId = original.albumId), 300)
+        assertTrue(completed(ownContextPending).none { it.targetId == target.id })
+    }
+
+    @Test fun `pending source reassessment holds its reference while independent targets can publish`() {
+        val linkedTarget = "lmnopqrstuv"
+        val reference = providerSongReference(MainSongReference(target.id, linkedTarget), original,
+            SongItem(linkedTarget, original.name, emptyList(), Album("Album", "MPREalbum"), thumbnail = ""))!!
+        val initial = aliases + assessed(listOf(original)) + reference.toMetadataName(100)
+        val prior = completed(initial)
+        val pending = aliases + raw(original, 300) + reference.toMetadataName(100)
+        assertTrue(completed(pending, prior).none { it.targetId == linkedTarget })
+        assertEquals(original.name, prior.single { it.targetId == linkedTarget }.englishName)
+    }
+
+    @Test fun `publication read set follows source withdrawal reference changes and album context only`() {
+        val linkedTarget = OriginalNameTarget(OriginalNameKind.SONG, "lmnopqrstuv")
+        val reference = providerSongReference(MainSongReference(target.id, linkedTarget.id), original,
+            SongItem(linkedTarget.id, original.name, emptyList(), Album("Album", "MPREalbum"), thumbnail = ""))!!
+        val initial = aliases + assessed(listOf(original)) + reference.toMetadataName(100)
+        val expected = OriginalPublicationInputs(initial).forTarget(linkedTarget)
+        val other = original.copy(target = OriginalNameTarget(OriginalNameKind.SONG, "12345678901"),
+            sourceVideoId = "12345678901", name = "Another Title", albumId = "MPREdifferent")
+        assertEquals(expected, OriginalPublicationInputs(initial + raw(other, 300)).forTarget(linkedTarget))
+        assertNotEquals(expected, OriginalPublicationInputs(initial + raw(other.copy(albumId = original.albumId), 300))
+            .forTarget(linkedTarget))
+        assertNotEquals(expected, OriginalPublicationInputs(initial + reference.toMetadataName(300)
+            .copy(originEvidenceJson = "{}")).forTarget(linkedTarget))
+        assertNotEquals(expected, OriginalPublicationInputs(initial + raw(original.copy(name = "Changed Original"), 300))
+            .forTarget(linkedTarget))
+        assertNotEquals(expected, OriginalPublicationInputs(initial + alias("Changed English Alias", "en", id = linkedTarget.id))
+            .forTarget(linkedTarget))
+    }
+
     @Test fun `foreign publication and completed unknown cannot grant English to a pending candidate`() {
         val valid = completed(aliases + assessed(listOf(original))).single()
         assertEquals("設定名", display(aliases, valid.copy(targetId = "lmnopqrstuv")))
         val unknown = completed(aliases + assessed(listOf(original), OriginalNameLanguage.UNKNOWN)).single()
         val pending = aliases + raw(original, 400)
         assertEquals("設定名", display(pending, unknown))
-        assertNull(prepareOriginalPublications(pending, listOf(unknown), 400))
+        assertTrue(prepareOriginalPublications(pending, listOf(unknown), 400).isEmpty())
     }
 
     @Test fun `shared targets retain complete source snapshots without unrelated sources or stale relations`() {

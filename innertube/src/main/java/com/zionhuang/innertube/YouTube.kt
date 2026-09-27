@@ -879,7 +879,7 @@ object YouTube {
         ).getOrThrow()
     }
 
-    /** Complete provider entry identities; this never publishes names or changes the playback queue. */
+    /** Terminal provider entry observations with explicit coverage; never changes names or playback. */
     suspend fun playlistSongReferences(
         playlistId: String,
         requestLocale: YouTubeLocale = locale,

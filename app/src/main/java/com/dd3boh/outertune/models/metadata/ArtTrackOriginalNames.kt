@@ -18,7 +18,8 @@ data class ArtTrackOriginalName(
  * establishes identities; text only corroborates those existing links and never creates one.
  */
 fun artTrackOriginalNames(original: ArtTrackOriginalMetadata, englishSong: SongItem): List<ArtTrackOriginalName> {
-    if (original.videoId != englishSong.id || original.title.isBlank() ||
+    if (original.videoId != englishSong.id || !Regex("[A-Za-z0-9_-]{11}").matches(original.videoId) ||
+        original.title.isBlank() || original.title.any { it == '\n' || it == '\r' } ||
         englishSong.endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType != "MUSIC_VIDEO_TYPE_ATV") return emptyList()
     return buildList {
         val blocks = original.shortDescription.orEmpty().replace("\r\n", "\n").trim().split(Regex("\n\\s*\n"))
@@ -27,7 +28,7 @@ fun artTrackOriginalNames(original: ArtTrackOriginalMetadata, englishSong: SongI
         val matchingTitleCredit = structured && blocks[1].startsWith(original.title + " · ") &&
             !blocks[1].contains('\n')
         val album = englishSong.album?.takeIf {
-            matchingTitleCredit && it.id.isNotBlank() && blocks[2] == it.name && !blocks[2].contains('\n')
+            matchingTitleCredit && validOriginalAlbum(it) && blocks[2] == it.name && !blocks[2].contains('\n')
         }
         add(ArtTrackOriginalName(OriginalNameTarget(OriginalNameKind.SONG, original.videoId), original.title, original.videoId, album?.id))
         // Do not parse arbitrary descriptions, Topic channel authors, music cards or free-form bios.
@@ -60,10 +61,7 @@ fun albumTrackOriginalNames(original: ArtTrackOriginalMetadata, englishAlbumSong
     if (endpoint?.videoId != null && endpoint.videoId != original.videoId) return emptyList()
     val videoType = endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType
     if (videoType != null && videoType != "MUSIC_VIDEO_TYPE_ATV") return emptyList()
-    val album = englishAlbumSong.album?.takeIf {
-        Regex("(?:MPRE|FEmusic_library_privately_owned_release)[A-Za-z0-9_-]+").matches(it.id) &&
-            it.name.isNotBlank() && it.name.none { character -> character == '\n' || character == '\r' }
-    } ?: return emptyList()
+    val album = englishAlbumSong.album?.takeIf(::validOriginalAlbum) ?: return emptyList()
     val blocks = original.shortDescription.orEmpty().replace("\r\n", "\n").trim().split(Regex("\n\\s*\n"))
     val providerPrefix = "Provided to YouTube by "
     if (blocks.size < 4 || !blocks.first().startsWith(providerPrefix) ||
@@ -133,12 +131,96 @@ fun retainCorroboratedOriginalContext(
                 candidate.copy(albumId = priorSong.albumId)
             candidate.target.kind == OriginalNameKind.ARTIST -> priorSource.singleOrNull {
                 it.target == candidate.target && it.name == candidate.name && it.albumId == priorSong.albumId
-            } ?: candidate
+            } ?: candidate.copy(albumId = priorSong.albumId)
             else -> candidate
         }
     }
     return (refreshed + related).distinct()
 }
+
+/** One coherent source snapshot; an empty result leaves the prior snapshot untouched. */
+data class OriginalSourceSnapshot(
+    val names: List<ArtTrackOriginalName>,
+    val incompleteMusicIdentities: Boolean,
+)
+
+/**
+ * Album rows may omit their byline while proving the exact track's album membership. Reconcile
+ * each kind of evidence independently instead of rejecting that membership because a previously
+ * observed artist ID is absent. Retained IDs always come from this same unchanged source and
+ * must be corroborated by the current complete distributor credit; no name creates a new ID.
+ */
+fun reconcileOriginalSourceSnapshot(
+    original: ArtTrackOriginalMetadata,
+    music: SongItem,
+    previous: List<ArtTrackOriginalName>,
+    fromAlbumPage: Boolean,
+): OriginalSourceSnapshot {
+    val incoming = if (fromAlbumPage) albumTrackOriginalNames(original, music) else artTrackOriginalNames(original, music)
+    val prior = previous.filter { it.sourceVideoId == original.videoId }
+    val artists = music.artistCredit?.artists ?: music.artists
+    val priorArtists = prior.filter { it.target.kind == OriginalNameKind.ARTIST }
+    val missingArtists = priorArtists.isNotEmpty() && (artists.isEmpty() || artists.any {
+        ArtistIdentity.onlineId(it.id) == null || it.name.isBlank() || it.name.any { c -> c == '\n' || c == '\r' }
+    })
+    val missingAlbum = prior.any { it.albumId != null } && music.album?.let(::validOriginalAlbum) != true
+    val incomplete = missingArtists || missingAlbum
+    fun unfinished() = OriginalSourceSnapshot(emptyList(), incomplete)
+    if (incoming.none { it.target == OriginalNameTarget(OriginalNameKind.SONG, original.videoId) }) return unfinished()
+    val relatedProof = prior.any { it.target.kind != OriginalNameKind.SONG || it.albumId != null }
+    if (!relatedProof) return OriginalSourceSnapshot(incoming, incomplete)
+
+    val blocks = original.shortDescription.orEmpty().replace("\r\n", "\n").trim().split(Regex("\n\\s*\n"))
+    val creditPrefix = original.title + " · "
+    val completeDescription = blocks.size >= 4 && blocks[0].startsWith("Provided to YouTube by ") &&
+        blocks[0].removePrefix("Provided to YouTube by ").isNotBlank() && blocks[1].startsWith(creditPrefix) &&
+        blocks[1].removePrefix(creditPrefix).isNotBlank() && blocks[2].isNotBlank() &&
+        blocks.last() == "Auto-generated by YouTube." && blocks.take(3).all { '\n' !in it && '\r' !in it }
+    if (!completeDescription) return unfinished()
+    val priorSong = prior.singleOrNull { it.target == OriginalNameTarget(OriginalNameKind.SONG, original.videoId) }
+    // A changed title cannot join old related proof to a partial new identity observation.
+    if (incomplete && priorSong?.name != original.title) return unfinished()
+
+    val refreshed = retainCorroboratedOriginalContext(original, music, prior, incoming)
+    val retainedArtists = if (missingArtists) {
+        val knownIdsAgree = artists.all { artist ->
+            ArtistIdentity.onlineId(artist.id)?.let { id ->
+                priorArtists.any { it.target.id == id && (artist.name.isBlank() ||
+                    artist.name.any { c -> c == '\n' || c == '\r' } || it.name == artist.name) }
+            } ?: true
+        }
+        val creditMatches = exactKnownArtistCredit(blocks[1].removePrefix(creditPrefix), priorArtists.map { it.name })
+            ?: return unfinished()
+        if (knownIdsAgree && creditMatches) {
+            val albumId = refreshed.singleOrNull { it.target.kind == OriginalNameKind.SONG }?.albumId
+            priorArtists.map { it.copy(albumId = albumId ?: it.albumId) }
+        } else emptyList()
+    } else emptyList()
+    return OriginalSourceSnapshot((refreshed + retainedArtists).distinct(), incomplete)
+}
+
+/** Match only whole, previously identified names; a delimiter inside a name is never split. */
+private fun exactKnownArtistCredit(credit: String, names: List<String>): Boolean? {
+    if (names.isEmpty()) return false
+    if (names.size > 32) return null
+    // Bound adversarial ambiguous prefixes. A failed corroboration cannot authorize an old ID.
+    var remainingChecks = 4_096
+    fun matches(offset: Int, remaining: List<String>): Boolean {
+        if (--remainingChecks < 0) return false
+        if (remaining.isEmpty()) return offset == credit.length
+        return remaining.indices.any { index ->
+            val token = remaining[index] + if (remaining.size == 1) "" else " · "
+            credit.startsWith(token, offset) && matches(offset + token.length,
+                remaining.filterIndexed { other, _ -> other != index })
+        }
+    }
+    val result = matches(0, names)
+    return if (!result && remainingChecks < 0) null else result
+}
+
+private fun validOriginalAlbum(album: Album): Boolean =
+    Regex("(?:MPRE|FEmusic_library_privately_owned_release)[A-Za-z0-9_-]+").matches(album.id) &&
+        album.name.isNotBlank() && album.name.none { it == '\n' || it == '\r' }
 
 /** Raw source data survives model changes and is kept separately from the automatic assessment. */
 object ArtTrackOriginalNameCodec {

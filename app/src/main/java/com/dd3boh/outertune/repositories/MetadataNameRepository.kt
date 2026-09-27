@@ -110,6 +110,10 @@ class MetadataNameRepository internal constructor(
     private val referenceRefreshes = Channel<Unit>(Channel.CONFLATED)
     private data class EnglishSongObservation(val song: SongItem, val observedAt: Long)
     private val englishSongs = ConcurrentHashMap<String, EnglishSongObservation>()
+    private data class IdentityEnrichment(val observation: EnglishSongObservation, val originalName: String,
+        val musicContext: String, val token: String)
+    private val identityEnrichments = ConcurrentHashMap<MetadataFetchRequest, IdentityEnrichment>()
+    private val attemptedIdentityEnrichments = ConcurrentHashMap<MetadataFetchRequest, MutableSet<String>>()
     private val openedAlbumContexts = ConcurrentHashMap<MetadataFetchRequest, Long>()
     @Volatile private var foregroundAlbumId: String? = null
     @Volatile private var playingSongId: String? = null
@@ -262,7 +266,7 @@ class MetadataNameRepository internal constructor(
     private suspend fun bootstrapOriginalPublications() {
         if (database.metadataOriginalPublicationCount() != 0) return
         val names = database.metadataNameSnapshot()
-        val prepared = prepareOriginalPublications(names, emptyList(), runtime.now()) ?: return
+        val prepared = prepareOriginalPublications(names, emptyList(), runtime.now())
         if (prepared.isEmpty()) return
         database.awaitTransaction {
             if (metadataOriginalPublicationCount() == 0 && metadataNameSnapshot().toSet() == names.toSet()) {
@@ -272,66 +276,106 @@ class MetadataNameRepository internal constructor(
     }
 
     private suspend fun evaluateOriginals(names: List<MetadataNameEntity>) {
-        val rows = latestOriginalRows(names)
-        val candidates = rows.mapNotNull(::originalCandidate)
-        val inputs = originalAssessmentInputs(rows)
-        val staleRows = rows.filterNot { hasCurrentOriginalAssessmentInputs(it, inputs) }
-        val staleCandidates = staleRows.mapNotNull(::originalCandidate)
-        val fresh = if (staleCandidates.isEmpty()) emptyList()
-            else runtime.assessOriginals(inputs.withAlbumContext(staleCandidates), runtime.now())
-        val staleKeys = staleCandidates.map { Triple(it.target, it.name, it.sourceVideoId) }.toSet()
-        val cached = rows.filter { hasCurrentOriginalAssessmentInputs(it, inputs) }.mapNotNull { row ->
-            originalCandidate(row)?.let { OriginalNameAssessmentCodec.decode(row.originEvidenceJson, it.target, it.name) }
+        var snapshot = names
+        // Missing classifier output remains pending. Try other independent groups without spinning
+        // on the same failed input; a later observation or periodic refresh may retry it.
+        val attempted = mutableSetOf<Pair<ArtTrackOriginalName, String?>>()
+        while (currentCoroutineContext().isActive) {
+            val rows = latestOriginalRows(snapshot)
+            val inputs = originalAssessmentInputs(rows)
+            val stale = rows.filterNot { hasCurrentOriginalAssessmentInputs(it, inputs) }.filter {
+                val candidate = originalCandidate(it)!!
+                (candidate to inputs.fingerprintFor(candidate)) !in attempted
+            }
+            val foregroundAlbum = foregroundAlbumId
+            val playingSong = playingSongId
+            val foregroundTargets = foregroundAlbumTargets
+            fun priority(group: List<MetadataNameEntity>): Int = when {
+                foregroundAlbum != null && group.any { originalCandidate(it)?.albumId == foregroundAlbum } -> 0
+                group.any { row -> originalCandidate(row)!!.target.let {
+                    it in foregroundTargets || (it.kind == OriginalNameKind.SONG && it.id == playingSong)
+                } } -> 1
+                else -> 2
+            }
+            val groups = stale.groupBy {
+                val candidate = originalCandidate(it)!!
+                candidate.albumId?.let { id -> "album:$id" } ?: "source:${candidate.sourceVideoId}"
+            }.values.sortedWith(compareBy<List<MetadataNameEntity>>(::priority).thenBy { it.first().targetId })
+            // Bound background aggregation so cache migrations do not prepare the entire display
+            // projection for every orphan song. A foreground group always publishes on its own.
+            val limit = if (groups.firstOrNull()?.let(::priority) == 2) 8 else 1
+            val updates = mutableListOf<MetadataNameEntity>()
+            var capturedInputKey: List<MetadataNameEntity>? = null
+            for (selected in groups.take(limit)) {
+                // Navigation may change while the preceding model call is running. Re-read its
+                // new inputs before starting another background group, rather than draining eight.
+                if (foregroundAlbum != foregroundAlbumId || playingSong != playingSongId ||
+                    foregroundTargets != foregroundAlbumTargets) break
+                // Its IDs can already be foreground when the first raw source finally arrives.
+                // A notification interrupts this batch only for a changed input; an initial or
+                // redundant signal must not turn a cache migration back into one-row commits.
+                if (originalEvaluations.tryReceive().isSuccess) {
+                    val expected = capturedInputKey ?: originalPublicationInputKey(snapshot).also { capturedInputKey = it }
+                    if (originalPublicationInputKey(database.metadataNameSnapshot()) != expected) break
+                }
+                val selectedCandidates = selected.mapNotNull(::originalCandidate)
+                val fresh = try {
+                    runtime.assessOriginals(inputs.withAlbumContext(selectedCandidates), runtime.now())
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // A failed group is pending, not UNKNOWN; other independent groups still run.
+                    emptyList()
+                }
+                selectedCandidates.forEach { attempted += it to inputs.fingerprintFor(it) }
+                val assessments = fresh.associateBy { Triple(it.target, it.originalName, it.sourceVideoId) }
+                updates += selected.mapNotNull { row ->
+                    val candidate = originalCandidate(row)!!
+                    val assessment = assessments[Triple(candidate.target, candidate.name, candidate.sourceVideoId)]
+                        ?: return@mapNotNull null
+                    row.copy(originEvidenceJson = encodeOriginalAssessment(candidate, assessment, inputs))
+                }
+            }
+            publishCompletedOriginals(snapshot, updates)
+            if (groups.isEmpty()) return
+            snapshot = database.metadataNameSnapshot()
         }
-        val assessments = (cached + fresh.filter { Triple(it.target, it.originalName, it.sourceVideoId) in staleKeys })
-            .associateBy { Triple(it.target, it.originalName, it.sourceVideoId) }
-        // Missing classifier output is unfinished work, not a completed UNKNOWN verdict.
-        if (candidates.any { Triple(it.target, it.name, it.sourceVideoId) !in assessments }) return
-        val updates = rows.mapNotNull { row ->
-            val candidate = originalCandidate(row) ?: return@mapNotNull null
-            val assessment = assessments[Triple(candidate.target, candidate.name, candidate.sourceVideoId)] ?: return@mapNotNull null
-            val prior = OriginalNameAssessmentCodec.decode(row.originEvidenceJson, candidate.target, candidate.name)
-            if (prior?.copy(evaluatedAt = assessment.evaluatedAt) == assessment &&
-                hasCurrentOriginalAssessmentInputs(row, inputs)) null
-            else row.copy(originEvidenceJson = encodeOriginalAssessment(candidate, assessment, inputs))
-        }
+    }
+
+    private suspend fun publishCompletedOriginals(names: List<MetadataNameEntity>, updates: List<MetadataNameEntity>) {
+        fun rowKey(row: MetadataNameEntity) = listOf(row.kind, row.targetId, row.language, row.name, row.source)
         val updatesByKey = updates.associateBy { listOf(it.kind, it.targetId, it.language, it.name, it.source) }
-        val assessedNames = names.map { updatesByKey[listOf(it.kind, it.targetId, it.language, it.name, it.source)] ?: it }
+        val assessedNames = names.map { updatesByKey[rowKey(it)] ?: it }
         val previous = database.metadataOriginalPublicationSnapshot()
-        // Parsing and assembling proof is CPU work. Never hold Room's transaction queue while
-        // doing it: saved-song/artist relation queries share that queue during app startup.
-        val prepared = prepareOriginalPublications(assessedNames, previous, runtime.now()) ?: return
+        // Assemble proof off the Room transaction queue, then validate just its dependencies.
+        val prepared = prepareOriginalPublications(assessedNames, previous, runtime.now())
         val previousByTarget = previous.associateBy { it.kind to it.targetId }
         val changedPublications = prepared.filter { previousByTarget[it.kind to it.targetId] != it }
         if (updates.isEmpty() && changedPublications.isEmpty()) return
-        fun publicationInputs(values: List<MetadataNameEntity>) = values.filter {
-            it.language in setOf("en", "und") && it.source != "manual"
-        }.toSet()
-        val expectedInputs = publicationInputs(names)
+        val expectedInputs = OriginalPublicationInputs(assessedNames)
         var retryPublication = false
         database.awaitTransaction {
-            // Candidate text and references belong to the evaluated snapshot too. A delayed batch
-            // cannot publish a former edge against newly observed names or a withdrawn link.
             val currentNames = metadataNameSnapshot()
-            if (publicationInputs(currentNames) != expectedInputs ||
-                metadataOriginalPublicationSnapshot().toSet() != previous.toSet()) {
-                // Preserve independently completed work without publishing an obsolete snapshot.
-                val currentRows = latestOriginalRows(currentNames).associateBy(::originalCandidate)
-                val currentInputs = originalAssessmentInputs(currentRows.values.toList())
-                val stillValid = updates.mapNotNull { update ->
-                    val current = currentRows[originalCandidate(update)] ?: return@mapNotNull null
-                    if (hasCurrentOriginalAssessmentInputs(current, currentInputs) ||
-                        !hasCurrentOriginalAssessmentInputs(update, currentInputs)) return@mapNotNull null
-                    current.copy(originEvidenceJson = update.originEvidenceJson)
-                }
-                if (stillValid.isNotEmpty()) recordMetadataNames(stillValid)
-                retryPublication = true
-                return@awaitTransaction
+            val currentRows = latestOriginalRows(currentNames).associateBy(::originalCandidate)
+            val currentAssessmentInputs = originalAssessmentInputs(currentRows.values.toList())
+            val stillValid = updates.mapNotNull { update ->
+                val current = currentRows[originalCandidate(update)] ?: return@mapNotNull null
+                if (hasCurrentOriginalAssessmentInputs(current, currentAssessmentInputs) ||
+                    !hasCurrentOriginalAssessmentInputs(update, currentAssessmentInputs)) return@mapNotNull null
+                current.copy(originEvidenceJson = update.originEvidenceJson)
             }
-            if (updates.isNotEmpty()) recordMetadataNames(updates)
-            if (changedPublications.isNotEmpty()) recordMetadataOriginalPublications(changedPublications)
+            val validByKey = stillValid.associateBy(::rowKey)
+            val currentInputs = OriginalPublicationInputs(currentNames.map { validByKey[rowKey(it)] ?: it })
+            val currentPublications = metadataOriginalPublicationSnapshot().associateBy { it.kind to it.targetId }
+            val publishable = changedPublications.filter { publication ->
+                val target = OriginalNameTarget(OriginalNameKind.valueOf(publication.kind), publication.targetId)
+                expectedInputs.forTarget(target) == currentInputs.forTarget(target) &&
+                    previousByTarget[publication.kind to publication.targetId] == currentPublications[publication.kind to publication.targetId]
+            }
+            if (stillValid.isNotEmpty()) recordMetadataNames(stillValid)
+            if (publishable.isNotEmpty()) recordMetadataOriginalPublications(publishable)
+            retryPublication = publishable.size != changedPublications.size
         }
-        // Assessment JSON is excluded from the observer's input key; explicitly finish publication.
         if (retryPublication) originalEvaluations.trySend(Unit)
         if (updates.isNotEmpty()) referenceRefreshes.trySend(Unit)
     }
@@ -499,7 +543,14 @@ class MetadataNameRepository internal constructor(
 
     private fun due(request: MetadataFetchRequest): Boolean {
         if (requeueIfObsolete(request)) return false
+        // An authentication change may bypass an older session's persisted failure once.
+        // Attempts completed in this request's own session still obey their retry delay,
+        // including album workers which call due directly instead of passing enqueue again.
+        if ((nextAttempt[request] ?: 0L) > runtime.now()) return false
         val previous = database.metadataFetch(request.target.kind.name, request.target.id, request.storedLanguage, request.contextKey)
+        // A newly complete Music identity may enrich a successful album-only source once. Failed
+        // attempts still follow the ordinary retry window; queued work is revalidated under its lock.
+        if (request.enrichment && previous?.status == MetadataFetchEntity.SUCCESS && identityEnrichments.containsKey(request)) return true
         // Successful names remain useful across sessions. A fresh login can retry a failure or
         // empty response from the earlier session, while a normal process restart keeps its TTL.
         val expires = previous?.takeIf { request.authRevision == initialAuthRevision || it.status == MetadataFetchEntity.SUCCESS }
@@ -541,6 +592,16 @@ class MetadataNameRepository internal constructor(
             (dueRequests.ifEmpty { batch }).forEach { recordFailure(it) }
         } finally {
             batch.forEach(scheduled::remove)
+            batch.filter { it.enrichment }.forEach { request ->
+                val pending = identityEnrichments[request] ?: return@forEach
+                // A different complete detail may arrive while this source's Main call is held.
+                // Its payload belongs to the next attempt, not to the finishing worker's cleanup.
+                val state = runCatching { database.metadataFetch("SONG", request.target.id, "und", request.contextKey) }.getOrNull()
+                if (isCurrent(request) && state?.status == MetadataFetchEntity.SUCCESS) {
+                    nextAttempt.remove(request)
+                    enqueue(request)
+                } else identityEnrichments.remove(request, pending)
+            }
         }
     }
 
@@ -578,8 +639,50 @@ class MetadataNameRepository internal constructor(
             if (englishSongs.size > 1024) englishSongs.clear()
             englishSongs["${request.authRevision}:${request.contextKey}:${request.target.id}"] = EnglishSongObservation(song!!, now)
             knownArtTracks.add(request.target)
+            scheduleIdentityEnrichment(request, song, now)
             scheduleOriginal(request.target)
         }
+    }
+
+    private fun scheduleIdentityEnrichment(musicRequest: MetadataFetchRequest, song: SongItem, observedAt: Long) {
+        val request = musicRequest.copy(original = true, contextKey = originalMetadataContextKey(musicRequest.locale), enrichment = true)
+        if (!isCurrent(request)) return
+        val state = database.metadataFetch("SONG", song.id, "und", request.contextKey)
+        if (state?.status != MetadataFetchEntity.SUCCESS) return
+        val source = latestOriginalRows(database.metadataNameSnapshot()).mapNotNull(::originalCandidate)
+            .filter { it.sourceVideoId == song.id }
+        val priorSong = source.singleOrNull { it.target.kind == OriginalNameKind.SONG } ?: return
+        if (observedAt < state.updatedAt || !addsOriginalIdentityProof(song, source)) return
+        val artists = song.artistCredit?.artists ?: song.artists
+        // Observation times do not change the meaning of an identity. Unsuccessful corroboration
+        // must not create a loop when the same queue response arrives again in this session.
+        val parts = listOf(musicRequest.contextKey, priorSong.name, song.album?.id.orEmpty(), song.album?.name.orEmpty()) +
+            artists.flatMap { listOf(it.id.orEmpty(), it.name) }
+        val token = parts.joinToString("") { "${it.length}:$it" }
+        val attempted = attemptedIdentityEnrichments.getOrPut(request) { mutableSetOf() }
+        synchronized(attempted) {
+            if (attempted.size >= 8 || token in attempted) return
+        }
+        identityEnrichments[request] = IdentityEnrichment(EnglishSongObservation(song, observedAt), priorSong.name,
+            musicRequest.contextKey, token)
+        nextAttempt.remove(request)
+        enqueue(request)
+    }
+
+    private fun addsOriginalIdentityProof(song: SongItem, source: List<ArtTrackOriginalName>): Boolean {
+        val priorSong = source.singleOrNull { it.target.kind == OriginalNameKind.SONG } ?: return false
+        val artists = song.artistCredit?.artists ?: song.artists
+        val completeArtists = artists.isNotEmpty() && artists.all {
+            ArtistIdentity.onlineId(it.id) != null && it.name.isNotBlank() && it.name.none { c -> c == '\n' || c == '\r' }
+        }
+        val addsArtists = completeArtists && artists.any { artist ->
+            source.none { it.target.kind == OriginalNameKind.ARTIST && it.target.id == ArtistIdentity.onlineId(artist.id) }
+        }
+        val addsAlbum = priorSong.albumId == null && song.album?.let {
+            Regex("(?:MPRE|FEmusic_library_privately_owned_release)[A-Za-z0-9_-]+").matches(it.id) &&
+                it.name.isNotBlank() && it.name.none { c -> c == '\n' || c == '\r' }
+        } == true
+        return addsArtists || addsAlbum
     }
 
     private fun albumContextAllowed(request: MetadataFetchRequest): Boolean =
@@ -659,10 +762,9 @@ class MetadataNameRepository internal constructor(
                     // Its seven-day TTL must not suppress the stronger, directly observed link.
                     // A shared recording may already have another verified edition's context;
                     // do not replace that evidence just because a second edition was opened.
-                    val albumRecoveryDue = state?.status != MetadataFetchEntity.SUCCESS &&
+                    val albumRecoveryDue = (state?.status != MetadataFetchEntity.SUCCESS || !hasAlbumContext) &&
                         (albumOriginalRetryAfter[originalRequest] ?: 0L) <= runtime.now()
-                    if (due(originalRequest) || albumRecoveryDue ||
-                        (state?.status == MetadataFetchEntity.SUCCESS && !hasAlbumContext)) {
+                    if (due(originalRequest) || albumRecoveryDue) {
                         saveOriginalTitle(originalRequest, song, fromAlbumPage = true)
                     }
                     if (database.metadataFetch("SONG", song.id, "und", originalRequest.contextKey)?.status != MetadataFetchEntity.SUCCESS) {
@@ -698,8 +800,8 @@ class MetadataNameRepository internal constructor(
                     } == true
             }
         }
-        // A partial alternate-ID snapshot remains unfinished, even if the current page happened
-        // to contain only directly verified audio IDs.
+        // Failure to process an observed identity pair remains unfinished. Explicit restricted
+        // omissions are separate: their album tracks may already have independent direct proof.
         if (playlistComplete == false) complete = false
         // Do not cache the album as complete before its original-title work finishes. On failure
         // or process death the next visit/restart can recover using a fresh authoritative page.
@@ -732,18 +834,38 @@ class MetadataNameRepository internal constructor(
     /** A shared provider playlist entry supplies identity; title/order similarity never does. */
     private suspend fun captureAlbumPlaylistReferences(request: MetadataFetchRequest, albumSongs: List<SongItem>): Boolean? {
         val fetch = runtime.playlistReferences ?: return null
-        val fetchKey = "album-playlist-reference:${runtime.contextKey(request.locale)}:v1"
+        val fetchKey = "album-playlist-reference:${runtime.contextKey(request.locale)}:v2"
         try {
             val album = loadAlbumHeader(request)
             require(album.id == request.target.id && album.browseId == request.target.id)
             val playlistId = album.playlistId ?: return null
             val snapshot = networkPermits.withPermit { fetch(playlistId, request.locale).getOrThrow() }
+            val videoIdPattern = Regex("[A-Za-z0-9_-]{11}")
+            val entryIdPattern = Regex("[A-Za-z0-9_-]{1,512}")
             require(snapshot.playlistId == playlistId && snapshot.references.isNotEmpty())
-            require(snapshot.references.all { it.playlistId == playlistId })
+            require(snapshot.references.all { it.playlistId == playlistId && entryIdPattern.matches(it.playlistSetVideoId) &&
+                videoIdPattern.matches(it.sourceVideoId) && videoIdPattern.matches(it.targetVideoId) })
             require(snapshot.references.map { it.playlistSetVideoId }.distinct().size == snapshot.references.size)
+            require(snapshot.references.map { it.sourceVideoId }.distinct().size == snapshot.references.size)
+            require(snapshot.references.map { it.targetVideoId }.distinct().size == snapshot.references.size)
+            require(snapshot.sourceSongs.map { it.id }.distinct().size == snapshot.sourceSongs.size)
+            require(snapshot.targetSongs.map { it.id }.distinct().size == snapshot.targetSongs.size)
             require(snapshot.sourceSongs.map { it.id }.toSet() == snapshot.references.map { it.sourceVideoId }.toSet())
             require(snapshot.targetSongs.all { song -> snapshot.references.any { it.targetVideoId == song.id } })
+            require(snapshot.unavailableSourceEntries.all { entry ->
+                entryIdPattern.matches(entry.playlistSetVideoId) && videoIdPattern.matches(entry.sourceVideoId) &&
+                    snapshot.references.none { it.playlistSetVideoId == entry.playlistSetVideoId || it.sourceVideoId == entry.sourceVideoId }
+            })
+            require(snapshot.unavailableSourceEntries.map { it.playlistSetVideoId }.distinct().size == snapshot.unavailableSourceEntries.size)
+            require(snapshot.unavailableSourceEntries.map { it.sourceVideoId }.distinct().size == snapshot.unavailableSourceEntries.size)
             require((snapshot.sourceSongs + snapshot.targetSongs).all { song -> song.album?.id?.let { it == album.id } != false })
+            require((snapshot.sourceSongs + snapshot.targetSongs).all { song -> song.endpoint?.videoId?.let { it == song.id } != false })
+            require(snapshot.sourceSongs.all { song -> song.setVideoId?.let { entry ->
+                snapshot.references.any { it.sourceVideoId == song.id && it.playlistSetVideoId == entry }
+            } != false })
+            require(snapshot.targetSongs.all { song -> song.setVideoId?.let { entry ->
+                snapshot.references.any { it.targetVideoId == song.id && it.playlistSetVideoId == entry }
+            } != false })
             if (requeueIfObsolete(request)) return false
             val sources = snapshot.sourceSongs.map { it.copy(album = Album(album.title, album.id)) }
             val sourceMusicById = sources.associateBy { it.id }
@@ -762,9 +884,12 @@ class MetadataNameRepository internal constructor(
                         val hasContext = originals.any { it.target.kind == OriginalNameKind.SONG &&
                             it.sourceVideoId == source.id && it.albumId != null }
                         val state = database.metadataFetch("SONG", source.id, "und", sourceRequest.contextKey)
-                        val albumRecoveryDue = state?.status != MetadataFetchEntity.SUCCESS &&
+                        // A full album may strengthen an earlier ordinary lookup once. If that
+                        // stronger attempt failed, a playlist containing the same source must
+                        // not immediately retry it merely because its context is still absent.
+                        val albumRecoveryDue = (state?.status != MetadataFetchEntity.SUCCESS || !hasContext) &&
                             (albumOriginalRetryAfter[sourceRequest] ?: 0L) <= runtime.now()
-                        if (due(sourceRequest) || !hasContext || albumRecoveryDue)
+                        if (due(sourceRequest) || albumRecoveryDue)
                             saveOriginalTitle(sourceRequest, source, fromAlbumPage = true)
                         if (database.metadataFetch("SONG", source.id, "und", sourceRequest.contextKey)?.status !=
                             MetadataFetchEntity.SUCCESS) {
@@ -809,9 +934,24 @@ class MetadataNameRepository internal constructor(
                 val previous = names.filter { row -> row.source.startsWith(PLAYLIST_SONG_REFERENCE_SOURCE_PREFIX) &&
                     row.source.endsWith(":$playlistId") }
                 val now = maxOf(runtime.now(), (previous.maxOfOrNull { it.observedAt } ?: 0L) + 1L)
-                // This is a complete identity response. Withdraw omitted/changed links explicitly,
-                // retaining their names only as aliases; a network exception never takes this path.
-                recordMetadataNames(previous.map { it.copy(observedAt = now, originEvidenceJson = "{}") })
+                val matchedByEntry = snapshot.references.associateBy { it.playlistSetVideoId }
+                val unavailableByEntry = snapshot.unavailableSourceEntries.associateBy { it.playlistSetVideoId }
+                val obsoleteKeys = latestPlaylistReferenceRows(previous).mapNotNull { row ->
+                    val prior = PlaylistSongReferenceCodec.decode(row) ?: return@mapNotNull null
+                    val matched = matchedByEntry[prior.playlistSetVideoId]
+                    val sameIdentity = matched != null && matched.sourceVideoId == prior.sourceVideoId && matched.targetVideoId == prior.targetVideoId
+                    val restrictedWithoutTarget = matched == null &&
+                        unavailableByEntry[prior.playlistSetVideoId]?.sourceVideoId == prior.sourceVideoId &&
+                        snapshot.references.none { it.targetVideoId == prior.targetVideoId }
+                    val replacement = references.firstOrNull { it.sourceVideoId == prior.sourceVideoId &&
+                        it.targetVideoId == prior.targetVideoId }
+                    // Stable-entry replacement/removal is new evidence. A missing source lookup,
+                    // or the same explicitly restricted source without a target row, is not.
+                    if ((!sameIdentity && !restrictedWithoutTarget) || (replacement != null && replacement != prior))
+                        row.targetId to row.source else null
+                }.toSet()
+                recordMetadataNames(previous.filter { (it.targetId to it.source) in obsoleteKeys }
+                    .map { it.copy(observedAt = now, originEvidenceJson = "{}") })
                 recordMetadataNames(references.map { it.toMetadataName(now) })
                 recordMetadataFetch(MetadataFetchEntity("ALBUM", album.id, "und",
                     if (complete) MetadataFetchEntity.SUCCESS else MetadataFetchEntity.FAILED, runtime.now(), fetchKey))
@@ -830,7 +970,7 @@ class MetadataNameRepository internal constructor(
 
     private fun currentPlaylistSongReference(rows: List<MetadataNameEntity>, target: SongItem): AlbumPlaylistSongReference? {
         val originals = latestOriginalRows(rows).mapNotNull(::originalCandidate)
-        return rows.mapNotNull(PlaylistSongReferenceCodec::decode).firstOrNull { reference ->
+        return latestPlaylistReferenceRows(rows).mapNotNull(PlaylistSongReferenceCodec::decode).firstOrNull { reference ->
             reference.targetVideoId == target.id && originals.any { original ->
                 playlistSongReference(PlaylistSongReference(reference.playlistId, reference.playlistSetVideoId,
                     reference.sourceVideoId, reference.targetVideoId), original, target, reference.playlistId,
@@ -840,6 +980,13 @@ class MetadataNameRepository internal constructor(
             }
         }
     }
+
+    private fun latestPlaylistReferenceRows(rows: List<MetadataNameEntity>): List<MetadataNameEntity> = rows
+        .filter { it.kind == "SONG" && it.language == "und" && it.source.startsWith(PLAYLIST_SONG_REFERENCE_SOURCE_PREFIX) }
+        .groupBy { it.targetId to it.source }.values.flatMap { observations ->
+            val latest = observations.maxOf { it.observedAt }
+            observations.filter { it.observedAt == latest }
+        }
 
     /** A provider can put official-video IDs in an ordinary album's track shelf. */
     private suspend fun recoverAlbumSongReferences(request: MetadataFetchRequest, songs: List<SongItem>) {
@@ -964,6 +1111,21 @@ class MetadataNameRepository internal constructor(
             if (!due(request)) return@withLock
             val musicContext = runtime.contextKey(request.locale)
             val previous = database.metadataFetch("SONG", request.target.id, "und", request.contextKey)
+            if (request.enrichment) {
+                val enrichment = identityEnrichments.remove(request) ?: return@withLock
+                val source = latestOriginalRows(database.metadataNameSnapshot()).mapNotNull(::originalCandidate)
+                    .filter { it.sourceVideoId == request.target.id }
+                if (enrichment.musicContext != musicContext || previous?.status != MetadataFetchEntity.SUCCESS ||
+                    runtime.now() - enrichment.observation.observedAt >= metadataRetryDelay(MetadataFetchEntity.SUCCESS) ||
+                    source.none { it.target.kind == OriginalNameKind.SONG && it.name == enrichment.originalName } ||
+                    !addsOriginalIdentityProof(enrichment.observation.song, source)) return@withLock
+                val attempted = attemptedIdentityEnrichments.getOrPut(request) { mutableSetOf() }
+                synchronized(attempted) {
+                    if (attempted.size >= 8 || !attempted.add(enrichment.token)) return@withLock
+                }
+                saveOriginalTitle(request, enrichment.observation.song, fromAlbumPage = false)
+                return@withLock
+            }
             // Share the just-fetched detail batch once, but never pair a new Main observation
             // with Music identities left over from an earlier completed/failed Main attempt.
             val cached = englishSongs.remove("${request.authRevision}:$musicContext:${request.target.id}")?.takeIf {
@@ -992,14 +1154,7 @@ class MetadataNameRepository internal constructor(
         require(original.videoId == request.target.id) { "Main metadata belongs to another video" }
         if (requeueIfObsolete(request) || musicContext != runtime.contextKey(request.locale)) return
         val now = runtime.now()
-        val candidates = if (fromAlbumPage) albumTrackOriginalNames(original, englishSong)
-            else artTrackOriginalNames(original, englishSong)
-        val names = candidates.map { candidate ->
-            MetadataNameEntity(candidate.target.kind.name, candidate.target.id, "und", candidate.name,
-                ORIGINAL_NAME_SOURCE_PREFIX + original.videoId, sourcePriority = 10, observedAt = now,
-                originEvidenceJson = ArtTrackOriginalNameCodec.encode(candidate))
-        }
-        var status = if (names.isEmpty()) MetadataFetchEntity.EMPTY else MetadataFetchEntity.SUCCESS
+        var status = MetadataFetchEntity.EMPTY
         var saved = false
         var incompleteMusicIdentities = false
         database.awaitTransaction {
@@ -1012,32 +1167,35 @@ class MetadataNameRepository internal constructor(
             // Missing or incomplete distributor fields do not establish an affirmative withdrawal.
             // Retain the last proof and retry; a new corroborated original replaces it atomically.
             val priorOriginals = latestOriginalRows(previous).mapNotNull(::originalCandidate)
-            val priorSource = priorOriginals.filter { it.sourceVideoId == original.videoId }
-            val hadRelatedProof = priorSource.any { it.target.kind != OriginalNameKind.SONG || it.albumId != null }
-            // The ordinary ATV parser can accept a title without a distributor description. That
-            // is useful for a first song-only observation, but is not a complete replacement for
-            // an existing source snapshot containing artist/album proof. Otherwise its new song
-            // timestamp would silently withdraw those related rows from latestOriginalRows.
+            // An exact queue response can finish while this album's Main request is in flight.
+            // Consume its independently identified credit once, using the same freshness boundary
+            // as the ordinary source worker. Never copy the album header's artist onto its songs.
+            val priorFetch = metadataFetch("SONG", request.target.id, "und", request.contextKey)
             val currentArtists = englishSong.artistCredit?.artists ?: englishSong.artists
-            val completeArtistIdentities = priorSource.none { it.target.kind == OriginalNameKind.ARTIST } ||
-                (currentArtists.isNotEmpty() && currentArtists.all { artist ->
+            val creditKey = "${request.authRevision}:$musicContext:${request.target.id}"
+            val incompleteArtists = currentArtists.isEmpty() || currentArtists.any { artist ->
+                ArtistIdentity.onlineId(artist.id) == null || artist.name.isBlank() ||
+                    artist.name.any { c -> c == '\n' || c == '\r' }
+            }
+            val concurrentMusic = if (fromAlbumPage && incompleteArtists) englishSongs[creditKey]?.takeIf {
+                val artists = it.song.artistCredit?.artists ?: it.song.artists
+                it.song.id == englishSong.id && artists.isNotEmpty() && artists.all { artist ->
                     ArtistIdentity.onlineId(artist.id) != null && artist.name.isNotBlank() &&
-                        artist.name.none { it == '\n' || it == '\r' }
-                })
-            val currentAlbum = englishSong.album
-            val completeAlbumIdentity = priorSource.none { it.albumId != null } ||
-                (currentAlbum != null && Regex("(?:MPRE|FEmusic_library_privately_owned_release)[A-Za-z0-9_-]+")
-                    .matches(currentAlbum.id) && currentAlbum.name.isNotBlank() &&
-                    currentAlbum.name.none { it == '\n' || it == '\r' })
-            // Main may be complete while Music omits the IDs needed to interpret its artist or
-            // album text. Absence of those fields cannot withdraw previously verified links.
-            val completeSnapshot = (fromAlbumPage || !hadRelatedProof || hasCompleteDistributorDescription(original)) &&
-                completeArtistIdentities && completeAlbumIdentity
-            incompleteMusicIdentities = !completeArtistIdentities || !completeAlbumIdentity
-            val snapshotNames = if (completeSnapshot) names else emptyList()
-            status = if (snapshotNames.isEmpty()) MetadataFetchEntity.EMPTY else MetadataFetchEntity.SUCCESS
-            val refreshedNames = retainCorroboratedOriginalContext(original, englishSong, priorOriginals,
-                snapshotNames.mapNotNull(::originalCandidate)).map { candidate ->
+                        artist.name.none { c -> c == '\n' || c == '\r' }
+                } && currentArtists.mapNotNull { artist -> ArtistIdentity.onlineId(artist.id) }.all { id ->
+                    artists.any { artist -> ArtistIdentity.onlineId(artist.id) == id }
+                } && runtime.now() - it.observedAt < metadataRetryDelay(MetadataFetchEntity.SUCCESS) &&
+                    (priorFetch == null || it.observedAt > priorFetch.updatedAt ||
+                        (priorFetch.status == MetadataFetchEntity.PENDING && it.observedAt == priorFetch.updatedAt))
+            } else null
+            val identifiedSong = concurrentMusic?.let {
+                englishSongs.remove(creditKey, it)
+                englishSong.copy(artists = it.song.artists, artistCredit = it.song.artistCredit)
+            } ?: englishSong
+            val snapshot = reconcileOriginalSourceSnapshot(original, identifiedSong, priorOriginals, fromAlbumPage)
+            incompleteMusicIdentities = snapshot.incompleteMusicIdentities
+            status = if (snapshot.names.isEmpty()) MetadataFetchEntity.EMPTY else MetadataFetchEntity.SUCCESS
+            val refreshedNames = snapshot.names.map { candidate ->
                 MetadataNameEntity(candidate.target.kind.name, candidate.target.id, "und", candidate.name,
                     ORIGINAL_NAME_SOURCE_PREFIX + original.videoId, sourcePriority = 10, observedAt = observedAt,
                     originEvidenceJson = ArtTrackOriginalNameCodec.encode(candidate))
@@ -1052,17 +1210,13 @@ class MetadataNameRepository internal constructor(
             val key = "${request.authRevision}:$musicContext:${request.target.id}"
             englishSongs[key]?.takeIf { it.song == englishSong }?.let { englishSongs.remove(key, it) }
         }
-        if (saved) nextAttempt[request] = now + metadataRetryDelay(request, status) else scheduleOriginal(request.target)
-    }
-
-    private fun hasCompleteDistributorDescription(original: ArtTrackOriginalMetadata): Boolean {
-        val blocks = original.shortDescription.orEmpty().replace("\r\n", "\n").trim().split(Regex("\n\\s*\n"))
-        val providerPrefix = "Provided to YouTube by "
-        val creditPrefix = original.title + " · "
-        if (blocks.size < 4 || blocks.last() != "Auto-generated by YouTube.") return false
-        return blocks[0].startsWith(providerPrefix) && blocks[0].removePrefix(providerPrefix).isNotBlank() &&
-            blocks[1].startsWith(creditPrefix) && blocks[1].removePrefix(creditPrefix).isNotBlank() &&
-            blocks[2].isNotBlank() && blocks.take(3).all { block -> block.none { it == '\n' || it == '\r' } }
+        if (saved) {
+            val retryAt = now + metadataRetryDelay(request, status)
+            nextAttempt[request] = retryAt
+            // Both routes write the same persisted Main state. A failed/empty enrichment must
+            // replace the ordinary route's former seven-day success deadline as well.
+            nextAttempt[request.copy(enrichment = false)] = retryAt
+        } else scheduleOriginal(request.target)
     }
 
     private suspend fun recordFailure(request: MetadataFetchRequest) {
@@ -1073,6 +1227,8 @@ class MetadataNameRepository internal constructor(
             return
         }
         nextAttempt[request] = now + metadataRetryDelay(MetadataFetchEntity.FAILED)
+        if (request.enrichment) nextAttempt[request.copy(enrichment = false)] =
+            now + metadataRetryDelay(MetadataFetchEntity.FAILED)
         try {
             var saved = false
             database.awaitTransaction {
@@ -1143,6 +1299,7 @@ internal data class MetadataFetchRequest(
     val contextKey: String,
     val original: Boolean = false,
     val authRevision: Long = 0,
+    val enrichment: Boolean = false,
 ) {
     val storedLanguage: String get() = if (original) "und" else locale.hl
     fun state(status: String, now: Long) = MetadataFetchEntity(target.kind.name, target.id, storedLanguage, status, now, contextKey)
@@ -1175,8 +1332,8 @@ internal fun isMetadataFetchCurrent(request: MetadataFetchRequest, locale: YouTu
     }
 
 internal fun originalMetadataContextKey(locale: YouTubeLocale) = "main:${locale.gl}:v3"
-// v5 also checks independently observed Music aliases when Main retains a formal edition suffix.
-internal fun albumOriginalContextKey(contextKey: String) = "album-original-context:$contextKey:v5"
+// v6 independently accepts source proofs and handles terminal restricted playlist omissions.
+internal fun albumOriginalContextKey(contextKey: String) = "album-original-context:$contextKey:v6"
 internal const val ORIGINAL_NAME_SOURCE_PREFIX = "art-track-original:"
 
 internal fun originalCandidate(row: MetadataNameEntity): ArtTrackOriginalName? {
