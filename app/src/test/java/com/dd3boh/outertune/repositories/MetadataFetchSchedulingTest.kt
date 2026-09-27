@@ -61,6 +61,16 @@ class MetadataFetchSchedulingTest {
         assertFalse(isMetadataFetchCurrent(original, ja.copy(gl = "US"), "US:account1"))
     }
 
+    @Test fun `missing song metadata retries without a full day of blocked original discovery`() {
+        val song = request("track", en)
+        val original = song.copy(contextKey = originalMetadataContextKey(ja), original = true)
+        assertEquals(5 * 60_000L, metadataRetryDelay(song, MetadataFetchEntity.EMPTY))
+        assertEquals(5 * 60_000L, metadataRetryDelay(original, MetadataFetchEntity.EMPTY))
+        assertEquals(7 * 24 * 60 * 60_000L, metadataRetryDelay(song, MetadataFetchEntity.SUCCESS))
+        val artist = song.copy(target = OriginalNameTarget(OriginalNameKind.ARTIST, "UCartist"))
+        assertEquals(24 * 60 * 60_000L, metadataRetryDelay(artist, MetadataFetchEntity.EMPTY))
+    }
+
     @Test fun `album original context is invalidated by account changes unlike public Main titles`() {
         val album = MetadataFetchRequest(OriginalNameTarget(OriginalNameKind.ALBUM, "album"), en,
             albumOriginalContextKey("JP:account1"), original = true)

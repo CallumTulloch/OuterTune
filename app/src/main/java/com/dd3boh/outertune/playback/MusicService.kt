@@ -170,6 +170,7 @@ import java.net.UnknownHostException
 import java.time.LocalDateTime
 import javax.inject.Inject
 import com.dd3boh.outertune.repositories.ArtistCreditRepository
+import com.dd3boh.outertune.repositories.MetadataNameRepository
 import kotlin.math.min
 import kotlin.math.pow
 
@@ -184,6 +185,8 @@ class MusicService : MediaLibraryService(),
     lateinit var database: MusicDatabase
     @Inject
     lateinit var artistCredits: ArtistCreditRepository
+    @Inject
+    lateinit var metadataNames: MetadataNameRepository
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val offloadScope = CoroutineScope(SupervisorJob() + playerCoroutine)
     // These jobs perform only I/O. onDestroy can join them without waiting for the Main thread.
@@ -305,6 +308,11 @@ class MusicService : MediaLibraryService(),
             .build()
 
         player.repeatMode = dataStore.get(RepeatModeKey, REPEAT_MODE_OFF)
+
+        scope.launch {
+            currentMediaMetadata.map { it?.takeUnless { song -> song.isLocal }?.id }
+                .distinctUntilChanged().collect(metadataNames::setPlayingSong)
+        }
 
         scope.launch {
             merge(MetadataNames.updates, ArtistDisplayProjection.updates).debounce(150).collect {
@@ -1269,6 +1277,7 @@ class MusicService : MediaLibraryService(),
         queueServiceDestroyed = true
         if (::connectivityObserver.isInitialized) connectivityObserver.unregister()
         scope.cancel()
+        metadataNames.setPlayingSong(null)
         offloadScope.cancel()
         deInitQueue()
         queueIoScope.cancel()

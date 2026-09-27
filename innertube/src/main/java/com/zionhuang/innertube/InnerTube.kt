@@ -281,6 +281,24 @@ class InnerTube {
         )
     }
 
+    /** Public Main song attribution, isolated from Music account and visitor context. */
+    suspend fun mainSongReference(
+        videoId: String,
+        requestLocale: YouTubeLocale = locale,
+    ) = post("${YouTubeClient.API_URL_YOUTUBE}next", rejectStaleResponse = true) { auth ->
+        val client = YouTubeClient.WEB.copy(sendMusicHeaders = false)
+        ytClient(client, auth)
+        setBody(NextBody(
+            context = client.toContext(requestLocale, null, null),
+            videoId = videoId,
+            playlistId = null,
+            playlistSetVideoId = null,
+            index = null,
+            params = null,
+            continuation = null,
+        ))
+    }
+
     suspend fun registerPlayback(
         url: String,
         cpn: String,

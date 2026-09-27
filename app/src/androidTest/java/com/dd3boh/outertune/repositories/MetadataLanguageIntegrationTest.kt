@@ -1,11 +1,17 @@
 package com.dd3boh.outertune.repositories
 
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.preferencesOf
+import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
+import com.dd3boh.outertune.constants.ContentCountryKey
 import com.dd3boh.outertune.constants.ContentLanguageKey
 import com.dd3boh.outertune.constants.PreferEnglishOriginalKey
 import com.dd3boh.outertune.constants.OobeStatusKey
 import com.dd3boh.outertune.constants.OOBE_VERSION
+import com.dd3boh.outertune.db.InternalDatabase
+import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.AlbumEntity
 import com.dd3boh.outertune.db.entities.AlbumArtistMap
@@ -17,34 +23,41 @@ import com.dd3boh.outertune.models.metadata.OriginalNameKind
 import com.dd3boh.outertune.models.metadata.OriginalNameTarget
 import com.dd3boh.outertune.models.metadata.ArtTrackOriginalName
 import com.dd3boh.outertune.models.metadata.ArtTrackOriginalNameCodec
-import com.dd3boh.outertune.utils.MetadataNames
-import com.dd3boh.outertune.utils.dataStore
 import com.dd3boh.outertune.utils.createDatabaseSnapshot
 import com.dd3boh.outertune.utils.createBackupArchive
+import com.zionhuang.innertube.models.YouTubeLocale
 import java.io.File
-import dagger.hilt.android.EntryPointAccessors
+import java.io.IOException
 import java.time.LocalDateTime
-import kotlinx.coroutines.delay
+import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 
-/** Runs on a disposable test application. Exercises the real DB -> repository -> display subscription. */
+/** Real DB, repository and language model, isolated from app data and live metadata acquisition. */
 class MetadataLanguageIntegrationTest {
-    @Test fun savedNamesFollowPreferenceAndRemainSearchableWithoutReplacingRawMetadata() = runBlocking {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val database = EntryPointAccessors.fromApplication(context, MetadataLanguageTestEntryPoint::class.java).database()
+    @Test fun savedNamesFollowPreferenceAndRemainSearchableWithoutReplacingRawMetadata(): Unit = runBlocking {
+        val fixture = Fixture()
+        try {
+            verifyNames(fixture)
+        } finally {
+            fixture.close()
+        }
+    }
+
+    private suspend fun verifyNames(fixture: Fixture) {
+        val database = fixture.database
         val songId = "ljUtuoFt-8c"
         val artistId = "UCrPe3hLA51968GwxHSZ1llw"
         val albumId = "MPREb_jPOYfjGgApr"
         val jaTitle = "スメルズ・ライク・ティーン・スピリット"
-        context.dataStore.edit {
-            it[ContentLanguageKey] = "ja"
-            it.remove(PreferEnglishOriginalKey)
-            it[OobeStatusKey] = OOBE_VERSION
-        }
         database.insert(SongEntity(songId, "Smells Like Teen Spirit", localPath = null,
             albumId = albumId, albumName = "Nevermind", inLibrary = LocalDateTime.now()))
         database.insert(ArtistEntity(artistId, "Nirvana"))
@@ -92,32 +105,100 @@ class MetadataLanguageIntegrationTest {
                 ORIGINAL_NAME_SOURCE_PREFIX + candidate.sourceVideoId, 10, observedAt = originalObservedAt,
                 originEvidenceJson = ArtTrackOriginalNameCodec.encode(candidate)),
         ) })
+        fixture.start()
         suspend fun awaitNames(title: String, artist: String) = withTimeout(15_000) {
-            while (MetadataNames.resolve(OriginalNameKind.SONG, songId, "") != title ||
-                MetadataNames.resolve(OriginalNameKind.ARTIST, artistId, "") != artist) delay(25)
+            fixture.names.first { names ->
+                names[OriginalNameTarget(OriginalNameKind.SONG, songId)] == title &&
+                    names[OriginalNameTarget(OriginalNameKind.ARTIST, artistId)] == artist
+            }
         }
         awaitNames(jaTitle, "ニルヴァーナ")
-        context.dataStore.edit { it[PreferEnglishOriginalKey] = true }
+        fixture.preferEnglish(true)
         awaitNames("Smells Like Teen Spirit", "Nirvana")
-        for ((id, title) in albumTitles) {
-            assertEquals(title, MetadataNames.resolve(OriginalNameKind.SONG, id, ""))
+        withTimeout(15_000) {
+            fixture.names.first { names -> albumTitles.all { (id, title) ->
+                names[OriginalNameTarget(OriginalNameKind.SONG, id)] == title
+            } }
         }
         assertTrue(database.searchSongs("スメルズ").first().any { it.id == songId })
         assertTrue(database.searchSongs("Smells").first().any { it.id == songId })
         assertTrue(database.searchArtistSongs("ニルヴァーナ").first().any { it.id == songId })
         assertTrue(database.searchArtistSongs("nirvan").first().any { it.id == songId })
-        context.dataStore.edit { it[PreferEnglishOriginalKey] = false }
+        fixture.preferEnglish(false)
         awaitNames(jaTitle, "ニルヴァーナ")
         assertEquals("Smells Like Teen Spirit", database.songForArtistCredit(songId)!!.title)
         assertEquals(2, database.metadataNames("SONG", songId).filter { it.source == "detail" }.size)
-        if (InstrumentationRegistry.getArguments().getString("exportLocaleFixture") == "true") {
-            val snapshot = File(context.cacheDir, "content-locale-fixture.db")
-            createDatabaseSnapshot(requireNotNull(database.openHelper.writableDatabase.path), snapshot)
-            try {
-                createBackupArchive(File(context.filesDir, "datastore/settings.preferences_pb"), snapshot,
-                    File(context.getExternalFilesDir(null), "content-locale-fixture.backup"))
-            } finally { snapshot.delete() }
+        fixture.exportIfRequested()
+    }
+
+    private class Fixture {
+        private val context = InstrumentationRegistry.getInstrumentation().targetContext
+        private val export = InstrumentationRegistry.getArguments().getString("exportLocaleFixture") == "true"
+        private val databaseName = "metadata-language-test-${UUID.randomUUID()}.db"
+        private val internal = if (export) {
+            Room.databaseBuilder(context, InternalDatabase::class.java, databaseName).build()
+        } else {
+            Room.inMemoryDatabaseBuilder(context, InternalDatabase::class.java).build()
         }
-        // Keep this record available for the subsequent process-restart/UI check in the isolated emulator.
+        val database = MusicDatabase(internal)
+        private val job = SupervisorJob()
+        private val scope = CoroutineScope(job + Dispatchers.IO)
+        private val locale = YouTubeLocale("JP", "ja")
+        private val settings = MutableStateFlow(preferences(preferOriginal = false))
+        val names = MutableStateFlow<Map<OriginalNameTarget, String>>(emptyMap())
+
+        fun start() {
+            MetadataNameRepository(database, context, MetadataNameRepository.Runtime(
+                scope = scope, preferences = settings,
+                locale = { locale }, localeUpdates = MutableStateFlow(locale),
+                authRevision = { 0L }, authUpdates = MutableStateFlow(0L),
+                contextKey = { "metadata-language-isolated" }, observeMetadata = {},
+                publishNames = { selected, _ -> names.value = selected },
+                queue = { _, _ -> Result.success(emptyList()) },
+                album = { _, _ -> Result.failure(IOException("No live album fetch in this fixture")) },
+                albumContext = { _, _ -> Result.success(emptyList()) },
+                artist = { _, _ -> Result.failure(IOException("No live artist fetch in this fixture")) },
+                main = { _, _ -> Result.failure(IOException("No live Main fetch in this fixture")) },
+                // Use the production classifier to assess the raw originals seeded above.
+            )).start()
+        }
+
+        fun preferEnglish(enabled: Boolean) { settings.value = preferences(enabled) }
+
+        /** Explicit UI-fixture export never reads or alters the target application's DB/settings. */
+        suspend fun exportIfRequested() {
+            if (!export) return
+            val snapshot = File(context.cacheDir, "$databaseName.snapshot")
+            val preferencesFile = File(context.cacheDir, "$databaseName.preferences_pb")
+            val preferencesJob = SupervisorJob()
+            try {
+                val store = PreferenceDataStoreFactory.create(
+                    scope = CoroutineScope(preferencesJob + Dispatchers.IO), produceFile = { preferencesFile },
+                )
+                store.edit {
+                    it[ContentCountryKey] = "JP"
+                    it[ContentLanguageKey] = "ja"
+                    it[PreferEnglishOriginalKey] = settings.value[PreferEnglishOriginalKey] ?: false
+                    it[OobeStatusKey] = OOBE_VERSION
+                }
+                createDatabaseSnapshot(requireNotNull(database.openHelper.writableDatabase.path), snapshot)
+                createBackupArchive(preferencesFile, snapshot,
+                    File(context.getExternalFilesDir(null), "content-locale-fixture.backup"))
+            } finally {
+                preferencesJob.cancelAndJoin()
+                preferencesFile.delete()
+                snapshot.delete()
+            }
+        }
+
+        suspend fun close() {
+            job.cancelAndJoin()
+            database.close()
+            if (export) context.deleteDatabase(databaseName)
+        }
+
+        private fun preferences(preferOriginal: Boolean) = preferencesOf(
+            ContentCountryKey to "JP", ContentLanguageKey to "ja", PreferEnglishOriginalKey to preferOriginal,
+        )
     }
 }

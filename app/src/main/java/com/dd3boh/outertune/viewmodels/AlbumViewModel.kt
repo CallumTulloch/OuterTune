@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.repositories.ArtistCreditRepository
+import com.dd3boh.outertune.repositories.MetadataNameRepository
 import com.dd3boh.outertune.utils.reportException
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.AlbumItem
@@ -29,6 +30,7 @@ class AlbumViewModel @Inject constructor(
     private val database: MusicDatabase,
     savedStateHandle: SavedStateHandle,
     private val artistCredits: ArtistCreditRepository,
+    private val metadataNames: MetadataNameRepository,
 ) : ViewModel() {
     val albumId = savedStateHandle.get<String>("albumId")!!
     val albumWithSongs = database.albumWithSongs(albumId)
@@ -44,6 +46,10 @@ class AlbumViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { YouTube.localeUpdates.collect { load(it) } }
+    }
+
+    fun setForeground(active: Boolean) {
+        metadataNames.setForegroundAlbum(albumId, active)
     }
 
     fun retry() {

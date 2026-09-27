@@ -211,6 +211,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var syncUtils: SyncUtils
 
+    @Inject
+    lateinit var metadataNames: com.dd3boh.outertune.repositories.MetadataNameRepository
+
     lateinit var activityLauncher: ActivityLauncherHelper
     lateinit var connectivityObserver: NetworkConnectivityObserver
 
@@ -329,6 +332,13 @@ class MainActivity : ComponentActivity() {
                 pureBlack = pureBlack,
                 highContrastCompat = highContrastCompat,
             ) {
+                val metadataReady by metadataNames.initialized.collectAsState()
+                if (!metadataReady) {
+                    // Hydrate only the saved name projection before exposing stored rows. Network
+                    // fetches and first-time language assessment never delay the initial screen.
+                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+                    return@OuterTuneTheme
+                }
                 Log.v(MAIN_TAG, "RC-2.1")
                 val density = LocalDensity.current
                 val windowsInsets = WindowInsets.systemBars

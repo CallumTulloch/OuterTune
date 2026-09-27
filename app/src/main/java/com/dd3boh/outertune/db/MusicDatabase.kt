@@ -32,6 +32,7 @@ import com.dd3boh.outertune.db.entities.LyricsEntity
 import com.dd3boh.outertune.db.entities.LocalArtistLink
 import com.dd3boh.outertune.db.entities.MetadataFetchEntity
 import com.dd3boh.outertune.db.entities.MetadataNameEntity
+import com.dd3boh.outertune.db.entities.MetadataOriginalPublicationEntity
 import com.dd3boh.outertune.db.entities.MetadataTargetEntity
 import com.dd3boh.outertune.db.entities.PlayCountEntity
 import com.dd3boh.outertune.db.entities.PlaylistEntity
@@ -90,7 +91,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 28
+        const val MUSIC_DATABASE_VERSION = 29
     }
 }
 
@@ -102,6 +103,7 @@ class MusicDatabase(
         LocalArtistLink::class,
         MetadataTargetEntity::class,
         MetadataNameEntity::class,
+        MetadataOriginalPublicationEntity::class,
         MetadataFetchEntity::class,
         AlbumEntity::class,
         PlaylistEntity::class,
@@ -152,6 +154,7 @@ class MusicDatabase(
         AutoMigration(from = 24, to = 25), // Preserve saved music while adding manual local artist links.
         AutoMigration(from = 25, to = 26), // Add read-only artist grouping without rewriting tags or participation.
         AutoMigration(from = 27, to = 28), // Preserve saved music while distinguishing confirmed album track lists.
+        AutoMigration(from = 28, to = 29), // Persist completed name decisions independently of pending evidence.
     ]
 )
 @TypeConverters(Converters::class)

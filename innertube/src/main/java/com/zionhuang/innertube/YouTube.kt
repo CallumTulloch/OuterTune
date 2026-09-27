@@ -14,9 +14,11 @@ import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.ArtTrackOriginalMetadata
 import com.zionhuang.innertube.models.BrowseEndpoint
 import com.zionhuang.innertube.models.GridRenderer
+import com.zionhuang.innertube.models.MainSongReference
 import com.zionhuang.innertube.models.MusicCarouselShelfRenderer
 import com.zionhuang.innertube.models.MusicShelfRenderer
 import com.zionhuang.innertube.models.PlaylistItem
+import com.zionhuang.innertube.models.PlaylistSongReferences
 import com.zionhuang.innertube.models.SearchSuggestions
 import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.SongItem
@@ -852,7 +854,7 @@ object YouTube {
             .also { innerTube.ensureAuthenticationCurrent(requestAuthentication) }
     }
 
-    /** Caller must first verify MUSIC_VIDEO_TYPE_ATV. Returned names remain unclassified candidates. */
+    /** Caller must validate Art Track provenance (Music ATV or the verified album-page path). */
     suspend fun artTrackOriginalMetadata(
         videoId: String,
         requestLocale: YouTubeLocale = locale,
@@ -861,6 +863,50 @@ object YouTube {
             innerTube.artTrackOriginalMetadata(videoId, requestLocale).body<JsonElement>(),
             expectedVideoId = videoId,
         )
+    }
+
+    /**
+     * One explicit Main music-card reference, not recording equivalence or original-name evidence.
+     * Callers must independently verify the source's original title and its language.
+     */
+    suspend fun mainSongReference(
+        videoId: String,
+        requestLocale: YouTubeLocale = locale,
+    ): Result<MainSongReference?> = runCatching {
+        parseMainSongReferenceResult(
+            innerTube.mainSongReference(videoId, requestLocale).body<JsonElement>(),
+            expectedVideoId = videoId,
+        ).getOrThrow()
+    }
+
+    /** Complete provider entry identities; this never publishes names or changes the playback queue. */
+    suspend fun playlistSongReferences(
+        playlistId: String,
+        requestLocale: YouTubeLocale = locale,
+    ): Result<PlaylistSongReferences> = runCatching {
+        require(playlistReferenceToken.matches(playlistId)) { "Invalid playlist ID" }
+        val revision = synchronized(metadataAuthLock) { authRevision }
+        fun requireCurrentAuthentication() = synchronized(metadataAuthLock) {
+            check(revision == authRevision) { "Playlist identities belong to an earlier authentication" }
+        }
+        val result = loadPlaylistSongReferences(playlistId, requestLocale.hl,
+            fetchBrowse = { continuation ->
+                requireCurrentAuthentication()
+                innerTube.browse(WEB_REMIX, browseId = if (continuation == null) "VL$playlistId" else null,
+                    continuation = continuation, setLogin = true, requestLocale = requestLocale,
+                ).body<JsonElement>().also { requireCurrentAuthentication() }
+            },
+            fetchNext = { continuation ->
+                requireCurrentAuthentication()
+                innerTube.next(WEB_REMIX, videoId = null, playlistId = playlistId, playlistSetVideoId = null,
+                    index = null, params = null, continuation = continuation, requestLocale = requestLocale,
+                ).body<JsonElement>().also { requireCurrentAuthentication() }
+            },
+        )
+        synchronized(metadataAuthLock) {
+            check(revision == authRevision) { "Playlist identities belong to an earlier authentication" }
+            result
+        }
     }
 
     suspend fun registerPlayback(playlistId: String? = null, playbackTracking: String) = runCatching {
