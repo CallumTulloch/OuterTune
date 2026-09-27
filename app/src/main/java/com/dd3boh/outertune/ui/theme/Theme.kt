@@ -86,6 +86,7 @@ fun OuterTuneTheme(
                                 val result = context.imageLoader.execute(
                                     ImageRequest.Builder(context)
                                         .data(model)
+                                        .apply { if (model is LocalArtworkPath) size(100, 100) }
                                         .allowHardware(false)
                                         .build()
                                 )

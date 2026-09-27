@@ -1,6 +1,7 @@
 package com.dd3boh.outertune.db
 
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.media3.common.C
 import androidx.test.platform.app.InstrumentationRegistry
 import com.dd3boh.outertune.models.MediaMetadata
@@ -8,6 +9,8 @@ import com.dd3boh.outertune.models.MultiQueueObject
 import java.time.LocalDateTime
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -227,6 +230,97 @@ class QueuePersistenceDatabaseTest {
         }
     }
 
+    @Test
+    fun savingStaleLocalQueuePreservesImportedMetadataAndDoesNotReprocessAlbums() = runBlocking {
+        val statements = CopyOnWriteArrayList<String>()
+        val fixture = Fixture(object : RoomDatabase.QueryCallback {
+            override fun onQuery(sqlQuery: String, bindArgs: List<Any?>) {
+                statements += sqlQuery
+            }
+        })
+        try {
+            val database = fixture.database
+            val artist = MediaMetadata.Artist("LA-current-artist", "Current artist", isLocal = true)
+            val album = MediaMetadata.Album("LB-current-album", "Current album", isLocal = true,
+                artists = listOf(artist))
+            val imported = (0..2).map { index ->
+                MediaMetadata("LS-queue-preserve-$index", "Current track $index", listOf(artist), 180 + index,
+                    album = album, genre = listOf(MediaMetadata.Genre(null, "Current genre", isLocal = true)),
+                    isLocal = true, localPath = "/music/current/$index.flac",
+                    thumbnailUrl = "/music/current/$index.flac", year = 2026,
+                    trackNumber = index + 1, discNumber = 1, liked = index == 1)
+            }
+            database.awaitTransaction { imported.forEach { insert(it) } }
+            val before = database.localMetadataRows()
+            val staleArtist = artist.copy(id = "LA-stale-artist", name = "Old artist")
+            val stale = imported.map { song ->
+                song.copy(title = "Old title", artists = listOf(staleArtist),
+                    album = album.copy(title = "Old album", artists = listOf(staleArtist)),
+                    genre = listOf(MediaMetadata.Genre(null, "Old genre", isLocal = true)),
+                    year = 1999, localPath = "/music/old/${song.id}.flac",
+                    thumbnailUrl = "/music/old/${song.id}.flac")
+            }
+            // Repeat one local song: occurrences retain their own queue/shuffle positions.
+            val first = queue(10, listOf(stale[2].id, stale[0].id, stale[2].id, stale[1].id),
+                shuffled = true, order = listOf(2, 0, 3, 1), position = 1, playbackMs = 12_345).let { queued ->
+                queued.copy(queue = queued.queue.map { item ->
+                    stale.first { it.id == item.id }.copy(shuffleIndex = item.shuffleIndex)
+                }.toMutableList())
+            }
+            val latest = first.copy(title = "Latest local queue", queuePos = 3, lastSongPos = 54_321)
+
+            for (snapshot in listOf(first, latest)) {
+                statements.clear()
+                database.saveQueueSnapshot(listOf(snapshot))
+                val saveStatements = statements.toList()
+                assertTrue("Query callback did not observe queue persistence", saveStatements.any {
+                    it.contains("INSERT", ignoreCase = true) && it.contains("queue_song_map")
+                })
+                assertFalse("Queue save resolved local album candidates", saveStatements.any {
+                    it.contains("AS albumRowId", ignoreCase = true)
+                })
+                val metadataWrite = Regex(
+                    "(?i)\\b(?:UPDATE(?:\\s+OR\\s+\\w+)?\\s+|INSERT(?:\\s+OR\\s+\\w+)?\\s+INTO\\s+|DELETE\\s+FROM\\s+)" +
+                        "[`\"]?(song|album|artist|genre|song_artist_map|song_album_map|song_genre_map|album_artist_map)\\b",
+                )
+                assertTrue("Local queue save wrote imported metadata: ${saveStatements.filter { metadataWrite.containsMatchIn(it) }}",
+                    saveStatements.none { metadataWrite.containsMatchIn(it) })
+                assertEquals(before, database.localMetadataRows())
+                database.assertQueues(listOf(snapshot))
+            }
+
+            fixture.reopen()
+            fixture.database.assertQueues(listOf(latest))
+            assertEquals(before, fixture.database.localMetadataRows())
+            val restored = fixture.database.readQueue().single()
+            restored.queue.forEach { song ->
+                val current = imported.first { it.id == song.id }
+                assertEquals(current.title, song.title)
+                assertEquals(current.localPath, song.localPath)
+                assertEquals(current.thumbnailUrl, song.thumbnailUrl)
+                assertEquals(album.title, song.album?.title)
+                assertEquals(listOf(artist.name), song.artists.map { it.name })
+            }
+        } finally {
+            fixture.close()
+        }
+    }
+
+    private fun MusicDatabase.localMetadataRows(): Map<String, List<List<String?>>> = listOf(
+        "song", "album", "artist", "genre", "song_artist_map", "song_album_map",
+        "song_genre_map", "album_artist_map",
+    ).associateWith { table ->
+        openHelper.readableDatabase.query("SELECT * FROM `$table` ORDER BY rowid").use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add((0 until cursor.columnCount).map { column ->
+                        if (cursor.isNull(column)) null else cursor.getString(column)
+                    })
+                }
+            }
+        }
+    }
+
     private suspend fun MusicDatabase.assertQueues(expected: List<MultiQueueObject>) {
         val actual = withTimeout(5_000) { readQueue() }
         assertEquals(expected.map { it.id }, actual.map { it.id })
@@ -248,14 +342,16 @@ class QueuePersistenceDatabaseTest {
         assertEquals(current.queue[current.queuePos].id, resumed.getCurrentSong()!!.id)
     }
 
-    private class Fixture {
+    private class Fixture(private val queryCallback: RoomDatabase.QueryCallback? = null) {
         private val context = InstrumentationRegistry.getInstrumentation().targetContext
         private val filename = "queue-persistence-${UUID.randomUUID()}.db"
         private var room = open()
         var database = MusicDatabase(room)
             private set
 
-        private fun open() = Room.databaseBuilder(context, InternalDatabase::class.java, filename).build()
+        private fun open() = Room.databaseBuilder(context, InternalDatabase::class.java, filename)
+            .apply { queryCallback?.let { setQueryCallback(it, Executor { command -> command.run() }) } }
+            .build()
 
         fun reopen() {
             room.close()

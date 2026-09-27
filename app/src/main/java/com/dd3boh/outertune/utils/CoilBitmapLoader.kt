@@ -37,6 +37,7 @@ import com.dd3boh.outertune.R
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.guava.future
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ExecutionException
 import javax.inject.Inject
 import kotlin.math.min
@@ -88,43 +89,27 @@ class CoilBitmapLoader @Inject constructor(
             }
         }
 
-    override suspend fun fetch(): FetchResult? {
-        return try {
+    override suspend fun fetch(): FetchResult? = withContext(coilCoroutine) {
+        try {
             if (data.path?.startsWith("/storage/") == true) {
-                val mData = MediaMetadataRetriever()
-                var image: Bitmap = try {
-                    mData.setDataSource(data.path)
-                    val art = mData.embeddedPicture
-                    BitmapFactory.decodeByteArray(art, 0, art!!.size)
-                } catch (e: Exception) {
-                    drawPlaceholder(context)
-                } ?: drawPlaceholder(context)
-
-                if (data.x + data.y > 0) {
-                    var realX = data.x
-                    var realY = data.y
-
-                    // scale maintaining aspect ratio
-                    if (image.width != image.height) {
-                        val frameW = data.x
-                        val frameH = data.y
-                        val imgW = image.width
-                        val imgH = image.height
-
-                        val scaleX = frameW.toFloat() / imgW
-                        val scaleY = frameH.toFloat() / imgH
-                        val scale = minOf(scaleX, scaleY)
-
-                        realX = (imgW * scale).toInt()
-                        realY = (imgH * scale).toInt()
+                val decoded = try {
+                    extractEmbeddedArtwork(data.path)?.let { art ->
+                        decodeLocalArtwork(art, data.x, data.y)
                     }
-
-                    image = image.scale(realX, realY)
+                } catch (e: Exception) {
+                    null
+                } ?: drawPlaceholder(context).let { placeholder ->
+                    resizeLocalArtwork(
+                        placeholder,
+                        localArtworkDecodePlan(placeholder.width, placeholder.height, data.x, data.y),
+                        placeholder.width,
+                        placeholder.height,
+                    )
                 }
 
                 ImageFetchResult(
-                    image = image.asImage(),
-                    isSampled = false,
+                    image = decoded.bitmap.asImage(),
+                    isSampled = decoded.isSampled,
                     dataSource = DataSource.DISK
                 )
             } else {
@@ -176,6 +161,88 @@ class CoilBitmapLoader @Inject constructor(
         override fun create(data: LocalArtworkPath, options: Options, imageLoader: ImageLoader): Fetcher? {
             return CoilBitmapLoader(context, data = data)
         }
+    }
+}
+
+internal data class LocalArtworkDecodePlan(val width: Int, val height: Int, val sampleSize: Int)
+
+/** Retain the existing output dimensions without decoding more source pixels than they need. */
+internal fun localArtworkDecodePlan(
+    sourceWidth: Int,
+    sourceHeight: Int,
+    requestedWidth: Int,
+    requestedHeight: Int,
+): LocalArtworkDecodePlan {
+    require(sourceWidth > 0 && sourceHeight > 0)
+    if (requestedWidth <= 0 || requestedHeight <= 0) {
+        return LocalArtworkDecodePlan(sourceWidth, sourceHeight, 1)
+    }
+
+    val width: Int
+    val height: Int
+    if (sourceWidth == sourceHeight) {
+        // Keep the existing behavior for explicitly requested rectangular frames too.
+        width = requestedWidth
+        height = requestedHeight
+    } else {
+        val scale = minOf(requestedWidth.toFloat() / sourceWidth, requestedHeight.toFloat() / sourceHeight)
+        width = (sourceWidth * scale).toInt().coerceAtLeast(1)
+        height = (sourceHeight * scale).toInt().coerceAtLeast(1)
+    }
+
+    val maximumSample = minOf(sourceWidth / width, sourceHeight / height).coerceAtLeast(1)
+    var sampleSize = 1
+    while (sampleSize <= maximumSample / 2) sampleSize *= 2
+    return LocalArtworkDecodePlan(width, height, sampleSize)
+}
+
+private data class LocalArtworkBitmap(val bitmap: Bitmap, val isSampled: Boolean)
+
+private fun decodeLocalArtwork(art: ByteArray, width: Int, height: Int): LocalArtworkBitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(art, 0, art.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+    val plan = localArtworkDecodePlan(bounds.outWidth, bounds.outHeight, width, height)
+    val options = BitmapFactory.Options().apply { inSampleSize = plan.sampleSize }
+    val bitmap = BitmapFactory.decodeByteArray(art, 0, art.size, options) ?: return null
+    return resizeLocalArtwork(bitmap, plan, bounds.outWidth, bounds.outHeight)
+}
+
+private fun resizeLocalArtwork(
+    bitmap: Bitmap,
+    plan: LocalArtworkDecodePlan,
+    sourceWidth: Int,
+    sourceHeight: Int,
+): LocalArtworkBitmap {
+    val resized = try {
+        bitmap.scale(plan.width, plan.height)
+    } catch (error: Throwable) {
+        bitmap.recycle()
+        throw error
+    }
+    // This bitmap was decoded for this fetch and has not entered Coil's shared cache yet.
+    if (resized !== bitmap) bitmap.recycle()
+    return LocalArtworkBitmap(
+        bitmap = resized,
+        isSampled = plan.width < sourceWidth || plan.height < sourceHeight,
+    )
+}
+
+/** Read the artwork bytes and release the native retriever before decoding the image. */
+internal fun extractEmbeddedArtwork(
+    path: String,
+    retriever: MediaMetadataRetriever = MediaMetadataRetriever(),
+): ByteArray? = try {
+    retriever.setDataSource(path)
+    retriever.embeddedPicture
+} finally {
+    // release(), unlike close(), is available on all supported Android versions.
+    try {
+        retriever.release()
+    } catch (e: Exception) {
+        // Cleanup must not discard artwork already read or replace the read failure.
+        reportException(e)
     }
 }
 

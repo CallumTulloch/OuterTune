@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.media3.exoplayer.offline.Download
 import com.dd3boh.outertune.LocalDatabase
 import com.dd3boh.outertune.LocalDownloadUtil
@@ -34,40 +35,48 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
+private fun AlbumBadges(album: Album, showLikedIcon: Boolean = true) {
+    if (showLikedIcon && album.album.bookmarkedAt != null) {
+        Icon.Favorite()
+    }
+
+    // Local albums have no download badge; do not load their tracks just to discard them.
+    if (album.album.isLocal) return
+
+    val database = LocalDatabase.current
+    val downloadUtil = LocalDownloadUtil.current
+    var songs by remember(album.id, album.album.isLocal) {
+        mutableStateOf(emptyList<Song>())
+    }
+
+    LaunchedEffect(database, album.id, album.album.isLocal) {
+        database.albumSongs(album.id).collect {
+            songs = it
+        }
+    }
+
+    var downloadState by remember(album.id, songs) {
+        mutableIntStateOf(Download.STATE_STOPPED)
+    }
+
+    LaunchedEffect(downloadUtil, album.id, songs) {
+        val remoteSongs = songs.filterNot { it.song.isLocal }
+        if (remoteSongs.isEmpty()) return@LaunchedEffect
+        downloadUtil.downloads.collect { downloads ->
+            downloadState = getDownloadState(remoteSongs.map { downloads[it.id] })
+        }
+    }
+
+    Icon.Download(downloadState)
+}
+
+@Composable
 fun AlbumListItem(
     album: Album,
     modifier: Modifier = Modifier,
     showLikedIcon: Boolean = true,
     badges: @Composable RowScope.() -> Unit = {
-        val database = LocalDatabase.current
-        val downloadUtil = LocalDownloadUtil.current
-        var songs by remember {
-            mutableStateOf(emptyList<Song>())
-        }
-
-        LaunchedEffect(Unit) {
-            database.albumSongs(album.id).collect {
-                songs = it
-            }
-        }
-
-        var downloadState by remember {
-            mutableIntStateOf(Download.STATE_STOPPED)
-        }
-
-        LaunchedEffect(songs) {
-            val songs = songs.filterNot { it.song.isLocal }
-            if (songs.isEmpty()) return@LaunchedEffect
-            downloadUtil.downloads.collect { downloads ->
-                downloadState = getDownloadState(songs.map { downloads[it.id] })
-            }
-        }
-
-        if (showLikedIcon && album.album.bookmarkedAt != null) {
-            Icon.Favorite()
-        }
-
-        Icon.Download(downloadState)
+        AlbumBadges(album, showLikedIcon)
     },
     isActive: Boolean = false,
     isPlaying: Boolean = false,
@@ -85,6 +94,7 @@ fun AlbumListItem(
     thumbnailContent = {
         ItemThumbnail(
             thumbnailUrl = album.album.thumbnailUrl,
+            preferredSize = with(LocalDensity.current) { ListThumbnailSize.roundToPx() },
             placeholderIcon = Icons.Outlined.Album,
             isActive = isActive,
             isPlaying = isPlaying,
@@ -102,35 +112,7 @@ fun AlbumGridItem(
     modifier: Modifier = Modifier,
     coroutineScope: CoroutineScope,
     badges: @Composable RowScope.() -> Unit = {
-        val database = LocalDatabase.current
-        val downloadUtil = LocalDownloadUtil.current
-        var songs by remember {
-            mutableStateOf(emptyList<Song>())
-        }
-
-        LaunchedEffect(Unit) {
-            database.albumSongs(album.id).collect {
-                songs = it
-            }
-        }
-
-        var downloadState by remember {
-            mutableIntStateOf(Download.STATE_STOPPED)
-        }
-
-        LaunchedEffect(songs) {
-            val songs = songs.filterNot { it.song.isLocal }
-            if (songs.isEmpty()) return@LaunchedEffect
-            downloadUtil.downloads.collect { downloads ->
-                downloadState = getDownloadState(songs.map { downloads[it.id] })
-            }
-        }
-
-        if (album.album.bookmarkedAt != null) {
-            Icon.Favorite()
-        }
-
-        Icon.Download(downloadState)
+        AlbumBadges(album)
     },
     isActive: Boolean = false,
     isPlaying: Boolean = false,
@@ -146,6 +128,7 @@ fun AlbumGridItem(
 
         ItemThumbnail(
             thumbnailUrl = album.album.thumbnailUrl,
+            preferredSize = with(LocalDensity.current) { minOf(maxWidth, maxHeight).roundToPx() },
             placeholderIcon = Icons.Outlined.Album,
             isActive = isActive,
             isPlaying = isPlaying,

@@ -1103,6 +1103,7 @@ fun PlayerBackground(
                 val result = context.imageLoader.execute(
                     ImageRequest.Builder(context)
                         .data(mediaMetadata?.getThumbnailModel(100, 100))
+                        .apply { if (mediaMetadata?.isLocal == true) size(100, 100) }
                         .allowHardware(false)
                         .build()
                 )

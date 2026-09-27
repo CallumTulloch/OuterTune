@@ -468,7 +468,10 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
         // why does kotlin not have for i loop???
         var i = 0
         while (i < mq.getSize()) {
-            insert(mq.queue[i]) // make sure song exists
+            // Local rows were checked above in this transaction. Their scanner-owned metadata
+            // may be newer than this queue snapshot; re-inserting would resolve album/artist
+            // relationships and recalculate the entire album for every queued track.
+            if (!mq.queue[i].isLocal) insert(mq.queue[i])
             insert(
                 QueueSongMap(
                     queueId = mq.id,
