@@ -65,7 +65,6 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CommandButton
 import androidx.media3.session.CommandButton.ICON_UNDEFINED
-import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -224,6 +223,8 @@ class MusicService : MediaLibraryService(),
 
     lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaLibrarySession
+    private lateinit var notificationProvider: PlaybackNotificationProvider
+    private val notificationLayout = NotificationLayoutUpdater { mediaSession.setCustomLayout(it) }
 
     // Player components
     @Inject
@@ -382,17 +383,10 @@ class MusicService : MediaLibraryService(),
             updateNotification()
         }
 
-        setMediaNotificationProvider(
-            DefaultMediaNotificationProvider(
-                this@MusicService,
-                { NOTIFICATION_ID },
-                CHANNEL_ID,
-                R.string.music_player
-            )
-                .apply {
-                    setSmallIcon(R.drawable.small_icon)
-                }
-        )
+        notificationProvider = PlaybackNotificationProvider(
+            this, NOTIFICATION_ID, CHANNEL_ID, R.string.music_player,
+        ).apply { setSmallIcon(R.drawable.small_icon) }
+        setMediaNotificationProvider(notificationProvider)
 
         // lateinit tasks
         offloadScope.launch {
@@ -980,7 +974,7 @@ class MusicService : MediaLibraryService(),
 // Misc
 
     fun updateNotification() {
-        mediaSession.setCustomLayout(
+        notificationLayout.update(
             listOf(
                 CommandButton.Builder(ICON_UNDEFINED)
                     .setDisplayName(getString(if (queueBoard.value.getCurrentQueue()?.shuffled == true) R.string.action_shuffle_off else R.string.action_shuffle_on))
@@ -1286,6 +1280,7 @@ class MusicService : MediaLibraryService(),
         mediaSession.release()
         mediaSession.player.release()
         super.onDestroy()
+        if (::notificationProvider.isInitialized) notificationProvider.release()
         Log.i(TAG, "Terminated MusicService.")
     }
 

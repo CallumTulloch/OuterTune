@@ -367,6 +367,9 @@ interface DatabaseDao : SongsDao, AlbumsDao, PlaylistsDao, QueueDao, MetadataNam
         // Header-only/incomplete responses must not invalidate a previously confirmed list.
         if (albumPage.songs.isEmpty()) return
         val currentAlbum = albumById(albumPage.album.browseId)
+        // A header-only canonical playlist is not evidence that previously selected audio
+        // identities reverted to the album shelf's video IDs. Keep the complete cached list.
+        if (albumPage.hasUnresolvedTrackSources && currentAlbum?.hasTrackList == true) return
         val preservedAlbum = currentAlbum ?: previousAlbum
         upsert(
             AlbumEntity(

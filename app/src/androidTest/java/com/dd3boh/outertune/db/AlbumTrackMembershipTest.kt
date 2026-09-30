@@ -262,6 +262,42 @@ class AlbumTrackMembershipTest {
     }
 
     @Test
+    fun unresolvedCanonicalSourcesCannotReplaceConfirmedAudioMembership() = withDatabase { database ->
+        val albumId = "MPREb_dqWTncCjkSp"
+        val audio = page(albumId, "Thriller", listOf("Kr4EQDVETuA" to "Billie Jean")).let {
+            it.copy(songs = it.songs.map { song -> song.copy(duration = 295) })
+        }
+        database.saveWithUserState(audio.songs.single().toMediaMetadata())
+        database.insert(audio)
+        val original = database.albumById(albumId)!!
+        val unresolved = page(albumId, "Unresolved response", listOf("Zi_XLOBDo_Y" to "Billie Jean"))
+            .copy(hasUnresolvedTrackSources = true)
+
+        // Both direct insertion and refresh are used by album/menu consumers.
+        database.insert(unresolved)
+        database.update(original, unresolved)
+
+        assertEquals(original, database.albumById(albumId))
+        database.assertTrackOrder(albumId, listOf("Kr4EQDVETuA"))
+        assertEquals(295, database.albumById(albumId)!!.duration)
+        database.assertUserState("Kr4EQDVETuA", albumId)
+        assertEquals(null, database.song("Zi_XLOBDo_Y").first())
+    }
+
+    @Test
+    fun firstUnresolvedShelfRemainsAvailableUntilCanonicalSourcesResolve() = withDatabase { database ->
+        val albumId = "MPRE-first-unresolved"
+        val shelf = page(albumId, "Restricted album", listOf("video-first" to "First", "video-second" to "Second"))
+            .copy(hasUnresolvedTrackSources = true)
+        database.insert(shelf)
+        database.assertTrackOrder(albumId, shelf.songs.map { it.id })
+
+        val resolved = page(albumId, "Restricted album", listOf("audio-first" to "First", "audio-second" to "Second"))
+        database.update(database.albumById(albumId)!!, resolved)
+        database.assertTrackOrder(albumId, resolved.songs.map { it.id })
+    }
+
+    @Test
     fun legacyPlaybackStubKeepsNewSongsUntilACompletePageEstablishesMembership() = withDatabase { database ->
         val albumId = "MPRE-legacy-playback-stub"
         val oldSong = metadata(albumId, "Old playback stub", "legacy-song", "First recording")

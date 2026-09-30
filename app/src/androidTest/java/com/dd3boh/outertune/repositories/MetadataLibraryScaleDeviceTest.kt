@@ -11,6 +11,7 @@ import com.dd3boh.outertune.constants.PreferEnglishOriginalKey
 import com.dd3boh.outertune.db.InternalDatabase
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.db.entities.MetadataFetchEntity
+import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.models.metadata.OriginalAlbumLanguageResolver
 import com.dd3boh.outertune.models.metadata.OriginalNameKind
 import com.dd3boh.outertune.models.metadata.OriginalNameTarget
@@ -22,6 +23,7 @@ import com.zionhuang.innertube.models.YouTubeLocale
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.time.LocalDateTime
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -118,8 +120,20 @@ class MetadataLibraryScaleDeviceTest {
             // These responses already have direct source proof. Preserve it and suppress Main
             // acquisition so detail replies exercise identity checks without external services.
             db.awaitTransaction {
-                songs.forEach { song -> recordMetadataFetch(MetadataFetchEntity("SONG", song.id, "und",
-                    MetadataFetchEntity.SUCCESS, clock.get(), originalMetadataContextKey(locale))) }
+                val savedAt = LocalDateTime.of(2026, 9, 30, 12, 0)
+                songs.forEach { song ->
+                    // The fifty lookups are explicit test interests, not eager search-card work.
+                    // Only this disposable database copy changes; the supplied source stays intact.
+                    val existing = songForArtistCredit(song.id)
+                    check(existing?.isLocal != true) { "Replay identities must refer to remote tracks" }
+                    if (existing == null) {
+                        insert(SongEntity(song.id, song.title, localPath = null, inLibrary = savedAt))
+                    } else if (existing.inLibrary == null) {
+                        update(existing.copy(inLibrary = savedAt))
+                    }
+                    recordMetadataFetch(MetadataFetchEntity("SONG", song.id, "und",
+                        MetadataFetchEntity.SUCCESS, clock.get(), originalMetadataContextKey(locale)))
+                }
             }
             val queueReplies = ConcurrentHashMap.newKeySet<String>()
             val observedDetailCount = AtomicInteger()
@@ -204,7 +218,7 @@ class MetadataLibraryScaleDeviceTest {
 
                 val epoch = clock.incrementAndGet()
                 detailEpoch.set(epoch)
-                // A genuine provider-observer packet schedules the production queue workers.
+                // A provider-observer packet preserves raw names for the selected saved interests.
                 observer(songs, locale.copy(hl = "en"), "detail")
                 releaseDetails.complete(Unit)
                 await("fifty English queue replies and observed details") {

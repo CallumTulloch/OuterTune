@@ -10,4 +10,5 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 interface MetadataLanguageTestEntryPoint {
     fun database(): MusicDatabase
+    fun downloadUtil(): com.dd3boh.outertune.playback.DownloadUtil
 }

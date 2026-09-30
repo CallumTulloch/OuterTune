@@ -70,6 +70,18 @@ class AlbumViewModel @Inject constructor(
                     val response = YouTube.album(albumId, requestLocale = requestLocale).getOrThrow()
                     currentCoroutineContext().ensureActive()
                     if (expected != generation || requestLocale != YouTube.locale) return@withTimeout
+                    if (response.hasUnresolvedTrackSources && database.albumById(albumId)?.hasTrackList == true) {
+                        // A cold screen still needs restrictions for the unchanged cached IDs.
+                        // Availability on an unmatched MV says nothing about a cached audio ID.
+                        val cachedIds = database.albumSongs(albumId).first().mapTo(mutableSetOf()) { it.id }
+                        currentCoroutineContext().ensureActive()
+                        if (expected != generation || requestLocale != YouTube.locale) return@withTimeout
+                        unavailableSongIds.value = refreshCachedAlbumAvailability(
+                            cachedIds, unavailableSongIds.value, response.songs,
+                        )
+                        loadFailed.value = true
+                        return@withTimeout
+                    }
                     val page = response.copy(songs = response.songs.map(artistCredits::withCredit))
                     database.awaitTransaction {
                         if (expected != generation || requestLocale != YouTube.locale) return@awaitTransaction

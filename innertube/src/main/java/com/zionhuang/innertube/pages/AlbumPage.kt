@@ -22,6 +22,8 @@ data class AlbumPage(
     val album: AlbumItem,
     val songs: List<SongItem>,
     val otherVersions: List<AlbumItem>,
+    /** The shelf is usable, but canonical source identities could not be established. */
+    val hasUnresolvedTrackSources: Boolean = false,
 ) {
     companion object {
         fun getAlbum(browseId: String, response: BrowseResponse, language: String): AlbumItem = AlbumItem(
@@ -94,7 +96,8 @@ data class AlbumPage(
             response.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents.orEmpty() +
                 (response.contents?.singleColumnBrowseResultsRenderer?.tabs
                     ?: response.contents?.twoColumnBrowseResultsRenderer?.tabs)
-                    ?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents.orEmpty()
+                    ?.firstOrNull()?.tabRenderer?.content?.sectionListRenderer?.contents.orEmpty() +
+                response.continuationContents?.sectionListContinuation?.contents.orEmpty()
 
         /** Null means the server did not return a track shelf, distinct from an empty shelf. */
         fun trackContents(response: BrowseResponse): List<MusicShelfRenderer.Content>? {
@@ -109,6 +112,12 @@ data class AlbumPage(
         fun continuation(response: BrowseResponse): String? =
             trackContents(response)?.getContinuation()
                 ?: sections(response).firstNotNullOfOrNull { it.musicShelfRenderer?.continuations?.getContinuation() }
+                ?: sections(response).firstNotNullOfOrNull { it.musicPlaylistShelfRenderer?.continuations?.getContinuation() }
+                ?: response.contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.continuations?.getContinuation()
+                ?: (response.contents?.singleColumnBrowseResultsRenderer?.tabs
+                    ?: response.contents?.twoColumnBrowseResultsRenderer?.tabs)?.firstOrNull()
+                    ?.tabRenderer?.content?.sectionListRenderer?.continuations?.getContinuation()
+                ?: response.continuationContents?.sectionListContinuation?.continuations?.getContinuation()
                 ?: response.continuationContents?.musicShelfContinuation?.continuations?.getContinuation()
                 ?: response.continuationContents?.musicPlaylistShelfContinuation?.continuations?.getContinuation()
 
@@ -143,6 +152,7 @@ data class AlbumPage(
                     ?.text?.parseTime(),
                 thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getThumbnailUrl() ?: album?.thumbnail ?: return null,
                 endpoint = PageHelper.searchWatchEndpoint(renderer),
+                setVideoId = renderer.playlistItemData.playlistSetVideoId,
                 isPlayable = renderer.musicItemRendererDisplayPolicy != "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT" &&
                     renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer
                         ?.playNavigationEndpoint?.showDialogCommand == null &&

@@ -32,7 +32,20 @@ private data class ReferenceEntry(
     val videoId: String,
     val song: SongItem?,
     val explicitlyUnavailable: Boolean = false,
+    val sourceRenderer: MusicResponsiveListItemRenderer? = null,
 )
+
+/** Reuse playlist-scope and pagination validation without requesting or interpreting a next queue. */
+internal suspend fun loadPlaylistBrowseSourceRows(
+    expectedPlaylistId: String,
+    language: String,
+    fetchBrowse: suspend (String?) -> JsonElement,
+): List<MusicResponsiveListItemRenderer> {
+    require(playlistReferenceToken.matches(expectedPlaylistId))
+    return collectReferencePages(fetchBrowse, MAX_REFERENCE_PAGES) { response, continued ->
+        parseBrowseReferencePage(response, expectedPlaylistId, language, continued)
+    }.flatMap { page -> page.entries.map { requireNotNull(it.sourceRenderer) } }
+}
 private data class ReferencePage(
     val entries: List<ReferenceEntry>,
     val continuation: String?,
@@ -206,7 +219,7 @@ private fun parseBrowseReferencePage(
         }
         ReferenceEntry(entryId, videoId, song.copy(setVideoId = entryId),
             explicitlyUnavailable = renderer.musicItemRendererDisplayPolicy == "MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT" &&
-                endpoints.isEmpty())
+                endpoints.isEmpty(), sourceRenderer = renderer)
     }
     require(entries.isNotEmpty()) { "Empty playlist browse page" }
     return ReferencePage(entries, token)

@@ -265,6 +265,9 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation(libs.ktor.client.okhttp)
+    androidTestImplementation(libs.ktor.client.content.negotiation)
+    androidTestImplementation(libs.newpipe.extractor)
 
     // sdk24 support
     // Support for N is officially unsupported even it the app should still work. Leave this outside of the version catalog.

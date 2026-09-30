@@ -213,11 +213,16 @@ class MetadataManualProtectionTest {
                         "fixture-${candidate.name}", at) }
                 },
             )).also { it.start() }
-            if (local) observeRemoteCollision()
+            if (local) {
+                // Explicitly select the remote identity in this adverse same-ID fixture.
+                // Merely seeing a search card must no longer start its detail acquisition.
+                repository.setPlayingSong(SONG.id)
+                observeRemoteCollision()
+            }
         }
 
-        // A local row never creates a remote refresh interest. This adverse fixture explicitly
-        // observes a remote result with the same ID, so the conflicting online cache is real.
+        // A local row never creates a remote refresh interest. The fixture's explicit remote
+        // selection above makes this same-ID online cache real without changing the local row.
         private fun observeRemoteCollision() {
             observer(listOf(song(providerTitle)), locales.value.copy(hl = "en"), "search")
         }

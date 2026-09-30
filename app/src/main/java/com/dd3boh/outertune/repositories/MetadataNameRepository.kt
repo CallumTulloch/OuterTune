@@ -6,6 +6,7 @@ import com.dd3boh.outertune.constants.*
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.db.entities.MetadataFetchEntity
 import com.dd3boh.outertune.db.entities.MetadataNameEntity
+import com.dd3boh.outertune.db.entities.MetadataOriginalPublicationEntity
 import com.dd3boh.outertune.models.ArtistIdentity
 import com.dd3boh.outertune.models.metadata.*
 import com.dd3boh.outertune.utils.MetadataNames
@@ -17,6 +18,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.MessageDigest
 import java.text.Normalizer
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.*
@@ -24,7 +26,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
@@ -63,7 +64,7 @@ class MetadataNameRepository internal constructor(
         val observeMetadata: ((List<YTItem>, YouTubeLocale, String) -> Unit) -> Unit = { YouTube.metadataObserver = it },
         val publishNames: (Map<OriginalNameTarget, String>, Map<OriginalNameTarget, List<String>>) -> Unit = MetadataNames::publish,
         // A distinct observation boundary from display publication, also used by deterministic scheduling tests.
-        val onOriginalInputsObserved: (List<MetadataNameEntity>) -> Unit = {},
+        val onOriginalInputsObserved: ((List<MetadataNameEntity>) -> Unit)? = null,
         val now: () -> Long = System::currentTimeMillis,
         val contextKey: (YouTubeLocale) -> String = ::youtubeMetadataContextKey,
         val queue: suspend (List<String>, YouTubeLocale) -> Result<List<SongItem>> = { ids, locale ->
@@ -109,6 +110,7 @@ class MetadataNameRepository internal constructor(
     private val nextAttempt = ConcurrentHashMap<MetadataFetchRequest, Long>()
     private val knownArtTracks = ConcurrentHashMap.newKeySet<OriginalNameTarget>()
     private val originalEvaluations = Channel<Unit>(Channel.CONFLATED)
+    private val forceOriginalEvaluation = AtomicBoolean(false)
     private val publicationPreparer = OriginalPublicationPreparer()
     private val referenceRefreshes = Channel<Unit>(Channel.CONFLATED)
     private data class EnglishSongObservation(val song: SongItem, val observedAt: Long)
@@ -121,6 +123,8 @@ class MetadataNameRepository internal constructor(
     @Volatile private var foregroundAlbumId: String? = null
     @Volatile private var playingSongId: String? = null
     @Volatile private var foregroundAlbumTargets: Set<OriginalNameTarget> = emptySet()
+    @Volatile private var savedTargets: Set<OriginalNameTarget> = emptySet()
+    private val savedTargetsReady = CompletableDeferred<Unit>()
     private data class AlbumObservation(val album: AlbumItem, val songs: List<SongItem>?, val observedAt: Long)
     private val albumResponses = ConcurrentHashMap<MetadataFetchRequest, AlbumObservation>()
     private val albumResponseLocks = Array(32) { Mutex() }
@@ -149,11 +153,12 @@ class MetadataNameRepository internal constructor(
         }
         scope.launch {
             initialized.first { it }
+            savedTargetsReady.await()
             for (packet in packets) keepCollectorRunning {
                 // The observer's callback may wait in the packet queue across a setting/account change.
                 if (packet.locale.gl != currentLocale.gl || packet.contextKey != runtime.contextKey(currentLocale) ||
                     packet.authRevision != runtime.authRevision()) {
-                    packet.items.forEach { scheduleItem(it) }
+                    packet.items.forEach { scheduleObservedItem(it) }
                     return@keepCollectorRunning
                 }
                 val names = metadataNameCandidates(packet.items, packet.locale.hl, packet.source)
@@ -166,7 +171,7 @@ class MetadataNameRepository internal constructor(
                     }
                 }
                 if (!saved) {
-                    packet.items.forEach(::scheduleItem)
+                    packet.items.forEach(::scheduleObservedItem)
                     return@keepCollectorRunning
                 }
                 if (packet.source == "album") {
@@ -176,7 +181,9 @@ class MetadataNameRepository internal constructor(
                                 OriginalNameTarget(OriginalNameKind.ALBUM, album.id), packet.locale.copy(hl = "en"),
                                 albumOriginalContextKey(packet.contextKey), original = true, authRevision = packet.authRevision,
                             )
-                            openedAlbumContexts[request] = runtime.now()
+                            if (album.id == foregroundAlbumId || database.isAlbumOriginalContextEligible(album.id)) {
+                                openedAlbumContexts[request] = runtime.now()
+                            }
                             val songs = packet.items.filterIsInstance<SongItem>().filter { it.album?.id == album.id }
                             cacheAlbum(request.copy(locale = packet.locale, original = false, contextKey = packet.contextKey),
                                 AlbumObservation(album, songs, runtime.now()))
@@ -186,7 +193,11 @@ class MetadataNameRepository internal constructor(
                         }
                     }
                 }
-                names.map { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
+                // Keep a saved/playing item's directly observed album and artist eligible even
+                // when the song's own successful detail still has a valid TTL. A previously
+                // failed related header must be able to retry without fetching the song again.
+                metadataNameCandidates(packet.items.filter(::hasFetchInterest), packet.locale.hl, packet.source)
+                    .map { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
                     .distinct().forEach(::schedule)
             }
         }
@@ -212,20 +223,17 @@ class MetadataNameRepository internal constructor(
         scope.launch {
             while (isActive) {
                 keepCollectorRunning {
+                    val displayReader = MetadataDisplayReader(database)
                     if (!initialPublicationReady.value) bootstrapOriginalPublications()
-                    combine(database.metadataDisplayNames(), settings) { rows, options -> rows to options }
-                        .conflate().collect { (rows, options) ->
-                            val grouped = rows.groupBy { OriginalNameTarget(OriginalNameKind.valueOf(it.name.kind), it.name.targetId) }
-                            val selected = grouped.mapNotNull { (target, candidates) ->
-                                selectCommittedMetadataDisplayName(target, candidates.map { it.name }, options.locale.hl,
-                                    options.preferOriginal, candidates.first().englishName)?.let { target to it }
-                            }.toMap()
-                            val aliases = grouped.mapValues { (_, names) -> names.map { it.name.name }.distinct() }
+                    combine(database.metadataDisplayChanges(), settings) { _, options -> options }
+                        .conflate().collect { options ->
+                            val display = displayReader.read(options.locale, options.preferOriginal)
+                                ?: return@collect
                             withContext(Dispatchers.Main) {
                                 if (options.locale == currentLocale) {
-                                    runtime.publishNames(selected, aliases)
+                                    runtime.publishNames(display.names, display.aliases)
                                     initialPublicationReady.value = true
-                                }
+                                } else displayReader.invalidate()
                             }
                         }
                 }
@@ -234,20 +242,38 @@ class MetadataNameRepository internal constructor(
         }
         scope.launch {
             initialized.first { it }
-            database.metadataRefreshTargets().collect { targets -> keepCollectorRunning {
-                targets.forEach { schedule(OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId)) }
-            } }
+            while (isActive) {
+                keepCollectorRunning {
+                    database.metadataRefreshTargets().map { targets -> targets.mapTo(mutableSetOf()) {
+                        OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId)
+                    } }.collect { targets -> keepCollectorRunning {
+                        // Saving an already-liked song can enable full album recovery without changing
+                        // this ID set. Recheck eligibility; per-request TTLs suppress duplicate fetches.
+                        savedTargets = targets
+                        savedTargetsReady.complete(Unit)
+                        targets.forEach(::schedule)
+                    } }
+                }
+                delay(500)
+            }
         }
         scope.launch {
             initialized.first { it }
-            database.allMetadataNames().distinctUntilChangedBy(::originalPublicationInputKey)
-                .collect { names ->
+            database.metadataNameChanges().collect {
                     originalEvaluations.trySend(Unit)
-                    runtime.onOriginalInputsObserved(names)
+                    // Optional diagnostics for scheduling tests. Production never loads a second
+                    // whole library in this collector while the evaluator owns its snapshot.
+                    runtime.onOriginalInputsObserved?.invoke(database.metadataNameSnapshot())
                 }
         }
         scope.launch {
-            for (ignored in originalEvaluations) keepCollectorRunning { evaluateOriginals(database.metadataNameSnapshot()) }
+            var lastInputs: List<OriginalPublicationInputKeyRow>? = null
+            for (ignored in originalEvaluations) keepCollectorRunning {
+                val forced = forceOriginalEvaluation.getAndSet(false)
+                val names = database.metadataOriginalEvaluationSnapshot()
+                val input = originalPublicationInputKey(names)
+                if (forced || input != lastInputs) lastInputs = evaluateOriginals(names)
+            }
         }
         scope.launch {
             initialized.first { it }
@@ -257,7 +283,7 @@ class MetadataNameRepository internal constructor(
             while (isActive) {
                 delay(5 * 60_000L)
                 keepCollectorRunning { refreshTargets() }
-                keepCollectorRunning { originalEvaluations.trySend(Unit) }
+                keepCollectorRunning { requestOriginalEvaluationRetry() }
             }
         }
     }
@@ -271,22 +297,22 @@ class MetadataNameRepository internal constructor(
     /** Only pre-publication caches need conversion. Normal cold starts read display strings alone. */
     private suspend fun bootstrapOriginalPublications() {
         if (database.metadataOriginalPublicationCount() != 0) return
-        val names = database.metadataNameSnapshot()
-        val prepared = prepareOriginalPublications(names, emptyList(), runtime.now())
-        if (prepared.isEmpty()) return
-        database.awaitTransaction {
-            if (metadataOriginalPublicationCount() == 0 && metadataNameSnapshot().toSet() == names.toSet()) {
-                recordMetadataOriginalPublications(prepared)
-            }
-        }
+        publishCompletedOriginals(database.metadataOriginalEvaluationSnapshot(), emptyList())
     }
 
-    private suspend fun evaluateOriginals(names: List<MetadataNameEntity>) {
+    private fun requestOriginalEvaluationRetry() {
+        forceOriginalEvaluation.set(true)
+        originalEvaluations.trySend(Unit)
+    }
+
+    private suspend fun evaluateOriginals(names: List<MetadataNameEntity>): List<OriginalPublicationInputKeyRow> {
         var snapshot = names
         // Missing classifier output remains pending. Try other independent groups without spinning
         // on the same failed input; a later observation or periodic refresh may retry it.
         val attempted = mutableSetOf<Pair<ArtTrackOriginalName, String?>>()
+        var publishedInputKey: List<OriginalPublicationInputKeyRow>? = null
         while (currentCoroutineContext().isActive) {
+            val snapshotInputKey by lazy { originalPublicationInputKey(snapshot) }
             val rows = latestOriginalRows(snapshot)
             val inputs = originalAssessmentInputs(rows)
             val stale = rows.filterNot { hasCurrentOriginalAssessmentInputs(it, inputs) }.filter {
@@ -307,11 +333,14 @@ class MetadataNameRepository internal constructor(
                 val candidate = originalCandidate(it)!!
                 candidate.albumId?.let { id -> "album:$id" } ?: "source:${candidate.sourceVideoId}"
             }.values.sortedWith(compareBy<List<MetadataNameEntity>>(::priority).thenBy { it.first().targetId })
+            // The preceding iteration published its assessments atomically. A reread containing
+            // only our own assessment writes needs no second pass over every stored proof.
+            // A changed dependency still publishes, and bounded/failed commits enqueue a retry.
+            if (groups.isEmpty() && publishedInputKey == snapshotInputKey) return snapshotInputKey
             // Bound background aggregation so cache migrations do not prepare the entire display
             // projection for every orphan song. A foreground group always publishes on its own.
             val limit = if (groups.firstOrNull()?.let(::priority) == 2) 8 else 1
             val updates = mutableListOf<MetadataNameEntity>()
-            var capturedInputKey: List<OriginalPublicationInputKeyRow>? = null
             for (selected in groups.take(limit)) {
                 // Navigation may change while the preceding model call is running. Re-read its
                 // new inputs before starting another background group, rather than draining eight.
@@ -321,8 +350,7 @@ class MetadataNameRepository internal constructor(
                 // A notification interrupts this batch only for a changed input; an initial or
                 // redundant signal must not turn a cache migration back into one-row commits.
                 if (originalEvaluations.tryReceive().isSuccess) {
-                    val expected = capturedInputKey ?: originalPublicationInputKey(snapshot).also { capturedInputKey = it }
-                    if (originalPublicationInputKey(database.metadataNameSnapshot()) != expected) break
+                    if (originalPublicationInputKey(database.metadataOriginalEvaluationSnapshot()) != snapshotInputKey) break
                 }
                 val selectedCandidates = selected.mapNotNull(::originalCandidate)
                 val fresh = try {
@@ -343,25 +371,35 @@ class MetadataNameRepository internal constructor(
                 }
             }
             publishCompletedOriginals(snapshot, updates)
-            if (groups.isEmpty()) return
-            snapshot = database.metadataNameSnapshot()
+            publishedInputKey = snapshotInputKey
+            if (groups.isEmpty()) return snapshotInputKey
+            snapshot = database.metadataOriginalEvaluationSnapshot()
         }
+        currentCoroutineContext().ensureActive()
+        return originalPublicationInputKey(snapshot)
     }
 
     private suspend fun publishCompletedOriginals(names: List<MetadataNameEntity>, updates: List<MetadataNameEntity>) {
         fun rowKey(row: MetadataNameEntity) = listOf(row.kind, row.targetId, row.language, row.name, row.source)
         val updatesByKey = updates.associateBy { listOf(it.kind, it.targetId, it.language, it.name, it.source) }
         val assessedNames = names.map { updatesByKey[rowKey(it)] ?: it }
-        val previous = database.metadataOriginalPublicationSnapshot()
         // Assemble proof off the Room transaction queue, then validate just its dependencies.
-        val prepared = publicationPreparer.prepare(assessedNames, previous, runtime.now())
-        val previousByTarget = previous.associateBy { it.kind to it.targetId }
-        val changedPublications = prepared.filter { previousByTarget[it.kind to it.targetId] != it }
+        val batch = database.metadataOriginalPublicationCursor().use { cursor ->
+            publicationPreparer.prepareChanges(assessedNames, sequence {
+                while (cursor.moveToNext()) yield(MetadataOriginalPublicationEntity(
+                    kind = cursor.getString(0), targetId = cursor.getString(1),
+                    englishName = if (cursor.isNull(2)) null else cursor.getString(2),
+                    evidenceJson = cursor.getString(3), evaluatedAt = cursor.getLong(4),
+                ))
+            }, runtime.now())
+        }
+        val previousByTarget = batch.changes.associate { (previous, publication) -> (publication.kind to publication.targetId) to previous }
+        val changedPublications = batch.changes.map { it.publication }
         if (updates.isEmpty() && changedPublications.isEmpty()) return
         val expectedInputs = OriginalPublicationInputs(assessedNames)
         var retryPublication = false
         database.awaitTransaction {
-            val currentNames = metadataNameSnapshot()
+            val currentNames = metadataOriginalEvaluationSnapshot()
             val currentRows = latestOriginalRows(currentNames).associateBy(::originalCandidate)
             val currentAssessmentInputs = originalAssessmentInputs(currentRows.values.toList())
             val stillValid = updates.mapNotNull { update ->
@@ -382,7 +420,7 @@ class MetadataNameRepository internal constructor(
             if (publishable.isNotEmpty()) recordMetadataOriginalPublications(publishable)
             retryPublication = publishable.size != changedPublications.size
         }
-        if (retryPublication) originalEvaluations.trySend(Unit)
+        if (retryPublication || batch.hasMore) requestOriginalEvaluationRetry()
         if (updates.isNotEmpty()) referenceRefreshes.trySend(Unit)
     }
 
@@ -422,7 +460,19 @@ class MetadataNameRepository internal constructor(
             val request = MetadataFetchRequest(OriginalNameTarget(OriginalNameKind.ALBUM, albumId), currentLocale.copy(hl = "en"),
                 albumOriginalContextKey(runtime.contextKey(currentLocale)), original = true, authRevision = runtime.authRevision())
             openedAlbumContexts[request] = runtime.now()
-            schedule(request.target)
+            // A page response may arrive before Compose reports that its album is foreground.
+            // Restore its observed tracks even if the album's successful fetch TTL would skip
+            // another full response; those tracks can have independent expired retry states.
+            val cached = listOf(currentLocale, request.locale).distinct().firstNotNullOfOrNull { locale ->
+                albumResponses[request.copy(locale = locale, original = false, contextKey = runtime.contextKey(locale))]
+                    ?.takeIf { it.songs != null && it.observedAt + 60_000L > runtime.now() }
+            }
+            cached?.let { observation ->
+                updateForegroundAlbumTargets(albumId,
+                    metadataNameCandidates(listOf(observation.album) + observation.songs.orEmpty(), currentLocale.hl, "album")
+                        .mapTo(mutableSetOf()) { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) })
+            }
+            if (foregroundAlbumId == albumId) foregroundAlbumTargets.forEach(::schedule)
         }
     }
 
@@ -455,45 +505,69 @@ class MetadataNameRepository internal constructor(
 
     /** Recover existing album rows too, without requiring the provider to repeat an old ID list. */
     private suspend fun recoverPersistedSongReferences() {
-        val snapshot = database.metadataNameSnapshot()
-        val originals = latestOriginalRows(snapshot).mapNotNull(::originalCandidate).filter {
-            it.target.kind == OriginalNameKind.SONG && it.albumId != null
-        }
         val relevantIds = (database.metadataRefreshTargets().first().filter { it.kind == "SONG" }.map { it.targetId } +
             foregroundAlbumTargets.filter { it.kind == OriginalNameKind.SONG }.map { it.id } + listOfNotNull(playingSongId)).toSet()
-        val directIds = originals.mapTo(mutableSetOf()) { it.target.id }
-        val sourcesByAlbumAndName = originals.groupBy { it.albumId to comparableMetadataName(it.name) }
         val locale = currentLocale.copy(hl = "en")
         val contextKey = runtime.contextKey(locale)
         val revision = runtime.authRevision()
-        val groups = snapshot.filter { it.kind == "SONG" && it.language == "en" && it.targetId in relevantIds }
-            .groupBy { it.targetId }
-        for ((id, names) in groups) {
-            if (id in directIds) continue
-            val raw = database.songForArtistCredit(id)?.takeUnless { it.isLocal } ?: continue
-            val albumId = raw.albumId ?: continue
-            val sources = names.flatMap { sourcesByAlbumAndName[albumId to comparableMetadataName(it.name)].orEmpty() }
-                .filter { it.sourceVideoId != id }
-                .distinctBy { it.sourceVideoId }.take(3)
-            if (sources.isEmpty()) continue
-            val parent = MetadataFetchRequest(OriginalNameTarget(OriginalNameKind.ALBUM, albumId), locale,
+        for ((target, sources) in persistedReferenceCandidates(relevantIds)) {
+            val parent = MetadataFetchRequest(OriginalNameTarget(OriginalNameKind.ALBUM, target.album!!.id), locale,
                 albumOriginalContextKey(contextKey), original = true, authRevision = revision)
             if (!isCurrent(parent)) return
             for (source in sources) {
-                val target = SongItem(id, source.name, emptyList(), Album(raw.albumName.orEmpty(), albumId),
-                    thumbnail = raw.thumbnailUrl.orEmpty())
-                if (captureSongReference(parent, source.sourceVideoId, target)) break
+                if (captureSongReference(parent, source.sourceVideoId, target.copy(title = source.name))) break
             }
         }
     }
 
-    private fun scheduleItem(item: YTItem) {
+    // Build a compact work list before suspending; never retain the library's evidence strings
+    // through a sequence of provider requests. captureSongReference revalidates each source.
+    private fun persistedReferenceCandidates(relevantIds: Set<String>): List<Pair<SongItem, List<ArtTrackOriginalName>>> {
+        val originals = latestOriginalRows(database.metadataOriginalNameSnapshot()).mapNotNull(::originalCandidate).filter {
+            it.target.kind == OriginalNameKind.SONG && it.albumId != null
+        }
+        val directIds = originals.mapTo(mutableSetOf()) { it.target.id }
+        val sourcesByAlbumAndName = originals.groupBy { it.albumId to comparableMetadataName(it.name) }
+        val result = mutableListOf<Pair<SongItem, List<ArtTrackOriginalName>>>()
+        for (id in relevantIds) {
+            if (id in directIds) continue
+            val raw = database.songForArtistCredit(id)?.takeUnless { it.isLocal } ?: continue
+            val albumId = raw.albumId ?: continue
+            val names = database.metadataNames("SONG", id).filter { it.language == "en" }
+            val sources = names.flatMap { sourcesByAlbumAndName[albumId to comparableMetadataName(it.name)].orEmpty() }
+                .filter { it.sourceVideoId != id }
+                .distinctBy { it.sourceVideoId }.take(3)
+            if (sources.isEmpty()) continue
+            result += SongItem(id, raw.title, emptyList(), Album(raw.albumName.orEmpty(), albumId),
+                thumbnail = raw.thumbnailUrl.orEmpty()) to sources
+        }
+        return result
+    }
+
+    private fun scheduleObservedItem(item: YTItem) {
         when (item) {
-            is SongItem -> schedule(OriginalNameTarget(OriginalNameKind.SONG, item.id))
-            is AlbumItem -> schedule(OriginalNameTarget(OriginalNameKind.ALBUM, item.id))
-            is ArtistItem -> schedule(OriginalNameTarget(OriginalNameKind.ARTIST, item.id))
+            is SongItem -> scheduleObserved(OriginalNameTarget(OriginalNameKind.SONG, item.id))
+            is AlbumItem -> scheduleObserved(OriginalNameTarget(OriginalNameKind.ALBUM, item.id))
+            is ArtistItem -> scheduleObserved(OriginalNameTarget(OriginalNameKind.ARTIST, item.id))
             else -> Unit
         }
+    }
+
+    private fun hasFetchInterest(item: YTItem): Boolean {
+        val target = when (item) {
+            is SongItem -> OriginalNameTarget(OriginalNameKind.SONG, item.id)
+            is AlbumItem -> OriginalNameTarget(OriginalNameKind.ALBUM, item.id)
+            is ArtistItem -> OriginalNameTarget(OriginalNameKind.ARTIST, item.id)
+            else -> return false
+        }
+        return target in savedTargets || isForeground(target)
+    }
+
+    // Observing a search/recommendation response keeps its aliases, but is not a request to
+    // fetch every embedded identity. Explicit library, playback and album interests start work;
+    // their existing detail workers may still obtain the related authoritative headers.
+    private fun scheduleObserved(target: OriginalNameTarget) {
+        if (target in savedTargets || isForeground(target)) schedule(target)
     }
 
     private fun schedule(target: OriginalNameTarget) {
@@ -586,11 +660,7 @@ class MetadataNameRepository internal constructor(
             }
             currentCoroutineContext().ensureActive()
             val byTarget = metadataItemsByTarget(items)
-            dueRequests.forEach { request ->
-                try { saveMusicResult(request, byTarget[request.target]) }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { recordFailure(request) }
-            }
+            saveMusicResults(dueRequests.map { it to byTarget[it.target] })
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -611,39 +681,65 @@ class MetadataNameRepository internal constructor(
         }
     }
 
-    private suspend fun saveMusicResult(request: MetadataFetchRequest, item: YTItem?) {
-        if (requeueIfObsolete(request)) return
-        val now = runtime.now()
+    private data class MusicResult(
+        val request: MetadataFetchRequest, val item: YTItem?, val names: List<MetadataNameEntity>, val observedAt: Long,
+    ) {
         val status = if (item == null) MetadataFetchEntity.EMPTY else MetadataFetchEntity.SUCCESS
-        val names = metadataNameCandidates(listOfNotNull(item), request.locale.hl, "detail", now)
-        val song = item as? SongItem
-        val isArtTrack = song?.endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType == "MUSIC_VIDEO_TYPE_ATV"
-        val mainKey = originalMetadataContextKey(request.locale)
-        var saved = false
-        database.awaitTransaction {
-            if (!isCurrent(request)) return@awaitTransaction
-            recordMetadataNames(names, request.state(status, now))
-            if (item is ArtistItem) saveArtistProfile(item)
-            if (isArtTrack && request.locale.hl == "en" &&
-                metadataFetch(request.target.kind.name, request.target.id, "und", mainKey) == null) {
-                recordMetadataFetch(MetadataFetchEntity(request.target.kind.name, request.target.id,
-                    "und", MetadataFetchEntity.PENDING, now, mainKey))
-            }
-            saved = true
+        val artTrack: SongItem? = (item as? SongItem)?.takeIf {
+            it.endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType == "MUSIC_VIDEO_TYPE_ATV"
         }
-        if (!saved) { schedule(request.target); return }
+    }
+
+    private suspend fun saveMusicResults(items: List<Pair<MetadataFetchRequest, YTItem?>>) {
+        val results = items.mapNotNull { (request, item) ->
+            if (requeueIfObsolete(request)) null else {
+                val now = runtime.now()
+                MusicResult(request, item, metadataNameCandidates(listOfNotNull(item), request.locale.hl, "detail", now), now)
+            }
+        }
+        if (results.isEmpty()) return
+        val saved = mutableListOf<MusicResult>()
+        // A queue response already contains up to 50 songs. Commit it once, so readers cannot
+        // repeatedly materialize intermediate states after each individual song in that response.
+        database.awaitTransaction {
+            for (result in results) {
+                val (request, item, names, now) = result
+                if (!isCurrent(request)) continue
+                recordMetadataNames(names, request.state(result.status, now))
+                if (item is ArtistItem) saveArtistProfile(item)
+                val mainKey = originalMetadataContextKey(request.locale)
+                if (result.artTrack != null && request.locale.hl == "en" &&
+                    metadataFetch(request.target.kind.name, request.target.id, "und", mainKey) == null) {
+                    recordMetadataFetch(MetadataFetchEntity(request.target.kind.name, request.target.id,
+                        "und", MetadataFetchEntity.PENDING, now, mainKey))
+                }
+                saved += result
+            }
+        }
+        (results - saved.toSet()).forEach { schedule(it.request.target) }
+        for (result in saved) {
+            try { completeMusicResult(result) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { recordFailure(result.request) }
+        }
+    }
+
+    private suspend fun completeMusicResult(result: MusicResult) {
+        val (request, item, names, now) = result
+        // Revalidate after the transaction too; account/locale changes must not publish an
+        // old header or enqueue follow-up work using the previous request context.
+        if (requeueIfObsolete(request)) return
         if (item is AlbumItem && request.locale.hl == currentLocale.hl) {
             runtime.acceptAlbumHeader(item, request.locale, request.contextKey, request.authRevision)
         }
-        nextAttempt[request] = now + metadataRetryDelay(request, status)
-        // Embedded names also need both locales and their own authoritative header. A detail
-        // fetch never expands artist sections or album tracks, so this remains bounded by IDs
-        // actually returned; TTL and scheduled keys share repeated requests.
+        nextAttempt[request] = now + metadataRetryDelay(request, result.status)
+        // Preserve authoritative related headers for an explicitly requested song. Internal
+        // fetches do not notify the observer or expand arbitrary recommendation pages.
         names.map { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
             .distinct().forEach(::schedule)
-        if (isArtTrack && request.locale.hl == "en") {
+        result.artTrack?.takeIf { request.locale.hl == "en" }?.let { song ->
             if (englishSongs.size > 1024) englishSongs.clear()
-            englishSongs["${request.authRevision}:${request.contextKey}:${request.target.id}"] = EnglishSongObservation(song!!, now)
+            englishSongs["${request.authRevision}:${request.contextKey}:${request.target.id}"] = EnglishSongObservation(song, now)
             knownArtTracks.add(request.target)
             scheduleIdentityEnrichment(request, song, now)
             scheduleOriginal(request.target)
@@ -795,8 +891,8 @@ class MetadataNameRepository internal constructor(
         if (!complete && isCurrent(request)) {
             recoverAlbumSongReferences(request, songs)
             if (requeueIfObsolete(request) || yieldAlbumToForeground(request)) return
-            val snapshot = database.metadataNameSnapshot()
             complete = songs.isNotEmpty() && songs.all { song ->
+                val snapshot = songReferenceSnapshot(song.id)
                 database.metadataFetch("SONG", song.id, "und", originalMetadataContextKey(request.locale))?.status ==
                     MetadataFetchEntity.SUCCESS || (playlistComplete == true && currentPlaylistSongReference(snapshot, song) != null) ||
                     currentSongReference(snapshot, song)?.let { reference ->
@@ -917,7 +1013,8 @@ class MetadataNameRepository internal constructor(
             } ?: return null
             database.awaitTransaction {
                 if (!isCurrent(request)) { complete = false; return@awaitTransaction }
-                val names = metadataNameSnapshot()
+                val names = (snapshot.references.flatMap { metadataNamesForSource(ORIGINAL_NAME_SOURCE_PREFIX + it.sourceVideoId) } +
+                    snapshot.references.flatMap { metadataNames("SONG", it.targetVideoId) }).distinct()
                 val originals = latestOriginalRows(names).mapNotNull(::originalCandidate)
                 val references = snapshot.references.mapNotNull { edge ->
                     val source = originals.singleOrNull { it.target.kind == OriginalNameKind.SONG &&
@@ -938,8 +1035,7 @@ class MetadataNameRepository internal constructor(
                     playlistSongReference(edge, source, target, playlistId, expectedAlbumId = album.id, sourceMusic = sourceMusic)
                         .also { if (it == null) complete = false }
                 }
-                val previous = names.filter { row -> row.source.startsWith(PLAYLIST_SONG_REFERENCE_SOURCE_PREFIX) &&
-                    row.source.endsWith(":$playlistId") }
+                val previous = metadataPlaylistReferenceNames(playlistId)
                 val now = maxOf(runtime.now(), (previous.maxOfOrNull { it.observedAt } ?: 0L) + 1L)
                 val matchedByEntry = snapshot.references.associateBy { it.playlistSetVideoId }
                 val unavailableByEntry = snapshot.unavailableSourceEntries.associateBy { it.playlistSetVideoId }
@@ -999,17 +1095,14 @@ class MetadataNameRepository internal constructor(
     private suspend fun recoverAlbumSongReferences(request: MetadataFetchRequest, songs: List<SongItem>) {
         for (song in songs.distinctBy { it.id }) {
             if (requeueIfObsolete(request) || yieldAlbumToForeground(request)) return
-            val snapshot = database.metadataNameSnapshot()
+            val snapshot = songReferenceSnapshot(song.id)
             if (currentPlaylistSongReference(snapshot, song) != null) continue
             val existingReference = currentSongReference(snapshot, song)
             if (existingReference != null && captureSongReference(request, existingReference.sourceVideoId, song)) continue
             if (latestOriginalRows(snapshot).any { it.kind == "SONG" && it.targetId == song.id }) continue
 
             // Prefer already verified sources in this exact album. No title-based ID replacement.
-            val known = latestOriginalRows(snapshot).mapNotNull(::originalCandidate).filter {
-                it.target.kind == OriginalNameKind.SONG && it.albumId == request.target.id &&
-                    it.sourceVideoId != song.id && it.name == song.title
-            }.distinctBy { it.sourceVideoId }.take(3)
+            val known = knownAlbumSources(request.target.id, song)
             var recovered = false
             for (source in known) {
                 if (requeueIfObsolete(request) || yieldAlbumToForeground(request)) return
@@ -1040,6 +1133,24 @@ class MetadataNameRepository internal constructor(
             }
         }
     }
+
+    /** Include complete source observations, including withdrawals of related album/artist proof. */
+    private suspend fun songReferenceSnapshot(id: String): List<MetadataNameEntity> {
+        var result = emptyList<MetadataNameEntity>()
+        database.awaitTransaction {
+            val targetRows = metadataNames("SONG", id)
+            val sourceIds = (listOf(id) + targetRows.mapNotNull { ProviderSongReferenceCodec.decode(it)?.sourceVideoId } +
+                targetRows.mapNotNull { PlaylistSongReferenceCodec.decode(it)?.sourceVideoId }).distinct()
+            result = (targetRows + sourceIds.flatMap { metadataNamesForSource(ORIGINAL_NAME_SOURCE_PREFIX + it) }).distinct()
+        }
+        return result
+    }
+
+    private fun knownAlbumSources(albumId: String, song: SongItem): List<ArtTrackOriginalName> =
+        latestOriginalRows(database.metadataOriginalNameSnapshot()).mapNotNull(::originalCandidate).filter {
+            it.target.kind == OriginalNameKind.SONG && it.albumId == albumId &&
+                it.sourceVideoId != song.id && it.name == song.title
+        }.distinctBy { it.sourceVideoId }.take(3)
 
     private fun currentSongReference(rows: List<MetadataNameEntity>, target: SongItem): ProviderSongReference? {
         val originals = latestOriginalRows(rows).mapNotNull(::originalCandidate)

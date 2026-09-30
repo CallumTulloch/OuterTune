@@ -35,21 +35,24 @@ internal class OriginalPublicationPreparer {
     private data class PublicationState(val name: String?, val evaluatedAt: Long, val proof: String)
     private val proofDigest = MessageDigest.getInstance("SHA-256")
     private val proofBuffer = ByteArray(8 * 1024)
+    private val proofCharacters = CharArray(proofBuffer.size / 2)
 
     private fun state(row: MetadataOriginalPublicationEntity): PublicationState {
         // Hash exact UTF-16 code units in bounded chunks. Converting every proof to a second
         // full byte array costs tens of MiB per library observation even when nothing changed.
         proofDigest.reset()
-        var used = 0
-        for (character in row.evidenceJson) {
-            proofBuffer[used++] = (character.code ushr 8).toByte()
-            proofBuffer[used++] = character.code.toByte()
-            if (used == proofBuffer.size) {
-                proofDigest.update(proofBuffer)
-                used = 0
+        var offset = 0
+        while (offset < row.evidenceJson.length) {
+            val count = minOf(proofCharacters.size, row.evidenceJson.length - offset)
+            row.evidenceJson.toCharArray(proofCharacters, 0, offset, offset + count)
+            for (index in 0 until count) {
+                val code = proofCharacters[index].code
+                proofBuffer[index * 2] = (code ushr 8).toByte()
+                proofBuffer[index * 2 + 1] = code.toByte()
             }
+            proofDigest.update(proofBuffer, 0, count * 2)
+            offset += count
         }
-        proofDigest.update(proofBuffer, 0, used)
         val bytes = proofDigest.digest()
         val digits = "0123456789abcdef"
         val proof = buildString(bytes.size * 2) {
@@ -69,21 +72,32 @@ internal class OriginalPublicationPreparer {
         val result: PublicationState?,
     )
     private var cached = emptyMap<OriginalNameTarget, Cached>()
-    private var lastRows: List<MetadataNameEntity>? = null
-    private var lastCommitted = emptyMap<OriginalNameTarget, PublicationState>()
-    private var lastResultTargets = emptyList<OriginalNameTarget>()
+
+    internal data class Change(val previous: MetadataOriginalPublicationEntity?, val publication: MetadataOriginalPublicationEntity)
+    internal data class Batch(val changes: List<Change>, val hasMore: Boolean)
+
+    /** Only changed proofs escape this call; an unchanged database row is collectible immediately.
+     * Bound migrations too, so a large first publication cannot assemble every proof at once.
+     */
+    fun prepareChanges(rows: List<MetadataNameEntity>, previous: Sequence<MetadataOriginalPublicationEntity>,
+        evaluatedAt: Long, maxChanges: Int = 64): Batch {
+        require(maxChanges > 0)
+        return prepareInternal(rows, previous, evaluatedAt, maxChanges, null)
+    }
 
     fun prepare(
         rows: List<MetadataNameEntity>,
         previous: List<MetadataOriginalPublicationEntity>,
         evaluatedAt: Long,
     ): List<MetadataOriginalPublicationEntity> {
+        val result = mutableListOf<MetadataOriginalPublicationEntity>()
+        prepareInternal(rows, previous.asSequence(), evaluatedAt, Int.MAX_VALUE, result)
+        return result.sortedWith(compareBy({ it.kind }, { it.targetId }))
+    }
+
+    private fun prepareInternal(rows: List<MetadataNameEntity>, previous: Sequence<MetadataOriginalPublicationEntity>,
+        evaluatedAt: Long, maxChanges: Int, result: MutableList<MetadataOriginalPublicationEntity>?): Batch {
         require(evaluatedAt > 0)
-        val previousByTarget = previous.associateBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
-        val previousStates = previousByTarget.mapValues { state(it.value) }
-        if (lastRows == rows && previousStates == lastCommitted) {
-            return lastResultTargets.map { previousByTarget.getValue(it) }
-        }
         val inputs = OriginalPublicationInputs(rows)
         val assessments by lazy { originalAssessmentsByTarget(rows, inputs) }
         // A source snapshot can support its song, album, artists and provider references. Decode
@@ -91,21 +105,24 @@ internal class OriginalPublicationPreparer {
         val originalsBySource = inputs.bySource
         val grouped = rows.groupBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
         val next = mutableMapOf<OriginalNameTarget, Cached>()
-        val result = (grouped.keys + previousByTarget.keys).sortedWith(compareBy({ it.kind.name }, { it.id })).mapNotNull { target ->
+        val changes = mutableListOf<Change>()
+        val visited = mutableSetOf<OriginalNameTarget>()
+        fun prepareTarget(target: OriginalNameTarget, prior: MetadataOriginalPublicationEntity?) {
+            visited += target
             val input = inputs.forTarget(target)
             val candidates = grouped[target].orEmpty()
-            val prior = previousByTarget[target]
-            val priorState = previousStates[target]
+            val priorState = prior?.let(::state)
             val old = cached[target]
             if (old != null && old.input == input && old.rows == candidates &&
                 priorState == (old.result ?: old.previous)) {
                 // Rebind the dependency rows too, so old Room snapshots can be collected.
                 next[target] = Cached(input, candidates, priorState, old.result)
-                return@mapNotNull if (old.result == null) null else prior
+                if (old.result != null && prior != null) result?.add(prior)
+                return
             }
             if (!inputs.ready(target)) {
                 next[target] = Cached(input, candidates, priorState, null)
-                return@mapNotNull null
+                return
             }
             val evidence = assessments[target].orEmpty()
             // An empty requested language cannot match a stored alias. The normal selector therefore
@@ -117,13 +134,20 @@ internal class OriginalPublicationPreparer {
             val publication = if (prior != null && prior.englishName == englishName && prior.evidenceJson == evidenceJson) prior
             else MetadataOriginalPublicationEntity(target.kind.name, target.id, englishName, evidenceJson, evaluatedAt)
             next[target] = Cached(input, candidates, priorState, state(publication))
-            publication
+            result?.add(publication)
+            if (publication != prior) changes += Change(prior, publication)
+        }
+        for (prior in previous) {
+            if (changes.size == maxChanges) { cached = next; return Batch(changes, true) }
+            prepareTarget(OriginalNameTarget(OriginalNameKind.valueOf(prior.kind), prior.targetId), prior)
+        }
+        for (target in grouped.keys.sortedWith(compareBy({ it.kind.name }, { it.id }))) {
+            if (target in visited) continue
+            if (changes.size == maxChanges) { cached = next; return Batch(changes, true) }
+            prepareTarget(target, null)
         }
         cached = next
-        lastRows = rows
-        lastResultTargets = result.map { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
-        lastCommitted = previousStates + lastResultTargets.associateWith { next.getValue(it).result!! }
-        return result
+        return Batch(changes, false)
     }
 }
 

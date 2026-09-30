@@ -40,6 +40,32 @@ import org.junit.Test
 
 /** Cold Room startup must publish saved names before network or model work can delay the UI. */
 class MetadataStartupTest {
+    @Test(timeout = 45_000)
+    fun boundedBootstrapFinishesAndNonemptyTableInvalidationsStillPublishNewTargets(): Unit = runBlocking {
+        withFixture { f ->
+            // More than two production batches; no assessment or network reply is needed.
+            val names = (0 until 150).map { index ->
+                MetadataNameEntity("SONG", "bootstrap-$index", "en", "Observed title $index", "detail", observedAt = NOW)
+            }
+            f.database.recordMetadataNames(names)
+            f.start()
+            withTimeout(WAIT_MS) {
+                f.database.allMetadataOriginalPublications().first { it.size == names.size }
+            }
+            val expected = prepareOriginalPublications(names, emptyList(), NOW)
+            assertEquals(expected.map { it.targetId to it.evidenceJson }.toSet(),
+                f.database.metadataOriginalPublicationSnapshot().map { it.targetId to it.evidenceJson }.toSet())
+
+            // SELECT EXISTS remains true across this commit; the Room invalidation must still emit.
+            val added = names.first().copy(targetId = "after-bootstrap", name = "Another title")
+            f.database.recordMetadataNames(listOf(added))
+            withTimeout(WAIT_MS) {
+                f.database.allMetadataOriginalPublications().first { rows -> rows.any { it.targetId == added.targetId } }
+            }
+            assertEquals(names.size + 1, f.database.metadataOriginalPublicationCount())
+        }
+    }
+
     @Test(timeout = 90_000)
     fun largeSavedCachePublishesBeforeAnyNetworkWorkWithoutLoadingProofPayloads(): Unit = runBlocking {
         withFixture { f ->

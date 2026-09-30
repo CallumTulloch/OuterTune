@@ -6,8 +6,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.dd3boh.outertune.constants.PreferEnglishOriginalKey
 import com.dd3boh.outertune.db.InternalDatabase
 import com.dd3boh.outertune.db.MusicDatabase
+import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.models.metadata.*
 import com.zionhuang.innertube.models.*
+import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
@@ -23,6 +25,7 @@ class MetadataPartialIdentityTest {
     fun detailBeforeArtistlessAlbumAddsContextWithoutLosingPreviouslyVerifiedArtistIds() = runBlocking {
         val f = Fixture()
         try {
+            f.saveDetailInterest()
             f.start()
             f.observeDetails()
             f.await { f.idle() && f.originals().count { it.target.kind == OriginalNameKind.SONG } == 3 }
@@ -239,6 +242,14 @@ class MetadataPartialIdentityTest {
                 assessOriginals = resolver::assess,
             )).also { it.start() }
         }
+        fun saveDetailInterest() {
+            // Request these three tracks explicitly without creating an album membership/context.
+            english.forEach { song ->
+                database.insert(SongEntity(song.id, "日本語 ${song.id}", localPath = null,
+                    inLibrary = LocalDateTime.of(2026, 9, 30, 12, 0)))
+            }
+        }
+
         fun observeDetails() = observer(english.map { it.copy(title = "日本語 ${it.id}") }, locale, "queue")
         fun openAlbum() {
             repository.setForegroundAlbum(ALBUM, true)

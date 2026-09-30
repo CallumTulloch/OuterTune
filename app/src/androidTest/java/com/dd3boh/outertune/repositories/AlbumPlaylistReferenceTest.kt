@@ -369,8 +369,7 @@ class AlbumPlaylistReferenceTest {
             val oldRow = f.database.metadataNameSnapshot().single { PlaylistSongReferenceCodec.decode(it) == oldReference }
             // Simulate a missing source record followed by a failed network recovery. This must
             // neither invent a new original nor turn unchanged playlist identity into withdrawal.
-            f.database.openHelper.writableDatabase.execSQL("DELETE FROM metadata_name WHERE source = ?",
-                arrayOf(ORIGINAL_NAME_SOURCE_PREFIX + SOURCE_IDS.first()))
+            f.database.deleteMetadataNamesForSource(ORIGINAL_NAME_SOURCE_PREFIX + SOURCE_IDS.first())
             f.failedSources = setOf(SOURCE_IDS.first())
             f.clock.addAndGet(7 * 24 * 60 * 60_000L + 1)
             f.repository.refreshTargets()

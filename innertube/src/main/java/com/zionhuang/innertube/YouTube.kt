@@ -16,6 +16,7 @@ import com.zionhuang.innertube.models.BrowseEndpoint
 import com.zionhuang.innertube.models.GridRenderer
 import com.zionhuang.innertube.models.MainSongReference
 import com.zionhuang.innertube.models.MusicCarouselShelfRenderer
+import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.MusicShelfRenderer
 import com.zionhuang.innertube.models.PlaylistItem
 import com.zionhuang.innertube.models.PlaylistSongReferences
@@ -312,15 +313,27 @@ object YouTube {
     suspend fun album(browseId: String, withSongs: Boolean = true, requestLocale: YouTubeLocale = locale, notifyMetadata: Boolean = true): Result<AlbumPage> = metadataRequest(
         requestLocale, "album", enabled = notifyMetadata, items = { listOf(it.album) + it.songs + it.otherVersions },
     ) {
+        val revision = authRevision
         val response = innerTube.browse(WEB_REMIX, browseId, requestLocale = requestLocale).body<BrowseResponse>()
         val album = AlbumPage.getAlbum(browseId, response, requestLocale.hl)
+        val tracks = if (!withSongs) AlbumTrackSources(emptyList()) else if (AlbumPage.trackContents(response) != null) {
+            val rows = completeAlbumTrackRows(response, requestLocale)
+            resolveAlbumTrackSources(album, rows, requestLocale.hl) { continuation ->
+                check(revision == authRevision) { "Album sources belong to an earlier authentication" }
+                innerTube.browse(WEB_REMIX, browseId = if (continuation == null) "VL${album.playlistId}" else null,
+                    continuation = continuation, requestLocale = requestLocale).body<JsonElement>().also {
+                    check(revision == authRevision) { "Album sources belong to an earlier authentication" }
+                }
+            }
+        } else {
+            AlbumTrackSources(albumSongs(requireNotNull(album.playlistId) { "Album track shelf missing" }, requestLocale, false)
+                .getOrThrow().map { it.copy(album = com.zionhuang.innertube.models.Album(album.title, album.id)) })
+        }
+        check(revision == authRevision) { "Album sources belong to an earlier authentication" }
         AlbumPage(
             album = album,
-            songs = if (!withSongs) emptyList() else if (AlbumPage.trackContents(response) != null) {
-                completeAlbumTracks(response, album, requestLocale)
-            } else {
-                albumSongs(requireNotNull(album.playlistId) { "Album track shelf missing" }, requestLocale, false).getOrThrow()
-            },
+            songs = tracks.songs,
+            hasUnresolvedTrackSources = tracks.hasUnresolvedSources,
             otherVersions = AlbumPage.sections(response).flatMap { section ->
                 section.musicCarouselShelfRenderer?.contents.orEmpty()
                     .mapNotNull { it.musicTwoRowItemRenderer }
@@ -330,18 +343,34 @@ object YouTube {
     }
 
     private suspend fun completeAlbumTracks(initial: BrowseResponse, album: AlbumItem?, requestLocale: YouTubeLocale): List<SongItem> {
+        val songs = completeAlbumTrackRows(initial, requestLocale).map {
+            requireNotNull(AlbumPage.getSong(it, album, requestLocale.hl)) { "Incomplete album track" }
+        }
+        require(songs.map { it.id }.distinct().size == songs.size) { "Repeated album video identity" }
+        return songs
+    }
+
+    private suspend fun completeAlbumTrackRows(initial: BrowseResponse, requestLocale: YouTubeLocale): List<MusicResponsiveListItemRenderer> {
         var response = initial
-        val songs = mutableListOf<SongItem>()
+        val rows = mutableListOf<MusicResponsiveListItemRenderer>()
         val visited = mutableSetOf<String>()
+        var pages = 0
         while (true) {
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            check(++pages <= 100) { "Album pagination exceeded its bound" }
             val contents = requireNotNull(AlbumPage.trackContents(response)) { "Album track shelf missing" }
-            songs += contents.getItems().mapNotNull { AlbumPage.getSong(it, album, requestLocale.hl) }
+            require(contents.all { (it.musicResponsiveListItemRenderer != null) != (it.continuationItemRenderer != null) }) {
+                "Unknown or ambiguous album track row"
+            }
+            require(contents.count { it.continuationItemRenderer != null } <= 1 &&
+                contents.dropLast(1).none { it.continuationItemRenderer != null }) { "Ambiguous album continuation row" }
+            rows += contents.getItems()
+            check(rows.size <= 10_000) { "Album track limit exceeded" }
             val token = AlbumPage.continuation(response) ?: break
             check(visited.add(token)) { "Album continuation repeated" }
             response = innerTube.browse(WEB_REMIX, continuation = token, requestLocale = requestLocale).body()
         }
-        return songs.distinctBy { it.id }
+        return rows
     }
 
     suspend fun albumSongs(playlistId: String, requestLocale: YouTubeLocale = locale, notifyMetadata: Boolean = true): Result<List<SongItem>> = metadataRequest(

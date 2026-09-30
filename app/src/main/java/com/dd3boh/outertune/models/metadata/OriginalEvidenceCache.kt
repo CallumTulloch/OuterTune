@@ -25,11 +25,23 @@ internal class OriginalEvidenceCache(
     private data class Key(val payload: String, val target: OriginalNameTarget, val name: String) {
         val characters: Int get() = payload.length + target.id.length + name.length
     }
-    private val values = LinkedHashMap<Key, DecodedOriginalEvidence>(16, 0.75f, true)
+    private data class Entry(val key: Key, val decoded: DecodedOriginalEvidence)
+    private val values = LinkedHashMap<Key, Entry>(16, 0.75f, true)
     private var characters = 0
 
-    fun decode(value: String?, target: OriginalNameTarget, name: String): DecodedOriginalEvidence {
-        if (value.isNullOrBlank()) return DecodedOriginalEvidence()
+    fun decode(value: String?, target: OriginalNameTarget, name: String): DecodedOriginalEvidence =
+        entry(value, target, name)?.decoded ?: DecodedOriginalEvidence()
+
+    /** Room creates a new proof String for every read. Share the existing exact text before a
+     * snapshot is used by the evaluator and its transaction checks. Rebinding the cache to each
+     * reader makes concurrently retained snapshots repeatedly compare the whole proof again.
+     * This uses the same bounded entries; it neither interns globally nor retains a second copy.
+     */
+    fun canonicalize(value: String?, target: OriginalNameTarget, name: String): String? =
+        entry(value, target, name)?.key?.payload ?: value
+
+    private fun entry(value: String?, target: OriginalNameTarget, name: String): Entry? {
+        if (value.isNullOrBlank()) return null
         val key = Key(value, target, name)
         synchronized(values) { values[key]?.let { return it } }
         // Parsing is outside the monitor so fetch, evaluation and Room readers do not serialize.
@@ -43,10 +55,11 @@ internal class OriginalEvidenceCache(
             inputModel = text("model"),
             inputFingerprint = text("fingerprint"),
         )
-        if (key.characters > maxCharacters || maxEntries <= 0) return decoded
+        val entry = Entry(key, decoded)
+        if (key.characters > maxCharacters || maxEntries <= 0) return entry
         synchronized(values) {
             values[key]?.let { return it }
-            values[key] = decoded
+            values[key] = entry
             characters += key.characters
             val entries = values.entries.iterator()
             while (values.size > maxEntries || characters > maxCharacters) {
@@ -54,7 +67,7 @@ internal class OriginalEvidenceCache(
                 entries.remove()
             }
         }
-        return decoded
+        return entry
     }
 }
 

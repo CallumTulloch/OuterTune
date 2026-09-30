@@ -39,11 +39,47 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Real Room invalidation/publication with an instrumented classification boundary. */
 class OriginalAssessmentRetentionDeviceTest {
+    @Test(timeout = 15_000)
+    fun roomSnapshotsShareExactProofButPreserveSameTimestampChangesAndWithdrawals() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val database = MusicDatabase(Room.inMemoryDatabaseBuilder(context, InternalDatabase::class.java).build())
+        val target = OriginalNameTarget(OriginalNameKind.SONG, "canonproof1")
+        val original = ArtTrackOriginalName(target, "Snapshot proof", target.id, "MPREAa")
+        val row = MetadataNameEntity("SONG", target.id, "und", original.name,
+            ORIGINAL_NAME_SOURCE_PREFIX + target.id, observedAt = 100L,
+            originEvidenceJson = ArtTrackOriginalNameCodec.encode(original))
+        try {
+            database.recordMetadataNames(listOf(row))
+            val first = database.metadataOriginalEvaluationSnapshot().single()
+            val second = database.metadataOriginalNameSnapshot().single()
+            assertSame("Concurrent full reads should not retain equal proof copies",
+                first.originEvidenceJson, second.originEvidenceJson)
+
+            val changed = original.copy(albumId = "MPREBB")
+            val changedProof = ArtTrackOriginalNameCodec.encode(changed)
+            assertEquals(row.originEvidenceJson!!.hashCode(), changedProof.hashCode())
+            database.recordMetadataNames(listOf(row.copy(originEvidenceJson = changedProof)))
+            val afterChange = database.metadataOriginalEvaluationSnapshot().single()
+            assertEquals(100L, afterChange.observedAt)
+            assertNotSame(first.originEvidenceJson, afterChange.originEvidenceJson)
+            assertEquals(changed, originalCandidate(afterChange))
+            assertEquals(original, originalCandidate(first))
+
+            database.recordMetadataNames(listOf(row.copy(originEvidenceJson = "{}")))
+            assertNull(originalCandidate(database.metadataOriginalNameSnapshot().single()))
+            database.recordMetadataNames(listOf(row))
+            assertSame(first.originEvidenceJson,
+                database.metadataOriginalEvaluationSnapshot().single().originEvidenceJson)
+        } finally { database.close() }
+    }
+
     @Test(timeout = 45_000)
     fun unchangedOriginalRemainsEnglishDuringRefreshWithoutReclassification() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

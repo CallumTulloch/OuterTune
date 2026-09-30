@@ -289,13 +289,11 @@ class AlbumOriginalRecoveryTest {
             f.start()
             f.emit("searchSummary")
             f.awaitNames(f.japaneseTitles)
-            f.awaitCondition {
-                f.ids.all { id -> listOf("en", "ja").all { language ->
-                    f.database.metadataFetch("SONG", id, language, CONTEXT_KEY)?.status == MetadataFetchEntity.EMPTY
-                } }
-            }
             f.awaitIdle()
 
+            assertEquals(0, f.queueCalls.get())
+            assertTrue("Unselected search cards must not acquire a provider retry state",
+                f.ids.all { f.database.metadataFetchStates("SONG", it).isEmpty() })
             assertEquals(0, f.albumCalls.get())
             assertEquals(listOf(0, 0, 0), f.ids.map(f::mainCount))
             assertTrue(f.originalSongRows().isEmpty())
@@ -368,6 +366,8 @@ class AlbumOriginalRecoveryTest {
         }
 
         fun emit(source: String, albumId: String = ALBUM_ID) {
+            // Album cases represent an actual screen visit, not just a background API response.
+            if (source == "album") repository.setForegroundAlbum(albumId, true)
             val album = albumItem("ja", albumId)
             observer(listOf(album) + japaneseSongs.map { it.copy(album = Album(album.title, albumId)) }, locale, source)
         }

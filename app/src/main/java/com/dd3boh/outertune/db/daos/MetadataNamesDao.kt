@@ -7,10 +7,15 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
+import android.database.Cursor
+import com.dd3boh.outertune.db.entities.MetadataDisplayRevision
 import com.dd3boh.outertune.db.entities.MetadataFetchEntity
 import com.dd3boh.outertune.db.entities.MetadataNameEntity
 import com.dd3boh.outertune.db.entities.MetadataOriginalPublicationEntity
 import com.dd3boh.outertune.db.entities.MetadataTargetEntity
+import com.dd3boh.outertune.models.metadata.OriginalNameKind
+import com.dd3boh.outertune.models.metadata.OriginalNameTarget
+import com.dd3boh.outertune.models.metadata.originalEvidenceCache
 import kotlinx.coroutines.flow.Flow
 
 /** One coherent display projection; the potentially large proof payload stays off the UI path. */
@@ -18,6 +23,16 @@ data class MetadataDisplayName(
     @Embedded val name: MetadataNameEntity,
     val englishName: String?,
 )
+
+/** Share exact proof text across the simultaneously live evaluation and transaction snapshots. */
+private fun List<MetadataNameEntity>.canonicalizeOriginalProofs(): List<MetadataNameEntity> = map { row ->
+    val proof = row.originEvidenceJson
+    if (proof == null) row else {
+        val canonical = originalEvidenceCache.canonicalize(proof,
+            OriginalNameTarget(OriginalNameKind.valueOf(row.kind), row.targetId), row.name)
+        if (canonical === proof) row else row.copy(originEvidenceJson = canonical)
+    }
+}
 
 @Dao
 interface MetadataNamesDao {
@@ -94,16 +109,38 @@ interface MetadataNamesDao {
     @Query("SELECT * FROM metadata_name")
     fun allMetadataNames(): Flow<List<MetadataNameEntity>>
 
+    /** Invalidation signal only: the serial evaluation worker owns the large snapshot. */
+    @Query("SELECT EXISTS(SELECT 1 FROM metadata_name LIMIT 1)")
+    fun metadataNameChanges(): Flow<Boolean>
+
     @Query("SELECT * FROM metadata_name")
     fun metadataNameSnapshot(): List<MetadataNameEntity>
 
+    /** Original publication depends only on English aliases and und source/reference evidence.
+     * Configured-language display and manual overrides are handled by metadataDisplayNames.
+     */
+    @Query("SELECT * FROM metadata_name WHERE language IN ('en', 'und') AND source != 'manual'")
+    fun metadataOriginalEvaluationRows(): List<MetadataNameEntity>
+
+    fun metadataOriginalEvaluationSnapshot(): List<MetadataNameEntity> =
+        metadataOriginalEvaluationRows().canonicalizeOriginalProofs()
+
     /** Source retention and album language inputs do not depend on translated display aliases. */
     @Query("SELECT * FROM metadata_name WHERE language = 'und' AND source GLOB 'art-track-original:*'")
-    fun metadataOriginalNameSnapshot(): List<MetadataNameEntity>
+    fun metadataOriginalNameRows(): List<MetadataNameEntity>
+
+    fun metadataOriginalNameSnapshot(): List<MetadataNameEntity> =
+        metadataOriginalNameRows().canonicalizeOriginalProofs()
 
     /** Keep every observation from this source so a newer song row can withdraw related proof. */
     @Query("SELECT * FROM metadata_name WHERE source = :source")
     fun metadataNamesForSource(source: String): List<MetadataNameEntity>
+
+    @Query("""
+        SELECT * FROM metadata_name WHERE source GLOB 'playlist-song-reference:*'
+        AND SUBSTR(source, -LENGTH(:playlistId) - 1) = ':' || :playlistId
+    """)
+    fun metadataPlaylistReferenceNames(playlistId: String): List<MetadataNameEntity>
 
     /** Read a candidate source and all links to its target in one coherent, bounded snapshot. */
     @Query("""
@@ -128,6 +165,46 @@ interface MetadataNamesDao {
     """)
     fun metadataDisplayNames(): Flow<List<MetadataDisplayName>>
 
+    /** Initial/settings snapshots also include caches created before the journal existed. */
+    @Query("""
+        SELECT n.kind, n.targetId, n.language, n.name, n.source, n.sourcePriority, n.observedAt,
+            NULL AS originEvidenceJson, p.englishName
+        FROM metadata_name n
+        LEFT JOIN metadata_original_publication p ON n.kind = p.kind AND n.targetId = p.targetId
+    """)
+    fun metadataDisplayNameSnapshot(): List<MetadataDisplayName>
+
+    /** The metadata_name primary key starts with (kind, targetId), bounding this read to changes. */
+    @Query("""
+        SELECT n.kind, n.targetId, n.language, n.name, n.source, n.sourcePriority, n.observedAt,
+            NULL AS originEvidenceJson, p.englishName
+        FROM metadata_name n
+        LEFT JOIN metadata_original_publication p ON n.kind = p.kind AND n.targetId = p.targetId
+        WHERE n.kind = :kind AND n.targetId IN (:targetIds)
+    """)
+    fun metadataDisplayNamesForTargets(kind: String, targetIds: List<String>): List<MetadataDisplayName>
+
+    /** Invalidation only; do not distinctUntilChanged this boolean signal. */
+    @Query("SELECT EXISTS(SELECT 1 FROM metadata_display_revision LIMIT 1)")
+    fun metadataDisplayChanges(): Flow<Boolean>
+
+    @Query("SELECT * FROM metadata_display_revision")
+    fun metadataDisplayRevisionSnapshot(): List<MetadataDisplayRevision>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    fun insertMetadataDisplayRevisions(revisions: List<MetadataDisplayRevision>)
+
+    @Query("UPDATE metadata_display_revision SET revision = revision + 1 WHERE kind = :kind AND targetId = :targetId")
+    fun incrementMetadataDisplayRevision(kind: String, targetId: String)
+
+    /** Must share the writing transaction, so a revision can never precede its display contents. */
+    @Transaction
+    fun advanceMetadataDisplayRevisions(targets: Set<MetadataTargetEntity>) {
+        if (targets.isEmpty()) return
+        insertMetadataDisplayRevisions(targets.map { MetadataDisplayRevision(it.kind, it.targetId, 0) })
+        targets.forEach { incrementMetadataDisplayRevision(it.kind, it.targetId) }
+    }
+
     @Query("SELECT COUNT(*) FROM metadata_original_publication")
     fun metadataOriginalPublicationCount(): Int
 
@@ -137,11 +214,29 @@ interface MetadataNamesDao {
     @Query("SELECT * FROM metadata_original_publication")
     fun metadataOriginalPublicationSnapshot(): List<MetadataOriginalPublicationEntity>
 
+    /** Stream large proof strings instead of materializing the whole publication table. */
+    @Query("SELECT kind, targetId, englishName, evidenceJson, evaluatedAt FROM metadata_original_publication")
+    fun metadataOriginalPublicationCursor(): Cursor
+
     @Query("SELECT * FROM metadata_original_publication WHERE kind = :kind AND targetId = :targetId")
     fun metadataOriginalPublication(kind: String, targetId: String): MetadataOriginalPublicationEntity?
 
+    @Query("SELECT englishName FROM metadata_original_publication WHERE kind = :kind AND targetId = :targetId")
+    fun metadataOriginalPublishedName(kind: String, targetId: String): String?
+
+    /** Raw storage primitive; callers use the transactional wrapper below. */
     @Upsert
-    fun upsertMetadataOriginalPublications(publications: List<MetadataOriginalPublicationEntity>)
+    fun upsertMetadataOriginalPublicationsRaw(publications: List<MetadataOriginalPublicationEntity>)
+
+    @Transaction
+    fun upsertMetadataOriginalPublications(publications: List<MetadataOriginalPublicationEntity>) {
+        val finalPublications = publications.associateBy { MetadataTargetEntity(it.kind, it.targetId) }
+        val changed = finalPublications.filter { (target, publication) ->
+            metadataOriginalPublishedName(target.kind, target.targetId) != publication.englishName
+        }.keys
+        upsertMetadataOriginalPublicationsRaw(finalPublications.values.toList())
+        advanceMetadataDisplayRevisions(changed)
+    }
 
     /** Invoke with the candidate/assessment write in the same outer transaction. */
     @Transaction
@@ -177,8 +272,26 @@ interface MetadataNamesDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insertMetadataTargets(targets: List<MetadataTargetEntity>)
 
+    /** Raw storage primitive; callers use the transactional wrappers below. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    fun insertMetadataNameCandidate(name: MetadataNameEntity): Long
+    fun insertMetadataNameCandidateRaw(name: MetadataNameEntity): Long
+
+    @Transaction
+    fun insertMetadataNameCandidate(name: MetadataNameEntity): Long {
+        val inserted = insertMetadataNameCandidateRaw(name)
+        if (inserted != -1L) advanceMetadataDisplayRevisions(setOf(MetadataTargetEntity(name.kind, name.targetId)))
+        return inserted
+    }
+
+    @Query("""
+        SELECT EXISTS(SELECT 1 FROM metadata_name
+            WHERE kind = :kind AND targetId = :targetId AND language = :language AND name = :name AND source = :source
+                AND (:sourcePriority > sourcePriority OR (:sourcePriority = sourcePriority AND :observedAt > observedAt)))
+    """)
+    fun metadataNameCandidateDisplayChanges(
+        kind: String, targetId: String, language: String, name: String, source: String,
+        sourcePriority: Int, observedAt: Long,
+    ): Boolean
 
     @Query("""
         UPDATE metadata_name
@@ -195,23 +308,51 @@ interface MetadataNamesDao {
                 ELSE originEvidenceJson
             END
         WHERE kind = :kind AND targetId = :targetId AND language = :language AND name = :name AND source = :source
+            AND (
+                :sourcePriority > sourcePriority OR (:sourcePriority = sourcePriority AND :observedAt > observedAt)
+                OR (:originEvidenceJson IS NOT NULL AND originEvidenceJson IS NOT :originEvidenceJson AND (
+                    originEvidenceJson IS NULL OR :sourcePriority > sourcePriority
+                    OR (:sourcePriority = sourcePriority AND :observedAt >= observedAt)
+                ))
+            )
     """)
-    fun mergeMetadataNameCandidate(
+    fun mergeMetadataNameCandidateRaw(
         kind: String, targetId: String, language: String, name: String, source: String,
         sourcePriority: Int, observedAt: Long, originEvidenceJson: String?,
     )
 
+    @Transaction
+    fun mergeMetadataNameCandidate(
+        kind: String, targetId: String, language: String, name: String, source: String,
+        sourcePriority: Int, observedAt: Long, originEvidenceJson: String?,
+    ) {
+        if (mergeMetadataNameAndCheckDisplayChange(MetadataNameEntity(
+                kind, targetId, language, name, source, sourcePriority, observedAt, originEvidenceJson,
+            ))) advanceMetadataDisplayRevisions(setOf(MetadataTargetEntity(kind, targetId)))
+    }
+
+    private fun mergeMetadataNameAndCheckDisplayChange(candidate: MetadataNameEntity): Boolean {
+        val displayChanged = metadataNameCandidateDisplayChanges(
+            candidate.kind, candidate.targetId, candidate.language, candidate.name, candidate.source,
+            candidate.sourcePriority, candidate.observedAt,
+        )
+        mergeMetadataNameCandidateRaw(
+            candidate.kind, candidate.targetId, candidate.language, candidate.name, candidate.source,
+            candidate.sourcePriority, candidate.observedAt, candidate.originEvidenceJson,
+        )
+        return displayChanged
+    }
+
     /** Keep the timestamp of the strongest observation; a later byline cannot rejuvenate an old header. */
     @Transaction
     fun upsertMetadataNames(names: List<MetadataNameEntity>) {
+        val changed = mutableSetOf<MetadataTargetEntity>()
         names.forEach { candidate ->
-            if (insertMetadataNameCandidate(candidate) == -1L) {
-                mergeMetadataNameCandidate(
-                    candidate.kind, candidate.targetId, candidate.language, candidate.name, candidate.source,
-                    candidate.sourcePriority, candidate.observedAt, candidate.originEvidenceJson,
-                )
-            }
+            val inserted = insertMetadataNameCandidateRaw(candidate) != -1L
+            if (inserted || mergeMetadataNameAndCheckDisplayChange(candidate))
+                changed += MetadataTargetEntity(candidate.kind, candidate.targetId)
         }
+        advanceMetadataDisplayRevisions(changed)
     }
 
     @Upsert
@@ -235,6 +376,25 @@ interface MetadataNamesDao {
     @Transaction
     fun recordMetadataFetch(fetch: MetadataFetchEntity) = recordMetadataNames(emptyList(), fetch)
 
+    @Query("SELECT DISTINCT kind, targetId FROM metadata_name WHERE source = :source")
+    fun metadataTargetsForSource(source: String): List<MetadataTargetEntity>
+
+    @Query("DELETE FROM metadata_name WHERE source = :source")
+    fun deleteMetadataNamesForSourceRaw(source: String)
+
+    @Transaction
+    fun deleteMetadataNamesForSource(source: String) {
+        val targets = metadataTargetsForSource(source).toSet()
+        deleteMetadataNamesForSourceRaw(source)
+        advanceMetadataDisplayRevisions(targets)
+    }
+
     @Query("DELETE FROM metadata_target WHERE kind = :kind AND targetId = :targetId")
-    fun deleteMetadataTarget(kind: String, targetId: String)
+    fun deleteMetadataTargetRaw(kind: String, targetId: String): Int
+
+    @Transaction
+    fun deleteMetadataTarget(kind: String, targetId: String) {
+        if (deleteMetadataTargetRaw(kind, targetId) != 0)
+            advanceMetadataDisplayRevisions(setOf(MetadataTargetEntity(kind, targetId)))
+    }
 }

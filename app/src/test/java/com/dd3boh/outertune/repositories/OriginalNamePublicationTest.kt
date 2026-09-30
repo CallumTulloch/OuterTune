@@ -290,6 +290,57 @@ class OriginalNamePublicationTest {
         assertEquals(prepareOriginalPublications(rows, emptyList(), 300), preparer.prepare(rows, emptyList(), 300))
     }
 
+    @Test fun `streamed publication releases unchanged proofs and detects a foreign proof edit`() {
+        val rows = aliases + assessed(listOf(original))
+        val stored = prepareOriginalPublications(rows, emptyList(), 200)
+        val preparer = OriginalPublicationPreparer()
+        assertTrue(preparer.prepareChanges(rows, stored.asSequence(), 300).changes.isEmpty())
+        assertTrue(preparer.prepareChanges(rows.map { it.copy() }, stored.asSequence(), 400).changes.isEmpty())
+        // Same name/time must not authorize a cache hit after independent proof replacement.
+        val external = stored.map { it.copy(evidenceJson = "{}") }
+        val repaired = preparer.prepareChanges(rows, external.asSequence(), 500)
+        assertFalse(repaired.hasMore)
+        assertEquals(prepareOriginalPublications(rows, external, 500), repaired.changes.map { it.publication })
+        assertEquals(external, repaired.changes.map { it.previous })
+    }
+
+    @Test fun `streamed publication bounds a large rebuild and eventually publishes every target`() {
+        val rows = (0 until 11).flatMap { index ->
+            val id = "batch%06d".format(index)
+            listOf(alias("English $index", "en", id = id), alias("日本語 $index", "ja", id = id))
+        }
+        val expected = prepareOriginalPublications(rows, emptyList(), 200)
+        val preparer = OriginalPublicationPreparer()
+        var stored = emptyList<com.dd3boh.outertune.db.entities.MetadataOriginalPublicationEntity>()
+        var batches = 0
+        do {
+            val batch = preparer.prepareChanges(rows, stored.asSequence(), 200, maxChanges = 2)
+            assertTrue(batch.changes.size <= 2)
+            assertTrue(batch.changes.all { it.previous != it.publication })
+            stored = (stored + batch.changes.map { it.publication }).associateBy { it.kind to it.targetId }.values.toList()
+            batches++
+            assertTrue("Bounded publication must make progress", batches <= 7)
+        } while (batch.hasMore)
+        assertEquals(expected.toSet(), stored.toSet())
+        assertTrue(preparer.prepareChanges(rows, stored.asSequence(), 300, maxChanges = 2).changes.isEmpty())
+    }
+
+    @Test fun `publication evaluation needs only English aliases and source evidence including final source withdrawal`() {
+        val rows = aliases + assessed(listOf(original)) + alias("Manual English", "en", source = "manual") +
+            alias("Titre configure", "fr")
+        fun evaluationRows(values: List<MetadataNameEntity>) = values.filter {
+            it.language in setOf("en", "und") && it.source != "manual"
+        }
+        val published = prepareOriginalPublications(rows, emptyList(), 200)
+        assertEquals(published, prepareOriginalPublications(evaluationRows(rows), emptyList(), 200))
+        // The last English alias AND source can disappear, leaving configured/manual names only.
+        // Previously committed targets must still be visited through the publication cursor.
+        val withdrawn = rows.filter { it.language !in setOf("en", "und") || it.source == "manual" }
+        assertEquals(prepareOriginalPublications(withdrawn, published, 300),
+            prepareOriginalPublications(evaluationRows(withdrawn), published, 300))
+        assertNull(prepareOriginalPublications(evaluationRows(withdrawn), published, 300).single().englishName)
+    }
+
     private fun display(rows: List<MetadataNameEntity>, publication: MetadataOriginalPublicationEntity?,
         language: String = "ja", preferOriginal: Boolean = true) =
         selectPublishedMetadataDisplayName(target, rows, language, preferOriginal, publication)
