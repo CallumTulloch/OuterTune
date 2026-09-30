@@ -229,6 +229,67 @@ class OriginalNamePublicationTest {
             .getValue("evidence").jsonPrimitive.content)
     }
 
+    @Test fun `incremental publication follows pending album dependencies completed changes and withdrawals`() {
+        val preparer = OriginalPublicationPreparer()
+        val second = original.copy(target = OriginalNameTarget(OriginalNameKind.SONG, "12345678901"),
+            sourceVideoId = "12345678901", name = "A New Album Track")
+        val unrelated = second.copy(albumId = "MPREdifferent")
+        val ready = aliases + assessed(listOf(original))
+        var previous = emptyList<MetadataOriginalPublicationEntity>()
+        val steps = listOf(ready, ready, ready + raw(unrelated, 300), ready + raw(second, 300),
+            aliases + assessed(listOf(original, second), at = 400),
+            aliases + assessed(listOf(original), OriginalNameLanguage.OTHER, 500), aliases, emptyList())
+        steps.forEachIndexed { index, rows ->
+            val now = 600L + index
+            val fresh = prepareOriginalPublications(rows, previous, now)
+            val incremental = preparer.prepare(rows, previous, now)
+            assertEquals("Publication after dependency change $index", fresh, incremental)
+            previous = (previous + incremental).associateBy { it.kind to it.targetId }.values.toList()
+        }
+        assertNull(previous.single { it.targetId == target.id }.englishName)
+    }
+
+    @Test fun `incremental publication tracks reference withdrawal and a concurrent foreign publication`() {
+        val preparer = OriginalPublicationPreparer()
+        val otherId = "lmnopqrstuv"
+        val reference = providerSongReference(MainSongReference(target.id, otherId), original,
+            SongItem(otherId, original.name, emptyList(), Album("Album", "MPREalbum"), thumbnail = ""))!!
+        val initial = aliases + alias(original.name, "en", id = otherId) + assessed(listOf(original)) + reference.toMetadataName(100)
+        val previous = preparer.prepare(initial, emptyList(), 200)
+        assertEquals(previous, preparer.prepare(initial, previous, 300))
+        val external = previous.map { it.copy(englishName = null, evidenceJson = "{}", evaluatedAt = 350) }
+        assertEquals(prepareOriginalPublications(initial, external, 400), preparer.prepare(initial, external, 400))
+        val withdrawn = initial + reference.toMetadataName(500).copy(originEvidenceJson = "{}")
+        val after = preparer.prepare(withdrawn, previous, 600)
+        assertEquals(prepareOriginalPublications(withdrawn, previous, 600), after)
+        assertNull(after.single { it.targetId == otherId }.englishName)
+    }
+
+    @Test fun `cache returns freshly read committed rows without retaining old publication objects`() {
+        val preparer = OriginalPublicationPreparer()
+        val rows = aliases + assessed(listOf(original))
+        val first = preparer.prepare(rows, emptyList(), 200)
+        val reread = first.map { it.copy(evidenceJson = String(it.evidenceJson.toCharArray())) }
+        val second = preparer.prepare(rows.map { it.copy() }, reread, 300)
+        assertEquals(first, second)
+        assertSame(reread.single(), second.single())
+    }
+
+    @Test fun `a foreign proof change with the same name and timestamp invalidates the cache`() {
+        val preparer = OriginalPublicationPreparer()
+        val rows = aliases + assessed(listOf(original))
+        val first = preparer.prepare(rows, emptyList(), 200)
+        val external = first.map { it.copy(evidenceJson = "{}") }
+        assertEquals(prepareOriginalPublications(rows, external, 300), preparer.prepare(rows, external, 300))
+    }
+
+    @Test fun `an uncommitted prepared result is recomputed with the next evaluation time`() {
+        val preparer = OriginalPublicationPreparer()
+        val rows = aliases + assessed(listOf(original))
+        preparer.prepare(rows, emptyList(), 200)
+        assertEquals(prepareOriginalPublications(rows, emptyList(), 300), preparer.prepare(rows, emptyList(), 300))
+    }
+
     private fun display(rows: List<MetadataNameEntity>, publication: MetadataOriginalPublicationEntity?,
         language: String = "ja", preferOriginal: Boolean = true) =
         selectPublishedMetadataDisplayName(target, rows, language, preferOriginal, publication)

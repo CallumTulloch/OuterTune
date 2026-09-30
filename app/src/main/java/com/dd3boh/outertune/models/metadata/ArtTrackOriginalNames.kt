@@ -224,6 +224,7 @@ private fun validOriginalAlbum(album: Album): Boolean =
 
 /** Raw source data survives model changes and is kept separately from the automatic assessment. */
 object ArtTrackOriginalNameCodec {
+    private val videoIdPattern = Regex("[A-Za-z0-9_-]{11}")
     fun encode(candidate: ArtTrackOriginalName, assessment: OriginalNameAssessment? = null): String = buildJsonObject {
         assessment?.let { value -> Json.parseToJsonElement(OriginalNameAssessmentCodec.encode(value)).jsonObject.forEach { (k, v) -> put(k, v) } }
         put("original", buildJsonObject {
@@ -236,12 +237,15 @@ object ArtTrackOriginalNameCodec {
         })
     }.toString()
 
-    fun decode(value: String?, target: OriginalNameTarget, name: String): ArtTrackOriginalName? = runCatching {
-        val raw = Json.parseToJsonElement(value ?: return null).jsonObject["original"]?.jsonObject ?: return null
+    fun decode(value: String?, target: OriginalNameTarget, name: String): ArtTrackOriginalName? =
+        originalEvidenceCache.decode(value, target, name).original
+
+    internal fun decodeRoot(root: JsonObject?, target: OriginalNameTarget, name: String): ArtTrackOriginalName? = runCatching {
+        val raw = root?.get("original")?.jsonObject ?: return null
         fun text(key: String) = raw[key]?.jsonPrimitive?.takeIf { it.isString }?.content
         if (raw["version"]?.jsonPrimitive?.intOrNull != 1 || text("kind") != target.kind.name ||
             text("id") != target.id || text("name") != name || name.isBlank()) return null
-        val source = text("sourceVideoId")?.takeIf { Regex("[A-Za-z0-9_-]{11}").matches(it) } ?: return null
+        val source = text("sourceVideoId")?.takeIf { videoIdPattern.matches(it) } ?: return null
         if (target.kind == OriginalNameKind.SONG && target.id != source) return null
         val albumId = text("albumId")?.takeIf { it.isNotBlank() && it.none(Char::isWhitespace) }
         ArtTrackOriginalName(target, name, source, albumId)

@@ -9,8 +9,6 @@
 
 package com.dd3boh.outertune.ui.component
 
-import com.dd3boh.outertune.utils.displayTitle
-
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -84,7 +82,7 @@ fun SwipeToQueueBox(
                 snackbarHostState?.showSnackbar(
                     message = context.getString(
                         R.string.song_added_to_queue,
-                        item.mediaMetadata.displayTitle
+                        item.mediaMetadata.title
                     ),
                     withDismissAction = true,
                     duration = SnackbarDuration.Short
@@ -98,7 +96,7 @@ fun SwipeToQueueBox(
                     snackbarHostState?.showSnackbar(
                         message = context.getString(
                             R.string.song_added_to_queue_end,
-                            item.mediaMetadata.displayTitle
+                            item.mediaMetadata.title
                         ),
                         withDismissAction = true,
                         duration = SnackbarDuration.Indefinite

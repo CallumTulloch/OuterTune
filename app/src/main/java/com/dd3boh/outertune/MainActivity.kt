@@ -133,6 +133,7 @@ import com.dd3boh.outertune.playback.DownloadUtil
 import com.dd3boh.outertune.playback.MediaControllerViewModel
 import com.dd3boh.outertune.playback.MusicService
 import com.dd3boh.outertune.playback.PlayerConnection
+import com.dd3boh.outertune.ui.component.LocalPlayingIndicatorAnimationsEnabled
 import com.dd3boh.outertune.ui.component.rememberBottomSheetState
 import com.dd3boh.outertune.ui.component.shimmer.ShimmerTheme
 import com.dd3boh.outertune.ui.menu.BottomSheetMenu
@@ -986,7 +987,15 @@ class MainActivity : ComponentActivity() {
 
                             // phone
                             if (!tabMode) {
-                                navHost()
+                                val playerCoversContent = oobeStatus >= OOBE_VERSION &&
+                                    !navigationItems.contains(Screens.Player) && playerBottomSheetState.isExpanded
+                                // The full player covers the destination, but keeps its state alive.
+                                // Stop only its hidden indicators; the player's queue stays animated.
+                                CompositionLocalProvider(
+                                    LocalPlayingIndicatorAnimationsEnabled provides !playerCoversContent,
+                                ) {
+                                    navHost()
+                                }
 
                                 SearchBarContainer(navController, scrollBehavior)
 

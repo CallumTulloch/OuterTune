@@ -63,10 +63,15 @@ object OriginalNameAssessmentCodec {
         value: String?,
         expectedTarget: OriginalNameTarget,
         expectedName: String,
+    ): OriginalNameAssessment? = originalEvidenceCache.decode(value, expectedTarget, expectedName).assessment
+
+    internal fun decodeRoot(
+        root: JsonObject?,
+        expectedTarget: OriginalNameTarget,
+        expectedName: String,
     ): OriginalNameAssessment? {
-        if (value.isNullOrBlank() || expectedTarget.id.isBlank() || expectedName.isBlank()) return null
+        if (root == null || expectedTarget.id.isBlank() || expectedName.isBlank()) return null
         return try {
-            val root = Json.parseToJsonElement(value) as? JsonObject ?: return null
             val formatVersion = root.requiredNumber("formatVersion").intOrNull ?: return null
             val resolverVersion = root.requiredNumber("resolverVersion").intOrNull ?: return null
             if (formatVersion != FORMAT_VERSION || resolverVersion != RESOLVER_VERSION) return null

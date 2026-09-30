@@ -41,6 +41,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -57,6 +58,75 @@ import org.junit.Test
 
 /** A Main music card proves a relation between two IDs; a shared title or album never does. */
 class AlbumProviderSongReferenceTest {
+    @Test
+    fun scopedReferenceInputsKeepCompetingSourcesAndWithdrawalsWithoutUnrelatedProof(): Unit = runBlocking {
+        withFixture { f ->
+            f.seedKnownOriginals()
+            val first = ArtTrackOriginalName(target(AUDIO_IDS[0]), ENGLISH_TITLES[0], AUDIO_IDS[0], ALBUM_ID)
+            val second = ArtTrackOriginalName(target(AUDIO_IDS[1]), ENGLISH_TITLES[0], AUDIO_IDS[1], ALBUM_ID)
+            fun originalRow(candidate: ArtTrackOriginalName, observedAt: Long) = MetadataNameEntity(
+                candidate.target.kind.name, candidate.target.id, "und", candidate.name,
+                ORIGINAL_NAME_SOURCE_PREFIX + candidate.sourceVideoId, 10, observedAt,
+                ArtTrackOriginalNameCodec.encode(candidate),
+            )
+            fun link(source: ArtTrackOriginalName, targetId: String) = requireNotNull(providerSongReference(
+                MainSongReference(source.sourceVideoId, targetId), source,
+                SongItem(targetId, source.name, emptyList(), Album(ENGLISH_ALBUM, ALBUM_ID), thumbnail = ""),
+            )).toMetadataName(f.clock.get())
+            val withdrawn = link(first, MV_IDS[1]).copy(originEvidenceJson = "{}")
+            f.database.recordMetadataNames(listOf(
+                originalRow(first.copy(target = OriginalNameTarget(OriginalNameKind.ARTIST, ARTIST_ID), name = "Nirvana"),
+                    f.clock.get() - 1),
+                originalRow(first.copy(target = OriginalNameTarget(OriginalNameKind.ALBUM, ALBUM_ID), name = ENGLISH_ALBUM),
+                    f.clock.get() - 1),
+                // The newest source snapshot withdraws its album and artist, while aliases remain.
+                originalRow(first.copy(albumId = null), f.clock.get() + 1),
+                originalRow(second, f.clock.get() + 1),
+                link(first, MV_IDS[0]), link(second, MV_IDS[0]), withdrawn,
+            ))
+
+            val rows = f.database.metadataProviderReferenceInputs(MV_IDS[0], AUDIO_IDS[0])
+            assertTrue("A source's old link to another target must remain available for withdrawal", withdrawn in rows)
+            assertEquals(setOf(AUDIO_IDS[0], AUDIO_IDS[1]), rows.mapNotNull(ProviderSongReferenceCodec::decode)
+                .filter { it.targetVideoId == MV_IDS[0] }.map { it.sourceVideoId }.toSet())
+            assertTrue("Other songs' original payloads must not be materialized", rows.none { it.targetId == AUDIO_IDS[2] })
+            val current = latestOriginalRows(rows).mapNotNull(::originalCandidate)
+            assertTrue(current.none { it.sourceVideoId == AUDIO_IDS[0] && it.target.kind != OriginalNameKind.SONG })
+            assertEquals(null, current.single { it.target == target(AUDIO_IDS[0]) }.albumId)
+            assertEquals(setOf(OriginalNameKind.SONG, OriginalNameKind.ALBUM, OriginalNameKind.ARTIST),
+                f.database.metadataNamesForSource(ORIGINAL_NAME_SOURCE_PREFIX + AUDIO_IDS[0])
+                    .mapNotNull(::originalCandidate).map { it.target.kind }.toSet())
+        }
+    }
+
+    @Test
+    fun aSourceWithdrawalWhileItsCardIsInFlightCannotPublishTheOldReference(): Unit = runBlocking {
+        withFixture { f ->
+            f.seedKnownOriginals()
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            f.beforeReferenceReply = { source ->
+                if (source == AUDIO_IDS.first()) {
+                    started.complete(Unit)
+                    release.await()
+                }
+            }
+            f.start()
+            withTimeout(20_000) { started.await() }
+            val withdrawn = ArtTrackOriginalName(target(AUDIO_IDS.first()), ENGLISH_TITLES.first(), AUDIO_IDS.first())
+            f.database.recordMetadataNames(listOf(MetadataNameEntity("SONG", AUDIO_IDS.first(), "und", withdrawn.name,
+                ORIGINAL_NAME_SOURCE_PREFIX + AUDIO_IDS.first(), 10, f.clock.get() + 1,
+                ArtTrackOriginalNameCodec.encode(withdrawn))))
+            release.complete(Unit)
+            f.awaitAlbumState(MetadataFetchEntity.FAILED)
+            f.awaitIdle()
+            assertTrue(f.referenceRows().mapNotNull(ProviderSongReferenceCodec::decode)
+                .none { it.sourceVideoId == AUDIO_IDS.first() })
+            assertEquals(null, latestOriginalRows(f.database.metadataNamesForSource(
+                ORIGINAL_NAME_SOURCE_PREFIX + AUDIO_IDS.first())).mapNotNull(::originalCandidate).single().albumId)
+        }
+    }
+
     @Test
     fun cachedAudioOriginalsNameTheExistingVideoRowsAndSurviveRestartWithoutChangingPlaybackIdentity(): Unit = runBlocking {
         withFixture { f ->
@@ -367,6 +437,7 @@ class AlbumProviderSongReferenceTest {
         var referenceCardMissing = false
         var failReferenceFetch = false
         var referenceTarget: (String) -> String = { source -> MV_IDS[AUDIO_IDS.indexOf(source)] }
+        var beforeReferenceReply: suspend (String) -> Unit = {}
         lateinit var repository: MetadataNameRepository
             private set
         private val videoSongs = MV_IDS.mapIndexed { index, id -> song(id, ENGLISH_TITLES[index], "MUSIC_VIDEO_TYPE_OMV") }
@@ -446,6 +517,7 @@ class AlbumProviderSongReferenceTest {
                 mainSongReference = { source, requested ->
                     check(requested.hl == "en" && source in AUDIO_IDS)
                     referenceCalls.incrementAndGet()
+                    beforeReferenceReply(source)
                     if (failReferenceFetch) Result.failure(IOException("Synthetic music-card request failure"))
                     else Result.success(if (referenceCardMissing) null else MainSongReference(source, referenceTarget(source)))
                 },

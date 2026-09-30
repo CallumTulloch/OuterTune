@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.security.MessageDigest
 
 /**
  * Prepare independently completed display decisions from a coherent candidate snapshot.
@@ -22,27 +23,107 @@ internal fun prepareOriginalPublications(
     previous: List<MetadataOriginalPublicationEntity>,
     evaluatedAt: Long,
 ): List<MetadataOriginalPublicationEntity> {
-    require(evaluatedAt > 0)
-    val inputs = OriginalPublicationInputs(rows)
-    val assessments = originalAssessmentsByTarget(rows)
-    // A source snapshot can support its song, album, artists and provider references. Decode
-    // each source once here instead of scanning every original again for every display target.
-    val originalsBySource = inputs.bySource
-    val grouped = rows.groupBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
-    val previousByTarget = previous.associateBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
-    return (grouped.keys + previousByTarget.keys).sortedWith(compareBy({ it.kind.name }, { it.id })).mapNotNull { target ->
-        if (!inputs.ready(target)) return@mapNotNull null
-        val candidates = grouped[target].orEmpty()
-        val evidence = assessments[target].orEmpty()
-        // An empty requested language cannot match a stored alias. The normal selector therefore
-        // returns a name only when an observed English alias passes the original-name policy.
-        // Manual overrides are applied at display time and must never become original evidence.
-        val englishName = selectMetadataDisplayName(target, candidates.filter { it.source != "manual" },
-            language = "", preferOriginal = true, assessments = evidence)
-        val evidenceJson = publicationEvidence(target, englishName, originalsBySource, candidates, evidence)
-        val prior = previousByTarget[target]
-        if (prior != null && prior.englishName == englishName && prior.evidenceJson == evidenceJson) prior
-        else MetadataOriginalPublicationEntity(target.kind.name, target.id, englishName, evidenceJson, evaluatedAt)
+    return OriginalPublicationPreparer().prepare(rows, previous, evaluatedAt)
+}
+
+/** Owned by the serial publication worker. Reuse only an identical complete dependency set and
+ * its known previous/result publication. A concurrent external commit must be checked afresh.
+ */
+internal class OriginalPublicationPreparer {
+    // Publication proof can dwarf the candidate rows. Retain a digest, never another generation
+    // of the database's proof strings; return the caller's current committed row on a cache hit.
+    private data class PublicationState(val name: String?, val evaluatedAt: Long, val proof: String)
+    private val proofDigest = MessageDigest.getInstance("SHA-256")
+    private val proofBuffer = ByteArray(8 * 1024)
+
+    private fun state(row: MetadataOriginalPublicationEntity): PublicationState {
+        // Hash exact UTF-16 code units in bounded chunks. Converting every proof to a second
+        // full byte array costs tens of MiB per library observation even when nothing changed.
+        proofDigest.reset()
+        var used = 0
+        for (character in row.evidenceJson) {
+            proofBuffer[used++] = (character.code ushr 8).toByte()
+            proofBuffer[used++] = character.code.toByte()
+            if (used == proofBuffer.size) {
+                proofDigest.update(proofBuffer)
+                used = 0
+            }
+        }
+        proofDigest.update(proofBuffer, 0, used)
+        val bytes = proofDigest.digest()
+        val digits = "0123456789abcdef"
+        val proof = buildString(bytes.size * 2) {
+            bytes.forEach { byte ->
+                val value = byte.toInt() and 0xff
+                append(digits[value ushr 4])
+                append(digits[value and 15])
+            }
+        }
+        return PublicationState(row.englishName, row.evaluatedAt, proof)
+    }
+
+    private data class Cached(
+        val input: OriginalPublicationInput,
+        val rows: List<MetadataNameEntity>,
+        val previous: PublicationState?,
+        val result: PublicationState?,
+    )
+    private var cached = emptyMap<OriginalNameTarget, Cached>()
+    private var lastRows: List<MetadataNameEntity>? = null
+    private var lastCommitted = emptyMap<OriginalNameTarget, PublicationState>()
+    private var lastResultTargets = emptyList<OriginalNameTarget>()
+
+    fun prepare(
+        rows: List<MetadataNameEntity>,
+        previous: List<MetadataOriginalPublicationEntity>,
+        evaluatedAt: Long,
+    ): List<MetadataOriginalPublicationEntity> {
+        require(evaluatedAt > 0)
+        val previousByTarget = previous.associateBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
+        val previousStates = previousByTarget.mapValues { state(it.value) }
+        if (lastRows == rows && previousStates == lastCommitted) {
+            return lastResultTargets.map { previousByTarget.getValue(it) }
+        }
+        val inputs = OriginalPublicationInputs(rows)
+        val assessments by lazy { originalAssessmentsByTarget(rows, inputs) }
+        // A source snapshot can support its song, album, artists and provider references. Decode
+        // each source once here instead of scanning every original again for every display target.
+        val originalsBySource = inputs.bySource
+        val grouped = rows.groupBy { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
+        val next = mutableMapOf<OriginalNameTarget, Cached>()
+        val result = (grouped.keys + previousByTarget.keys).sortedWith(compareBy({ it.kind.name }, { it.id })).mapNotNull { target ->
+            val input = inputs.forTarget(target)
+            val candidates = grouped[target].orEmpty()
+            val prior = previousByTarget[target]
+            val priorState = previousStates[target]
+            val old = cached[target]
+            if (old != null && old.input == input && old.rows == candidates &&
+                priorState == (old.result ?: old.previous)) {
+                // Rebind the dependency rows too, so old Room snapshots can be collected.
+                next[target] = Cached(input, candidates, priorState, old.result)
+                return@mapNotNull if (old.result == null) null else prior
+            }
+            if (!inputs.ready(target)) {
+                next[target] = Cached(input, candidates, priorState, null)
+                return@mapNotNull null
+            }
+            val evidence = assessments[target].orEmpty()
+            // An empty requested language cannot match a stored alias. The normal selector therefore
+            // returns a name only when an observed English alias passes the original-name policy.
+            // Manual overrides are applied at display time and must never become original evidence.
+            val englishName = selectMetadataDisplayName(target, candidates.filter { it.source != "manual" },
+                language = "", preferOriginal = true, assessments = evidence)
+            val evidenceJson = publicationEvidence(target, englishName, originalsBySource, candidates, evidence)
+            val publication = if (prior != null && prior.englishName == englishName && prior.evidenceJson == evidenceJson) prior
+            else MetadataOriginalPublicationEntity(target.kind.name, target.id, englishName, evidenceJson, evaluatedAt)
+            next[target] = Cached(input, candidates, priorState, state(publication))
+            publication
+        }
+        cached = next
+        lastRows = rows
+        lastResultTargets = result.map { OriginalNameTarget(OriginalNameKind.valueOf(it.kind), it.targetId) }
+        lastCommitted = previousStates + lastResultTargets.associateWith { next.getValue(it).result!! }
+        return result
     }
 }
 

@@ -41,6 +41,7 @@ fun PlayingIndicator(
     isPlaying: Boolean = true
 ) {
     val sharedAnimation = LocalPlayingIndicatorAnimation.current
+    val animationsEnabled = playingIndicatorAnimationsEnabled()
     if (sharedAnimation != null) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(barWidth * 1.5f),
@@ -50,7 +51,7 @@ fun PlayingIndicator(
             repeat(bars) { index ->
                 Canvas(Modifier.fillMaxHeight().width(barWidth)) {
                     // Read the shared frame in drawing, without recomposing the search results.
-                    val height = size.height * if (isPlaying) sharedAnimation.barHeight(index) else 0.15f
+                    val height = size.height * if (isPlaying && animationsEnabled) sharedAnimation.barHeight(index) else 0.15f
                     drawRoundRect(
                         color = color,
                         topLeft = Offset(0f, (size.height - height) / 2),
@@ -69,14 +70,16 @@ fun PlayingIndicator(
         }
     }
 
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(isPlaying, animationsEnabled) {
+        if (!animationsEnabled) return@LaunchedEffect
         animatables.forEach { animatable ->
             launch {
+                if (!isPlaying) {
+                    animatable.animateTo(0.15f)
+                    return@launch
+                }
                 while (true) {
-                    if (isPlaying)
-                        animatable.animateTo(Random.nextFloat() * 0.9f + 0.1f)
-                    else
-                        animatable.animateTo(0.15f)
+                    animatable.animateTo(Random.nextFloat() * 0.9f + 0.1f)
                     delay(50)
                 }
             }

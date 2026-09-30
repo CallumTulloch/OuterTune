@@ -97,6 +97,29 @@ interface MetadataNamesDao {
     @Query("SELECT * FROM metadata_name")
     fun metadataNameSnapshot(): List<MetadataNameEntity>
 
+    /** Source retention and album language inputs do not depend on translated display aliases. */
+    @Query("SELECT * FROM metadata_name WHERE language = 'und' AND source GLOB 'art-track-original:*'")
+    fun metadataOriginalNameSnapshot(): List<MetadataNameEntity>
+
+    /** Keep every observation from this source so a newer song row can withdraw related proof. */
+    @Query("SELECT * FROM metadata_name WHERE source = :source")
+    fun metadataNamesForSource(source: String): List<MetadataNameEntity>
+
+    /** Read a candidate source and all links to its target in one coherent, bounded snapshot. */
+    @Query("""
+        SELECT n.* FROM metadata_name n
+        WHERE n.source IN ('art-track-original:' || :sourceId, 'main-song-reference:' || :sourceId)
+        OR (n.kind = 'SONG' AND n.targetId = :targetId AND n.language = 'und'
+            AND n.source GLOB 'main-song-reference:*')
+        OR (n.language = 'und' AND n.source IN (
+            SELECT 'art-track-original:' || SUBSTR(r.source, LENGTH('main-song-reference:') + 1)
+            FROM metadata_name r
+            WHERE r.kind = 'SONG' AND r.targetId = :targetId AND r.language = 'und'
+                AND r.source GLOB 'main-song-reference:*'
+        ))
+    """)
+    fun metadataProviderReferenceInputs(targetId: String, sourceId: String): List<MetadataNameEntity>
+
     @Query("""
         SELECT n.kind, n.targetId, n.language, n.name, n.source, n.sourcePriority, n.observedAt,
             NULL AS originEvidenceJson, p.englishName
@@ -113,6 +136,9 @@ interface MetadataNamesDao {
 
     @Query("SELECT * FROM metadata_original_publication")
     fun metadataOriginalPublicationSnapshot(): List<MetadataOriginalPublicationEntity>
+
+    @Query("SELECT * FROM metadata_original_publication WHERE kind = :kind AND targetId = :targetId")
+    fun metadataOriginalPublication(kind: String, targetId: String): MetadataOriginalPublicationEntity?
 
     @Upsert
     fun upsertMetadataOriginalPublications(publications: List<MetadataOriginalPublicationEntity>)

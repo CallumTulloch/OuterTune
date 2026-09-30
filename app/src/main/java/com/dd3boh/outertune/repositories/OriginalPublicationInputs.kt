@@ -15,7 +15,7 @@ internal data class OriginalPublicationInput(
 /** Index one database snapshot. Unrelated albums do not participate in a target's commit guard. */
 internal class OriginalPublicationInputs(rows: List<MetadataNameEntity>) {
     val originals = latestOriginalRows(rows)
-    private val assessmentInputs by lazy { originalAssessmentInputs(originals) }
+    val assessmentInputs by lazy { originalAssessmentInputs(originals) }
     private val candidates = originals.associateWith { requireNotNull(originalCandidate(it)) }
     private val byTarget = originals.groupBy { candidates.getValue(it).target }
     val bySource = originals.groupBy { candidates.getValue(it).sourceVideoId }

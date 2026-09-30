@@ -7,12 +7,10 @@ import com.dd3boh.outertune.models.metadata.OriginalAlbumLanguageResolver
 import com.dd3boh.outertune.models.metadata.OriginalNameAssessment
 import com.dd3boh.outertune.models.metadata.OriginalNameAssessmentCodec
 import com.dd3boh.outertune.models.metadata.OriginalNameKind
+import com.dd3boh.outertune.models.metadata.originalEvidenceCache
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 import java.security.MessageDigest
 
@@ -27,12 +25,21 @@ private const val INPUT_SET_VERSION = 3
 internal class OriginalAssessmentInputs internal constructor(
     internal val candidates: Set<ArtTrackOriginalName>,
     private val songsByAlbum: Map<String, List<ArtTrackOriginalName>>,
-    private val candidateFingerprints: Map<ArtTrackOriginalName, String>,
 ) {
+    private val albumFingerprints = mutableMapOf<String, String>()
+    private val candidateFingerprints = mutableMapOf<ArtTrackOriginalName, String>()
     // Kept for diagnostics; validation uses the scoped fingerprint below.
     internal val fingerprint: String by lazy { inputSetFingerprint(candidates) }
 
-    internal fun fingerprintFor(candidate: ArtTrackOriginalName): String? = candidateFingerprints[candidate]
+    internal fun fingerprintFor(candidate: ArtTrackOriginalName): String? {
+        if (candidate !in candidates) return null
+        return candidateFingerprints.getOrPut(candidate) {
+            val album = candidate.albumId?.let { id -> songsByAlbum[id]?.let { songs ->
+                albumFingerprints.getOrPut(id) { inputSetFingerprint(songs) }
+            } }.orEmpty()
+            fingerprint(listOf(encodedCandidate(candidate), album))
+        }
+    }
 
     /** Include the complete album evidence even when only one of its names needs a new result. */
     internal fun withAlbumContext(values: Collection<ArtTrackOriginalName>): List<ArtTrackOriginalName> {
@@ -46,14 +53,8 @@ internal fun originalAssessmentInputs(rows: List<MetadataNameEntity>): OriginalA
     val candidates = effectiveCandidates(rows)
     val songsByAlbum = candidates.filter { it.target.kind == OriginalNameKind.SONG && !it.albumId.isNullOrBlank() }
         .groupBy { it.albumId!! }
-    // Hash each shared group once. Repeating the entire album/artist input in every row would
-    // turn this lightweight invalidation check into quadratic work on large libraries.
-    val albumFingerprints = songsByAlbum.mapValues { (_, songs) -> inputSetFingerprint(songs) }
-    val fingerprints = candidates.associateWith { candidate ->
-        fingerprint(listOf(encodedCandidate(candidate),
-            candidate.albumId?.let(albumFingerprints::get).orEmpty()))
-    }
-    return OriginalAssessmentInputs(candidates, songsByAlbum, fingerprints)
+    // A one-source refresh needs only its own fingerprints and directly linked album songs.
+    return OriginalAssessmentInputs(candidates, songsByAlbum)
 }
 
 /** Record this candidate's complete dependency set alongside its unchanged assessment codec. */
@@ -137,17 +138,12 @@ internal fun retainOriginalAssessments(
 
 private fun currentAssessmentFor(row: MetadataNameEntity, fingerprint: String): OriginalNameAssessment? {
     val candidate = originalCandidate(row) ?: return null
-    val assessment = OriginalNameAssessmentCodec.decode(row.originEvidenceJson, candidate.target, candidate.name)
-        ?: return null
+    val decoded = originalEvidenceCache.decode(row.originEvidenceJson, candidate.target, candidate.name)
+    val assessment = decoded.assessment ?: return null
     if (assessment.originalName != candidate.name || assessment.sourceVideoId != candidate.sourceVideoId ||
         !currentMethod(assessment.method)) return null
-    val root = runCatching { Json.parseToJsonElement(row.originEvidenceJson!!) as? JsonObject }.getOrNull()
-        ?: return null
-    val inputs = root[INPUT_SET_FIELD] as? JsonObject ?: return null
-    val version = inputs["version"] as? JsonPrimitive ?: return null
-    if (version.isString || version.intOrNull != INPUT_SET_VERSION) return null
-    fun text(key: String) = (inputs[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
-    if (text("model") != OriginalAlbumLanguageResolver.METHOD_VERSION || text("fingerprint") != fingerprint) return null
+    if (decoded.inputVersion != INPUT_SET_VERSION || decoded.inputModel != OriginalAlbumLanguageResolver.METHOD_VERSION ||
+        decoded.inputFingerprint != fingerprint) return null
     return assessment
 }
 

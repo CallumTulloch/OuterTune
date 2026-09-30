@@ -134,7 +134,10 @@ internal object PlaylistSongReferenceCodec {
 }
 
 /** Adapt direct, current assessments in memory only. References never become classifier inputs. */
-internal fun playlistAssociatedOriginalAssessments(rows: List<MetadataNameEntity>): List<OriginalNameAssessment> {
+internal fun playlistAssociatedOriginalAssessments(
+    rows: List<MetadataNameEntity>,
+    publicationInputs: OriginalPublicationInputs = OriginalPublicationInputs(rows),
+): List<OriginalNameAssessment> {
     // Select the latest observation before decoding, so a newer explicit {} withdrawal wins.
     val references = rows.filter { it.kind == "SONG" && it.language == "und" &&
         it.source.startsWith(PLAYLIST_SONG_REFERENCE_SOURCE_PREFIX) }
@@ -144,8 +147,8 @@ internal fun playlistAssociatedOriginalAssessments(rows: List<MetadataNameEntity
         }.distinct()
     if (references.isEmpty()) return emptyList()
     val sourceIds = references.map { it.sourceVideoId }.toSet()
-    val directRows = latestOriginalRows(rows)
-    val inputs = originalAssessmentInputs(directRows)
+    val directRows = publicationInputs.originals
+    val inputs = publicationInputs.assessmentInputs
     val unambiguousSources = directRows.filter { it.kind == "SONG" && it.targetId in sourceIds }
         .groupBy { it.targetId }.filterValues { sourceRows ->
             val candidates = sourceRows.mapNotNull(::originalCandidate)

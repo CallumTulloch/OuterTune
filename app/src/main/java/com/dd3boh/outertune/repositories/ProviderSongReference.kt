@@ -101,7 +101,10 @@ internal object ProviderSongReferenceCodec {
  * Never persist the adapted assessment: its source remains another video, which the direct codec
  * deliberately rejects. References cannot feed the classifier or serve as another edge's source.
  */
-internal fun associatedOriginalAssessments(rows: List<MetadataNameEntity>): List<OriginalNameAssessment> {
+internal fun associatedOriginalAssessments(
+    rows: List<MetadataNameEntity>,
+    publicationInputs: OriginalPublicationInputs = OriginalPublicationInputs(rows),
+): List<OriginalNameAssessment> {
     // Choose the latest observation before decoding: an invalid/null newer payload must not revive
     // an older edge. Ties retain conflicting valid names for the existing conservative policy.
     val references = rows.filter { it.kind == "SONG" && it.language == "und" &&
@@ -112,8 +115,8 @@ internal fun associatedOriginalAssessments(rows: List<MetadataNameEntity>): List
         }.distinct()
     if (references.isEmpty()) return emptyList()
     val requiredSources = references.map { it.sourceVideoId }.toSet()
-    val directRows = latestOriginalRows(rows)
-    val inputs = originalAssessmentInputs(directRows)
+    val directRows = publicationInputs.originals
+    val inputs = publicationInputs.assessmentInputs
     val unambiguousSources = directRows.filter { it.kind == "SONG" && it.targetId in requiredSources }
         .groupBy { it.targetId }.filterValues { sourceRows ->
             val candidates = sourceRows.mapNotNull(::originalCandidate)

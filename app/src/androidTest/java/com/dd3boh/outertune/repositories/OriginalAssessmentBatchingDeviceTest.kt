@@ -73,15 +73,21 @@ class OriginalAssessmentBatchingDeviceTest {
         val releaseFirst = CompletableDeferred<Unit>()
         val followingBackgroundEntered = CompletableDeferred<Unit>()
         val releaseFollowingBackground = CompletableDeferred<Unit>()
+        val foregroundInputsObserved = CompletableDeferred<Unit>()
         val foreground = (0 until 3).map { index ->
             val id = "fgtrack${index.toString().padStart(4, '0')}"
             ArtTrackOriginalName(OriginalNameTarget(OriginalNameKind.SONG, id),
                 "The Foreground Song We Have Been Waiting For $index", id, FOREGROUND_ALBUM)
         }
         val calls = CopyOnWriteArrayList<List<ArtTrackOriginalName>>()
+        var phase = "first background model"
         try {
             fixture.database.recordMetadataNames(names((0 until 17).map(::backgroundSong)))
-            fixture.start(if (alreadyForeground) FOREGROUND_ALBUM else null) { candidates, at ->
+            fixture.start(if (alreadyForeground) FOREGROUND_ALBUM else null, onOriginalInputsObserved = { rows ->
+                if (foreground.all { candidate -> rows.any { originalCandidate(it) == candidate } }) {
+                    foregroundInputsObserved.complete(Unit)
+                }
+            }) { candidates, at ->
                 calls += candidates
                 when {
                     candidates.singleOrNull()?.sourceVideoId == backgroundSong(0).sourceVideoId -> {
@@ -102,11 +108,18 @@ class OriginalAssessmentBatchingDeviceTest {
             fixture.database.recordMetadataNames(names(foreground))
             // The real display collector observes the newly arrived rows while classification
             // is held; no navigation/priority change accompanies the already-foreground case.
+            phase = "configured foreground names"
             withTimeout(5_000) { fixture.published.first { selected -> foreground.all {
                 selected[it.target] == "保存された曲 ${it.target.id}"
             } } }
+            // Display and classification have independent Room collectors. Confirm the actual
+            // classification signal, not merely a display update, before releasing its model.
+            phase = "foreground classification input notification"
+            withTimeout(5_000) { foregroundInputsObserved.await() }
             releaseFirst.complete(Unit)
+            phase = "next background model"
             withTimeout(10_000) { followingBackgroundEntered.await() }
+            phase = "English foreground names"
             withTimeout(5_000) { fixture.published.first { selected -> foreground.all { selected[it.target] == it.name } } }
 
             assertEquals("Navigation interrupts the background batch after its current model call",
@@ -119,6 +132,9 @@ class OriginalAssessmentBatchingDeviceTest {
             assertTrue(fixture.database.metadataOriginalPublicationSnapshot().none {
                 it.targetId == backgroundSong(0).target.id && it.englishName != null
             })
+        } catch (error: kotlinx.coroutines.TimeoutCancellationException) {
+            throw AssertionError("Timed out at $phase; model calls=${calls.map { group -> group.map { it.sourceVideoId } }}; " +
+                "foreground names=${foreground.map { fixture.published.value[it.target] }}", error)
         } finally {
             releaseFirst.complete(Unit)
             releaseFollowingBackground.complete(Unit)
@@ -139,6 +155,7 @@ class OriginalAssessmentBatchingDeviceTest {
             private set
 
         fun start(foregroundAlbum: String? = null,
+            onOriginalInputsObserved: (List<MetadataNameEntity>) -> Unit = {},
             assess: suspend (List<ArtTrackOriginalName>, Long) -> List<OriginalNameAssessment>) {
             val locale = YouTubeLocale("JP", "ja")
             repository = MetadataNameRepository(database, context, MetadataNameRepository.Runtime(
@@ -147,6 +164,7 @@ class OriginalAssessmentBatchingDeviceTest {
                 locale = { locale }, localeUpdates = MutableStateFlow(locale),
                 contextKey = { "JP:assessment-batching" }, now = { 1_800_000_000_000L },
                 observeMetadata = {}, publishNames = { selected, _ -> published.value = selected },
+                onOriginalInputsObserved = onOriginalInputsObserved,
                 queue = { _, _ -> Result.success(emptyList()) },
                 album = { _, _ -> Result.failure(IOException("Offline name scheduling fixture")) },
                 albumContext = { _, _ -> Result.failure(IOException("Offline name scheduling fixture")) },
