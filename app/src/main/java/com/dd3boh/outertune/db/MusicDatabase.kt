@@ -172,9 +172,10 @@ abstract class InternalDatabase : RoomDatabase() {
         fun newInstance(context: Context): MusicDatabase = createDatabase(context, DB_NAME)
 
         // keep this separate in the rare case we come across concepts of a plan to support migrations from other forks
-        fun newTestInstance(context: Context, dbName: String): MusicDatabase = createDatabase(context, dbName)
+        fun newTestInstance(context: Context, dbName: String, allowDestructiveMigration: Boolean = true): MusicDatabase =
+            createDatabase(context, dbName, allowDestructiveMigration)
 
-        private fun createDatabase(context: Context, dbName: String): MusicDatabase =
+        private fun createDatabase(context: Context, dbName: String, allowDestructiveMigration: Boolean = true): MusicDatabase =
             MusicDatabase(
                 delegate = Room.databaseBuilder(context, InternalDatabase::class.java, dbName)
                     .addMigrations(MIGRATION_1_2)
@@ -185,7 +186,7 @@ abstract class InternalDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_21_22)
                     // This development restart intentionally has no 22 -> 23, 23 -> 24 or 26 -> 27 migration.
                     // A version-specific fallback conflicts with the retained 21 -> 22 migration.
-                    .fallbackToDestructiveMigration(true)
+                    .apply { if (allowDestructiveMigration) fallbackToDestructiveMigration(true) }
                     .build()
             )
     }
