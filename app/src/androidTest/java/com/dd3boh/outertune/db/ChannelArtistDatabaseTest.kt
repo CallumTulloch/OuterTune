@@ -195,6 +195,88 @@ class ChannelArtistDatabaseTest {
     }
 
     @Test
+    fun savedAndDownloadedChannelMembershipCountsOverlapOnceAndExcludesViewedOnlyTracksAcrossLinkAndUnlink() = runBlocking {
+        withDatabase { database ->
+            val savedOnly = "channel-membership-saved"
+            val downloadedOnly = "channel-membership-downloaded"
+            val both = "channel-membership-both"
+            val viewedOnly = "channel-membership-viewed"
+            val allIds = listOf(savedOnly, downloadedOnly, both, viewedOnly)
+            val expectedIds = setOf(savedOnly, downloadedOnly, both)
+            allIds.forEach { id ->
+                database.insert(metadata(id, channelCredit())) { song ->
+                    song.copy(
+                        inLibrary = savedAt.takeIf { id == savedOnly || id == both },
+                        dateDownload = savedAt.takeIf { id == downloadedOnly || id == both },
+                    )
+                }
+            }
+            val sourceId = database.artistIdsForSong(savedOnly).single()
+            val sourceSnapshot = database.artistById(sourceId)!!
+            val trackSnapshots = allIds.associateWith { database.songForArtistCredit(it)!! }
+            assertTrue(allIds.all { database.artistIdsForSong(it) == listOf(sourceId) })
+
+            suspend fun assertMembership(displayId: String) {
+                val source = database.linkableArtistSource(sourceId).first()!!
+                assertEquals(sourceId, source.localArtist.id)
+                assertEquals(3, source.localArtist.songCount)
+                assertEquals(2, source.localArtist.downloadCount)
+                assertEquals(3, source.songs.size)
+                assertEquals(expectedIds, source.songs.map { it.id }.toSet())
+                assertEquals(3, source.songs.map { it.id }.distinct().size)
+                assertTrue(source.folders.isEmpty())
+
+                // The same membership rule feeds source management and the visible artist page.
+                val displayed = database.artist(sourceId).first()!!
+                assertEquals(displayId, displayed.id)
+                assertEquals(3, displayed.songCount)
+                assertEquals(2, displayed.downloadCount)
+                for (sort in ArtistSongSortType.entries) {
+                    val tracks = database.artistSongs(displayId, sort, false).first()
+                    assertEquals(3, tracks.size)
+                    assertEquals(expectedIds, tracks.map { it.id }.toSet())
+                }
+                for ((filter, count, downloads) in listOf(
+                    Triple(ArtistFilter.LIBRARY, 2, 1),
+                    Triple(ArtistFilter.DOWNLOADED, 2, 2),
+                    Triple(ArtistFilter.ALL, 3, 2),
+                )) {
+                    val artists = database.artists(filter, ArtistSortType.NAME, false).first()
+                    assertEquals(listOf(displayId), artists.map { it.id })
+                    assertEquals(count, artists.single().songCount)
+                    assertEquals(downloads, artists.single().downloadCount)
+                }
+                assertEquals(sourceSnapshot, database.artistById(sourceId))
+                trackSnapshots.forEach { (id, snapshot) ->
+                    assertEquals(snapshot, database.songForArtistCredit(id))
+                    assertEquals(listOf(sourceId), database.artistIdsForSong(id))
+                }
+            }
+
+            assertTrue(database.localArtistLinkSources().first().isEmpty())
+            assertMembership(sourceId)
+            val choice = link(sourceId)
+            database.setLocalArtistLink(choice)
+            assertMembership(channelId)
+            for (target in listOf<String?>(null, channelId)) {
+                val managed = database.localArtistLinkSources(target).first().single()
+                assertEquals(sourceId, managed.localArtist.id)
+                assertEquals(3, managed.localArtist.songCount)
+                assertEquals(2, managed.localArtist.downloadCount)
+                assertEquals(3, managed.songs.size)
+                assertEquals(expectedIds, managed.songs.map { it.id }.toSet())
+            }
+            assertTrue(database.localArtistLinkSources(alternateId).first().isEmpty())
+
+            assertTrue(database.removeLocalArtistLink(sourceId, choice.revision))
+            assertTrue(database.localArtistLinkSources().first().isEmpty())
+            assertMembership(sourceId)
+            assertNull(database.artistDisplayById(channelId))
+            assertNull(database.artistByOnlineId(channelId))
+        }
+    }
+
+    @Test
     fun explicitTrackCreditReplacesChannelFallbackWithoutInheritingItsManualChoice() = runBlocking {
         withDatabase { database ->
             save(database, "channel-upgrade")

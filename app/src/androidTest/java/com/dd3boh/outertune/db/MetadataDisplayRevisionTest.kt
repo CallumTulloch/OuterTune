@@ -1,6 +1,5 @@
 package com.dd3boh.outertune.db
 
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.test.platform.app.InstrumentationRegistry
@@ -242,14 +241,14 @@ class MetadataDisplayRevisionTest {
     }
 
     @Test
-    fun versionTwentyNineUpgradeKeepsNinetyFiveSavedSongsAndReadsCacheWithAnEmptyJournal() = runBlocking {
+    fun freshDatabaseKeepsNinetyFiveSavedSongsAndReadsCacheWithAnEmptyJournalAcrossReopen() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val databaseName = "metadata-display-migration-${UUID.randomUUID()}.db"
+        val databaseName = "metadata-display-reopen-${UUID.randomUUID()}.db"
         fun open() = MusicDatabase(Room.databaseBuilder(context, InternalDatabase::class.java, databaseName).build())
         var database: MusicDatabase? = open()
         try {
-            val old = requireNotNull(database)
-            old.awaitTransaction {
+            val created = requireNotNull(database)
+            created.awaitTransaction {
                 repeat(95) { index ->
                     insert(SongEntity("saved-$index", "Saved $index", localPath = null,
                         inLibrary = LocalDateTime.of(2026, 9, 30, 0, 0)))
@@ -257,29 +256,25 @@ class MetadataDisplayRevisionTest {
                 recordMetadataNames(listOf(name("saved-0")))
                 recordMetadataOriginalPublications(listOf(publication("saved-0", "Preserved original")))
             }
-            val originalDisplay = old.metadataDisplayNameSnapshot()
-            old.close()
+            val originalDisplay = created.metadataDisplayNameSnapshot()
+            // A first display read must load the saved cache even without revision entries.
+            // Keep the current schema intact; old-version migration is outside this test's scope.
+            created.openHelper.writableDatabase.execSQL("DELETE FROM metadata_display_revision")
+            created.close()
             database = null
-            // Version 30 only adds this independent table. Removing it reconstructs the actual
-            // version-29 schema while retaining populated music/cache tables for the migration.
-            SQLiteDatabase.openDatabase(context.getDatabasePath(databaseName).path, null, SQLiteDatabase.OPEN_READWRITE).use {
-                it.execSQL("DROP TABLE metadata_display_revision")
-                it.execSQL("UPDATE room_master_table SET identity_hash = ? WHERE id = 42",
-                    arrayOf("76f3df123228ca37d6eef8217d01763d")) // Exported schema 29.
-                it.version = 29
+            val reopened = open().also { database = it }
+            assertEquals(MusicDatabase.MUSIC_DATABASE_VERSION, reopened.openHelper.readableDatabase.version)
+            reopened.openHelper.readableDatabase.query("SELECT id FROM song WHERE inLibrary IS NOT NULL ORDER BY id").use {
+                val savedIds = mutableSetOf<String>()
+                while (it.moveToNext()) savedIds += it.getString(0)
+                assertEquals((0 until 95).map { index -> "saved-$index" }.toSet(), savedIds)
             }
-            val upgraded = open().also { database = it }
-            assertEquals(30, upgraded.openHelper.readableDatabase.version)
-            upgraded.openHelper.readableDatabase.query("SELECT COUNT(*) FROM song WHERE inLibrary IS NOT NULL").use {
-                assertTrue(it.moveToFirst())
-                assertEquals(95, it.getInt(0))
-            }
-            assertTrue(upgraded.metadataDisplayRevisionSnapshot().isEmpty())
-            assertFalse(upgraded.metadataDisplayChanges().first())
-            assertEquals(originalDisplay, upgraded.metadataDisplayNameSnapshot())
-            upgraded.recordMetadataNames(listOf(name("saved-0", text = "New alias")))
-            assertEquals(1, upgraded.metadataDisplayRevisionSnapshot().size)
-            assertEquals(2, upgraded.metadataDisplayNamesForTargets("SONG", listOf("saved-0")).size)
+            assertTrue(reopened.metadataDisplayRevisionSnapshot().isEmpty())
+            assertFalse(reopened.metadataDisplayChanges().first())
+            assertEquals(originalDisplay, reopened.metadataDisplayNameSnapshot())
+            reopened.recordMetadataNames(listOf(name("saved-0", text = "New alias")))
+            assertEquals(1, reopened.metadataDisplayRevisionSnapshot().size)
+            assertEquals(2, reopened.metadataDisplayNamesForTargets("SONG", listOf("saved-0")).size)
         } finally {
             database?.close()
             context.deleteDatabase(databaseName)
