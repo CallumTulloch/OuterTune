@@ -170,6 +170,9 @@ fun AlbumScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val loadFailed by viewModel.loadFailed.collectAsState()
     val unavailableSongIds by viewModel.unavailableSongIds.collectAsState()
+    // Playback may have saved only one related song, before the album's track list is fetched.
+    val hasTrackList = albumWithSongs?.album?.let { it.isLocal || it.hasTrackList } == true
+    val songs = if (hasTrackList) albumWithSongs?.songs.orEmpty() else emptyList()
 
     // multiselect
     var inSelectMode by rememberSaveable { mutableStateOf(false) }
@@ -191,7 +194,7 @@ fun AlbumScreen(
 
     val downloadUtil = LocalDownloadUtil.current
     val downloads by downloadUtil.downloads.collectAsState()
-    val playableSongs = albumWithSongs?.songs.orEmpty().filter {
+    val playableSongs = songs.filter {
         it.id !in unavailableSongIds || it.song.isLocal || getDownloadState(downloads[it.id]) == Download.STATE_COMPLETED
     }
     var downloadState by remember {
@@ -199,6 +202,10 @@ fun AlbumScreen(
     }
 
     LaunchedEffect(albumWithSongs) {
+        if (!hasTrackList) {
+            downloadState = Download.STATE_STOPPED
+            return@LaunchedEffect
+        }
         if (albumWithSongs?.album?.isLocal != false) return@LaunchedEffect
         val songs = albumWithSongs?.songs?.filterNot { it.song.isLocal }?.map { it.id }
         if (songs.isNullOrEmpty()) return@LaunchedEffect
@@ -300,7 +307,9 @@ fun AlbumScreen(
                             Text(annotatedString)
 
                             Text(
-                                text = if (albumWithSongsLocal.album.year != null) {
+                                text = if (!hasTrackList) {
+                                    albumWithSongsLocal.album.year?.toString().orEmpty()
+                                } else if (albumWithSongsLocal.album.year != null) {
                                     joinByBullet(
                                         getNSongsString(
                                             albumWithSongsLocal.album.songCount,
@@ -337,6 +346,7 @@ fun AlbumScreen(
                                     when (downloadState) {
                                         Download.STATE_COMPLETED -> {
                                             IconButton(
+                                                enabled = hasTrackList,
                                                 onClick = {
                                                     albumWithSongsLocal.songs.forEach { song ->
                                                         DownloadService.sendRemoveDownload(
@@ -357,6 +367,7 @@ fun AlbumScreen(
 
                                         Download.STATE_DOWNLOADING -> {
                                             IconButton(
+                                                enabled = hasTrackList,
                                                 onClick = {
                                                     albumWithSongsLocal.songs.forEach { song ->
                                                         DownloadService.sendRemoveDownload(
@@ -377,6 +388,7 @@ fun AlbumScreen(
 
                                         else -> {
                                             IconButton(
+                                                enabled = hasTrackList,
                                                 onClick = {
                                                     val songs =
                                                         playableSongs.map { it.toMediaMetadata() }
@@ -393,6 +405,7 @@ fun AlbumScreen(
                                 }
 
                                 IconButton(
+                                    enabled = hasTrackList,
                                     onClick = {
                                         menuState.show {
                                             AlbumMenu(
@@ -473,7 +486,7 @@ fun AlbumScreen(
 
             val thumbnailSize = (ListThumbnailSize.value * density.density).roundToInt()
             itemsIndexed(
-                items = albumWithSongs!!.songs,
+                items = songs,
                 key = { _, song -> song.id }
             ) { index, song ->
                 if (playableSongs.none { it.id == song.id }) {
@@ -521,7 +534,14 @@ fun AlbumScreen(
                 )
             }
 
-            if (albumWithSongsLocal.songs.isEmpty() && !isLoading && !loadFailed) {
+            if (!hasTrackList && !loadFailed) {
+                item {
+                    ShimmerHost {
+                        repeat(6) { ListItemPlaceHolder() }
+                    }
+                }
+            }
+            if (hasTrackList && songs.isEmpty() && !isLoading && !loadFailed) {
                 item { LoadError(onRetry = viewModel::retry, message = stringResource(R.string.album_no_tracks)) }
             }
             if (otherVersions.isNotEmpty()) {
@@ -631,7 +651,7 @@ fun AlbumScreen(
     ) {
         FloatingFooter(inSelectMode) {
             val albumWithSongsLocal = albumWithSongs
-            if (albumWithSongsLocal != null && albumWithSongsLocal.songs.isNotEmpty()) {
+            if (albumWithSongsLocal != null && songs.isNotEmpty()) {
                 SelectHeader(
                     navController = navController,
                     selectedItems = selection.mapNotNull { id ->

@@ -70,6 +70,11 @@ class AlbumViewModel @Inject constructor(
                     val response = YouTube.album(albumId, requestLocale = requestLocale).getOrThrow()
                     currentCoroutineContext().ensureActive()
                     if (expected != generation || requestLocale != YouTube.locale) return@withTimeout
+                    if (response.songs.isEmpty()) {
+                        // No DB track-list update will arrive for an empty page.
+                        loadFailed.value = true
+                        return@withTimeout
+                    }
                     if (response.hasUnresolvedTrackSources && database.albumById(albumId)?.hasTrackList == true) {
                         // A cold screen still needs restrictions for the unchanged cached IDs.
                         // Availability on an unmatched MV says nothing about a cached audio ID.
