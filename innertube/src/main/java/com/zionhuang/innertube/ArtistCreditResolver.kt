@@ -4,6 +4,7 @@ import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.ArtistCredit
 import com.zionhuang.innertube.models.ArtistCreditStatus
 import com.zionhuang.innertube.models.merge
+import com.zionhuang.innertube.models.isChannelByline
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -114,15 +115,15 @@ internal object ArtistCreditResolver {
     }
 
     fun withPageNames(existing: ArtistCredit, pages: List<Artist>): ArtistCredit {
-        if (existing.status == ArtistCreditStatus.CONFLICT) return existing
-        val matches = pages.filter { it.id != null }.groupBy { it.name }
+        if (existing.status == ArtistCreditStatus.CONFLICT || existing.isChannelByline()) return existing
+        val matches = pages.filter { it.id != null && !it.isChannel }.groupBy { it.name }
         if (existing.status == ArtistCreditStatus.RAW) {
             val match = matches[existing.rawText]?.distinctBy { it.id }?.singleOrNull() ?: return existing
             return existing.merge(ArtistCredit(existing.rawText, listOf(match), ArtistCreditStatus.COMPLETE,
                 "artist-menu:verified-page", existing.language, listOf("artist-page:${match.id}:whole-name-match")))
         }
         val updated = existing.artists.map { artist ->
-            val match = if (existing.artists.count { it.name == artist.name } != 1) null
+            val match = if (artist.isChannel || existing.artists.count { it.name == artist.name } != 1) null
                 else matches[artist.name]?.distinctBy { it.id }?.singleOrNull()
             if (match == null) artist else artist.copy(id = match.id)
         }

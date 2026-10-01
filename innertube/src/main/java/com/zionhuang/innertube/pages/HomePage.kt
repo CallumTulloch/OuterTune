@@ -14,6 +14,7 @@ import com.zionhuang.innertube.models.withVideoSource
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.artistBrowseIds
 import com.zionhuang.innertube.models.toAlbumArtistCredit
+import com.zionhuang.innertube.models.toArtist
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
@@ -72,10 +73,7 @@ data class HomePage(
                             title = renderer.title.runs?.firstOrNull()?.text ?: return null,
                             artists = renderer.subtitle?.runs?.splitBySeparator()?.firstOrNull()
                                 ?.artistElements()?.map {
-                                Artist(
-                                    name = it.text,
-                                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                                )
+                                it.toArtist()
                             }.orEmpty(),
                             album = null,
                             duration = null,
@@ -95,10 +93,7 @@ data class HomePage(
                                 ?.watchPlaylistEndpoint?.playlistId ?: return null,
                             title = renderer.title.runs?.firstOrNull()?.text ?: return null,
                             artists = renderer.subtitle?.runs?.artistElements()?.drop(1)?.map {
-                                Artist(
-                                    name = it.text,
-                                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                                )
+                                it.toArtist()
                             },
                             year = renderer.subtitle?.runs?.lastOrNull()?.text?.toIntOrNull(),
                             thumbnail = renderer.thumbnailRenderer.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,

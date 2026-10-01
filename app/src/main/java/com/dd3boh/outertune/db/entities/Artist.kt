@@ -18,5 +18,5 @@ data class Artist(
     override val title: String
         get() = artist.name
     override val thumbnailUrl: String?
-        get() = (if (artist.isLocal) localLink?.thumbnailUrl else null) ?: artist.thumbnailUrl
+        get() = (if (artist.isLinkableSource) localLink?.thumbnailUrl else null) ?: artist.thumbnailUrl
 }

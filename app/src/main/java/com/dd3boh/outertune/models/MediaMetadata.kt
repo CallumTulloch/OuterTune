@@ -42,6 +42,8 @@ data class MediaMetadata(
         val name: String,
         val isLocal: Boolean = false,
         val onlineId: String? = null,
+        val isChannel: Boolean = false,
+        val sourceChannelId: String? = null,
     ) : Serializable
 
     data class Album(
@@ -132,9 +134,11 @@ fun Song.toMediaMetadata(): MediaMetadata {
     title = song.title,
     artists = credit?.artists?.map {
         MediaMetadata.Artist(
-            id = it.ref ?: ArtistIdentity.stableId(song.id, it.name),
+            id = ArtistIdentity.sourceId(song.id, it),
             name = it.name,
-            onlineId = ArtistIdentity.onlineId(it.id),
+            onlineId = if (it.isChannel) null else ArtistIdentity.onlineId(it.id),
+            isChannel = it.isChannel,
+            sourceChannelId = it.sourceChannelId,
         )
     } ?: artists.map {
         MediaMetadata.Artist(
@@ -142,6 +146,8 @@ fun Song.toMediaMetadata(): MediaMetadata {
             name = it.name,
             isLocal = it.isLocal,
             onlineId = it.onlineArtistId,
+            isChannel = it.isChannel,
+            sourceChannelId = it.sourceChannelId,
         )
     },
     duration = song.duration,
@@ -187,9 +193,11 @@ fun SongItem.toMediaMetadata(): MediaMetadata {
     title = title,
     artists = (credit?.artists ?: artists).map {
         MediaMetadata.Artist(
-            id = it.ref ?: ArtistIdentity.onlineId(it.id) ?: ArtistIdentity.stableId(id, it.name),
+            id = ArtistIdentity.sourceId(id, it),
             name = it.name,
-            onlineId = ArtistIdentity.onlineId(it.id),
+            onlineId = if (it.isChannel) null else ArtistIdentity.onlineId(it.id),
+            isChannel = it.isChannel,
+            sourceChannelId = it.sourceChannelId,
         )
     },
     duration = duration ?: -1,
@@ -212,15 +220,28 @@ fun MediaMetadata.withArtistCredit(credit: ArtistCredit): MediaMetadata {
     return copy(
         artistCredit = stable,
         artists = stable.artists.map {
-            MediaMetadata.Artist(id = it.ref, name = it.name, onlineId = it.id)
+            MediaMetadata.Artist(id = it.ref, name = it.name, onlineId = it.id,
+                isChannel = it.isChannel, sourceChannelId = it.sourceChannelId)
         },
     )
+}
+
+/** The player uploader supplies a video fallback; established performers retain priority. */
+internal fun MediaMetadata.withChannelFallback(author: String, channelId: String?, musicVideoType: String?): MediaMetadata {
+    if (isLocal || author.isBlank() || musicVideoType == null || musicVideoType == "MUSIC_VIDEO_TYPE_ATV" ||
+        artists.any { !it.isChannel } || artistCredit?.artists?.any { !it.isChannel } == true) return this
+    val channelArtist = OnlineArtist(author, null, sourceChannelId = channelId?.takeIf(String::isNotBlank), isChannel = true)
+    return withArtistCredit(ArtistCredit(author, listOf(channelArtist), ArtistCreditStatus.COMPLETE,
+        source = "player-uploader", language = artistCredit?.language.orEmpty(),
+        evidence = listOf("channel-byline:player-uploader", "video-source:$musicVideoType")))
 }
 
 /** Older callers can supply labels without proof that each label identifies one person. */
 internal fun MediaMetadata.creditForPersistence(): ArtistCredit {
     artistCredit?.let { return it }
     val confirmed = artists.mapNotNull { artist ->
+        if (artist.isChannel) return@mapNotNull OnlineArtist(artist.name, null, artist.id,
+            sourceChannelId = artist.sourceChannelId, isChannel = true)
         val onlineId = ArtistIdentity.onlineId(artist.onlineId) ?: ArtistIdentity.onlineId(artist.id)
         onlineId?.let { OnlineArtist(name = artist.name, id = it, ref = artist.id) }
     }

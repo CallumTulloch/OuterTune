@@ -32,9 +32,15 @@ data class ArtistEntity(
     val onlineId: String? = null,
     // A reversible album-scoped display group. Raw credit identity and relations stay on id.
     val albumGroupId: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val isChannel: Boolean = false,
+    val sourceChannelId: String? = null,
 ) {
+    val isChannelSource: Boolean get() = isChannel
+    val isLinkableSource: Boolean get() = isLocal || isChannel
+
     val onlineArtistId: String?
-        get() = if (isLocal) null else ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id)
+        get() = if (isLinkableSource) null else ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id)
 
     val isYouTubeArtist: Boolean
         get() = onlineArtistId != null

@@ -3,6 +3,9 @@ package com.dd3boh.outertune.viewmodels
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.ArtistEntity
 import com.dd3boh.outertune.db.entities.LocalArtistLink
+import com.dd3boh.outertune.db.entities.LocalArtistLinkSource
+import com.dd3boh.outertune.db.entities.Song
+import com.dd3boh.outertune.db.entities.SongEntity
 import com.dd3boh.outertune.repositories.LocalArtistLinkCandidate
 import com.dd3boh.outertune.repositories.LocalArtistLinkException
 import com.dd3boh.outertune.repositories.LocalArtistLinkFailure
@@ -17,11 +20,94 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.junit.Assert.*
 import org.junit.Test
 
 class LocalArtistLinkViewModelTest {
+    @Test
+    fun aChannelSourceLoadsItsSavedTracksBeforeManualLinkChangeAndUnlink() = fixture { f ->
+        val entity = ArtistEntity("CS-fixture", "Original channel", isChannel = true, sourceChannelId = "UC-upload-channel")
+        val artist = Artist(entity, songCount = 2, downloadCount = 0)
+        val source = LocalArtistLinkSource(artist, emptyList(), songs = listOf(
+            Song(SongEntity(id = "first-video", title = "First song", duration = 120, localPath = null), listOf(entity)),
+            Song(SongEntity(id = "second-video", title = "Second song", duration = 180, localPath = null), listOf(entity)),
+        ))
+        f.open(artist)
+        assertFalse(f.vm.state.value.loaded)
+        f.vm.search()
+        f.vm.confirm()
+        f.run()
+        assertTrue(f.searches.isEmpty())
+        assertTrue(f.saves.isEmpty())
+        assertTrue(f.sourceDetails.tryEmit(source))
+        f.run()
+        assertTrue(f.vm.state.value.loaded)
+        assertEquals(source, f.vm.state.value.source)
+        f.readyPreview("UC-first")
+        assertTrue(f.saves.isEmpty())
+        f.vm.confirm()
+        f.run()
+        assertEquals("CS-fixture", f.link.value!!.localArtistId)
+        assertEquals("UC-first", f.link.value!!.onlineArtistId)
+        assertEquals(entity, f.vm.state.value.source!!.localArtist.artist)
+        f.open(artist)
+        f.readyPreview("UC-second")
+        f.vm.confirm()
+        f.run()
+        assertEquals(listOf("UC-first" to null, "UC-second" to "saved-revision"), f.saves)
+        f.open(artist)
+        f.vm.askUnlink()
+        f.vm.unlink()
+        f.run()
+        assertNull(f.link.value)
+        assertEquals(source.songs, f.vm.state.value.source!!.songs)
+        assertEquals("UC-upload-channel", f.vm.state.value.source!!.localArtist.artist.sourceChannelId)
+    }
+
+    @Test
+    fun missingChannelSourceBlocksSavingAndRecoversWhenItsTracksCanBeRead() = fixture { f ->
+        val artist = Artist(ArtistEntity("CS-fixture", "Channel", isChannel = true), 0, 0)
+        f.open(artist)
+        assertTrue(f.sourceDetails.tryEmit(null))
+        f.run()
+        assertFalse(f.vm.state.value.loaded)
+        assertEquals(LocalArtistLinkViewModel.Failure.LOAD, f.vm.state.value.failure)
+        assertTrue(f.sourceDetails.tryEmit(LocalArtistLinkSource(artist, emptyList())))
+        f.run()
+        assertTrue(f.vm.state.value.loaded)
+        assertNull(f.vm.state.value.failure)
+        assertTrue(f.saves.isEmpty())
+    }
+
+    @Test
+    fun sourceLoadFailureAfterPreviewDisablesConfirmationUntilTheSourceIsReloaded() = fixture { f ->
+        val artist = Artist(ArtistEntity("CS-fixture", "Channel", isChannel = true), 0, 0)
+        val source = LocalArtistLinkSource(artist, emptyList())
+        assertTrue(f.sourceDetails.tryEmit(source))
+        f.open(artist)
+        f.readyPreview("UC-selected")
+        f.sourceFailure = IOException("source unavailable")
+        assertTrue(f.sourceDetails.tryEmit(source))
+        f.run()
+        assertFalse(f.vm.state.value.loaded)
+        assertEquals(LocalArtistLinkViewModel.Failure.LOAD, f.vm.state.value.failure)
+        assertNull(f.vm.state.value.preview)
+        f.vm.confirm()
+        f.run()
+        assertTrue(f.saves.isEmpty())
+        f.sourceFailure = null
+        f.open(artist)
+        assertTrue(f.vm.state.value.loaded)
+        assertNull(f.vm.state.value.failure)
+        assertNull(f.vm.state.value.preview)
+        f.readyPreview("UC-selected")
+        f.vm.confirm()
+        f.run()
+        assertEquals(listOf("UC-selected" to null), f.saves)
+    }
+
     @Test
     fun searchAndPreviewNeverSaveUntilTheSelectedPageIsConfirmed() = fixture { f ->
         f.open()
@@ -181,6 +267,9 @@ class LocalArtistLinkViewModelTest {
         }
         val scope = CoroutineScope(SupervisorJob() + dispatcher)
         val link = MutableStateFlow<LocalArtistLink?>(null)
+        val sourceDetails = MutableSharedFlow<LocalArtistLinkSource?>(replay = 1)
+        var sourceFailure: IOException? = null
+        var sourceId = "LA-fixture"
         val contextChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         var token = "initial-context"
         val searches = mutableListOf<CompletableDeferred<List<ArtistItem>>>()
@@ -189,6 +278,12 @@ class LocalArtistLinkViewModelTest {
         var pendingSave: CompletableDeferred<Unit>? = null
         val vm = LocalArtistLinkViewModel(LocalArtistLinkViewModel.Runtime(
             links = { link }, contextToken = { token }, contextChanges = contextChanges,
+            sourceDetails = { flow {
+                sourceDetails.collect { source ->
+                    emit(source)
+                    sourceFailure?.let { throw it }
+                }
+            } },
             search = {
                 val reply = CompletableDeferred<List<ArtistItem>>().also(searches::add)
                 withContext(NonCancellable) { reply.await() }
@@ -209,14 +304,15 @@ class LocalArtistLinkViewModelTest {
             },
             dispatcher = dispatcher, scope = scope,
         ))
-        fun open() {
-            vm.open(Artist(ArtistEntity("LA-fixture", "Local name", isLocal = true), songCount = 3, downloadCount = 0))
+        fun open(artist: Artist = Artist(ArtistEntity("LA-fixture", "Local name", isLocal = true), songCount = 3, downloadCount = 0)) {
+            sourceId = artist.id
+            vm.open(artist)
             run()
         }
         fun run() { while (tasks.isNotEmpty()) tasks.removeFirst().run() }
         fun item(id: String) = ArtistItem(id, "Name $id", null, shuffleEndpoint = null, radioEndpoint = null)
         fun candidate(id: String) = LocalArtistLinkCandidate(id, "Name $id", null, listOf("Album"), token)
-        fun savedLink(id: String, revision: String) = LocalArtistLink("LA-fixture", id, "Name $id", null, revision)
+        fun savedLink(id: String, revision: String) = LocalArtistLink(sourceId, id, "Name $id", null, revision)
         fun readyPreview(id: String) {
             vm.search()
             run()

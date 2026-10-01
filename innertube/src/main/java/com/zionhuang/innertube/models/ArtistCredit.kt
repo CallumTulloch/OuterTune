@@ -20,6 +20,9 @@ data class ArtistCredit(
 fun ArtistCredit.isEmptyByline(): Boolean =
     status == ArtistCreditStatus.RAW && rawText.isBlank() && artists.isEmpty()
 
+/** A channel fallback is usable in the app, without establishing any performer identity. */
+fun ArtistCredit.isChannelByline(): Boolean = artists.isNotEmpty() && artists.all { it.isChannel }
+
 /** Merge evidence without turning a later, thinner response into a destructive replacement. */
 fun ArtistCredit.merge(incoming: ArtistCredit): ArtistCredit {
     if (incoming == this) return this
@@ -32,12 +35,25 @@ fun ArtistCredit.merge(incoming: ArtistCredit): ArtistCredit {
         evidence = (notes + "conflict:${incoming.source}:${incoming.artists.map { it.name to it.id }}").distinct())
     if (status == ArtistCreditStatus.CONFLICT) return copy(evidence = notes)
     if (incoming.status == ArtistCreditStatus.CONFLICT) return conflict()
+    // Performer evidence replaces a fallback as a whole, preserving its own literal byline.
+    // Conversely a later uploader response must not replace already established artists.
+    if (isChannelByline() && !incoming.isChannelByline() && incoming.artists.isNotEmpty() &&
+        incoming.status != ArtistCreditStatus.RAW) return incoming.copy(evidence = notes)
+    if (incoming.isChannelByline() && !isChannelByline() && artists.isNotEmpty()) return copy(evidence = notes)
     if (incoming.status == ArtistCreditStatus.RAW) return copy(
         rawText = rawText.ifEmpty { incoming.rawText }, evidence = notes)
     if (status == ArtistCreditStatus.RAW) return incoming.copy(
         rawText = rawText.ifEmpty { incoming.rawText },
         language = language.ifEmpty { incoming.language }, evidence = notes)
-    fun matches(a: Artist, b: Artist) = a.name == b.name || (a.id != null && a.id == b.id)
+    fun matches(a: Artist, b: Artist): Boolean {
+        if (a.isChannel != b.isChannel) return false
+        if (a.isChannel) {
+            return if (a.sourceChannelId != null || b.sourceChannelId != null)
+                a.sourceChannelId != null && a.sourceChannelId == b.sourceChannelId
+            else a.ref != null && a.ref == b.ref
+        }
+        return a.name == b.name || (a.id != null && a.id == b.id)
+    }
     // Every previously adopted name must survive a complete replacement.
     if (incoming.status == ArtistCreditStatus.COMPLETE && artists.any { old ->
             incoming.artists.none { matches(old, it) }
@@ -58,7 +74,7 @@ fun ArtistCredit.merge(incoming: ArtistCredit): ArtistCredit {
     val merged = base.map { artist ->
         val old = artists.singleOrNull { matches(it, artist) }
         val fresh = incoming.artists.singleOrNull { matches(artist, it) }
-        artist.copy(name = old?.name ?: artist.name, id = old?.id ?: fresh?.id ?: artist.id,
+        artist.copy(name = old?.name ?: artist.name, id = if (artist.isChannel) null else old?.id ?: fresh?.id ?: artist.id,
             ref = old?.ref ?: artist.ref ?: fresh?.ref)
     }
     // Independent partial results are not a proof that their union is complete.
@@ -75,27 +91,35 @@ private val duration = Regex("""^\d+:[0-5]\d(?::[0-5]\d)?$""")
 
 /** Restrict a metadata column to its byline; never split the contents of one Run. */
 fun List<Run>.artistBylineRuns(): List<Run> {
-    val end = indexOfFirst { it.text == " • " }
-    return (if (end >= 0) take(end) else this).filterNot {
+    val byline = splitBySeparator().clean().firstOrNull().orEmpty()
+    return byline.filterNot {
         it.navigationEndpoint == null && duration.matches(it.text.trim())
     }
 }
 
-fun List<Run>.toArtistCredit(source: String, language: String = ""): ArtistCredit {
+/** Only an explicitly typed artist endpoint supplies an online artist ID. */
+fun Run.toArtist(): Artist {
+    val endpoint = navigationEndpoint?.browseEndpoint
+    return if (endpoint?.isChannelEndpoint == true) Artist(text, null, sourceChannelId = endpoint.browseId)
+    else Artist(text, endpoint?.takeIf { it.isArtistEndpoint }?.browseId)
+}
+
+fun List<Run>.toArtistCredit(source: String, language: String = "", allowChannelFallback: Boolean = true): ArtistCredit {
     val runs = artistBylineRuns()
     val raw = runs.joinToString("") { it.text }
     val names = runs.filterNot { it.navigationEndpoint == null && (it.text in artistSeparators || it.text.isBlank()) }
-    val artists = names.map { run -> Artist(run.text, run.navigationEndpoint?.browseEndpoint
-        ?.takeIf { it.isArtistEndpoint || (it.browseEndpointContextSupportedConfigs == null && it.browseId.startsWith("UC")) }
-        ?.browseId) }
+    val supplied = names.map { it.toArtist() }
+    val artists = if (supplied.any { it.id != null }) supplied.filterNot { it.isChannel } else supplied
+    val channelFallback = allowChannelFallback && artists.isNotEmpty() && artists.all { it.isChannel }
     val singleLinked = artists.size == 1 && artists[0].id != null
     val explicitList = names.size > 1 && runs.size == names.size * 2 - 1 &&
+        artists.none { it.isChannel } &&
         runs.filterIndexed { index, _ -> index % 2 == 1 }.all { it.navigationEndpoint == null && it.text in artistSeparators }
     val allLinked = artists.size > 1 && artists.all { it.id != null }
-    val complete = singleLinked || explicitList || allLinked
+    val complete = channelFallback || singleLinked || explicitList || allLinked
     return ArtistCredit(raw, if (complete) artists else emptyList(),
         if (complete) ArtistCreditStatus.COMPLETE else ArtistCreditStatus.RAW, source, language,
-        listOf(if (complete) "structured-byline:$source" else "literal-byline:$source"))
+        listOf(if (channelFallback) "channel-byline:$source" else if (complete) "structured-byline:$source" else "literal-byline:$source"))
 }
 
 fun Menu?.artistBrowseIds(): List<String> = this?.menuRenderer?.items.orEmpty().mapNotNull {
@@ -113,7 +137,7 @@ fun List<Run>.toAlbumArtistCredit(source: String, language: String = ""): Artist
         text.isNotBlank() && text !in setOf("アルバム", "シングル", "Album", "Single", "EP", "专辑", "專輯") &&
             !Regex("^\\d{4}年?$").matches(text)
     }.orEmpty()
-    return artistSection.toArtistCredit(source, language)
+    return artistSection.toArtistCredit(source, language, allowChannelFallback = false)
 }
 
 private fun ArtistCredit.withVideoEndpoint(vararg endpoints: WatchEndpoint?): ArtistCredit {

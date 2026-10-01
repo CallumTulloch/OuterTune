@@ -5,6 +5,7 @@ import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.models.ArtistIdentity
 import com.dd3boh.outertune.models.MediaMetadata
 import com.dd3boh.outertune.models.toMediaMetadata
+import com.dd3boh.outertune.models.withChannelFallback
 import com.zionhuang.innertube.YouTube
 import com.zionhuang.innertube.models.Album
 import com.zionhuang.innertube.models.Artist
@@ -62,6 +63,8 @@ class ArtistCreditRepository internal constructor(
         val name: String,
         val onlineId: String?,
         val sourceSongs: List<MediaMetadata>,
+        val isChannel: Boolean = false,
+        val sourceChannelId: String? = null,
     )
 
     private val scope = runtime.scope
@@ -155,6 +158,15 @@ class ArtistCreditRepository internal constructor(
         return withCredit(metadata)
     }
 
+    internal fun acceptUploader(metadata: MediaMetadata, author: String, channelId: String?, musicVideoType: String?): MediaMetadata {
+        val candidate = metadata.withChannelFallback(author, channelId, musicVideoType)
+        if (candidate == metadata) return withCredit(metadata)
+        val cacheKey = key(metadata.id)
+        sourceSongs.putIfAbsent(cacheKey, metadata)
+        publish(metadata.id, cacheKey, candidate.artistCredit!!, persist = true)
+        return withCredit(candidate)
+    }
+
     fun request(metadata: MediaMetadata, priority: Boolean = false) {
         if (metadata.isLocal) return
         sourceSongs[key(metadata.id)] = metadata
@@ -162,7 +174,9 @@ class ArtistCreditRepository internal constructor(
             SongItem(
                 id = metadata.id,
                 title = metadata.title,
-                artists = metadata.artists.map { Artist(it.name, it.onlineId ?: it.id?.takeIf(::isOnlineId), it.id) },
+                artists = metadata.artists.map { Artist(it.name,
+                    if (it.isChannel) null else it.onlineId ?: it.id?.takeIf(::isOnlineId), it.id,
+                    sourceChannelId = it.sourceChannelId, isChannel = it.isChannel) },
                 album = metadata.album?.let { Album(it.title, it.id) },
                 duration = metadata.duration.takeIf { it >= 0 },
                 thumbnail = metadata.thumbnailUrl.orEmpty(),
@@ -276,7 +290,7 @@ class ArtistCreditRepository internal constructor(
     }
 
     private fun legacyCredit(song: SongItem): ArtistCredit {
-        val complete = song.artists.size > 1 || song.artists.singleOrNull()?.id != null
+        val complete = song.artists.size > 1 || song.artists.singleOrNull()?.let { it.id != null || it.isChannel } == true
         return ArtistCredit(
             rawText = song.artists.joinToString(", ") { it.name },
             artists = if (complete) song.artists else emptyList(),
@@ -288,6 +302,7 @@ class ArtistCreditRepository internal constructor(
 
     private fun needsResolution(credit: ArtistCredit, cacheKey: String) =
         credit.status != ArtistCreditStatus.CONFLICT &&
+            credit.artists.none { it.isChannel } &&
             // Video album rows may omit the byline; fetch that video's own basic credit once it is needed.
             (credit.isEmptyByline() || credit.evidence.none { it.startsWith("video-source:") }) &&
             (credit.status != ArtistCreditStatus.COMPLETE || credit.artists.any { it.id == null } || albums[cacheKey]?.value == null)
@@ -335,14 +350,19 @@ class ArtistCreditRepository internal constructor(
         val old = state.value
         if (cacheKey != key(videoId)) return@synchronized old ?: incoming
         val merged = old?.merge(incoming) ?: incoming
-        fun findArtist(artists: List<Artist>, artist: Artist): Artist? =
-            artist.id?.let { id -> artists.singleOrNull { it.id == id } }
-                ?: artists.singleOrNull { it.name == artist.name && (it.id == null || artist.id == null || it.id == artist.id) }
+        fun findArtist(artists: List<Artist>, artist: Artist): Artist? {
+            val sameSource = artists.filter { it.isChannel == artist.isChannel }
+            return if (artist.isChannel) sameSource.singleOrNull {
+                it.sourceChannelId == artist.sourceChannelId && (artist.sourceChannelId != null || it.name == artist.name)
+            } else artist.id?.let { id -> sameSource.singleOrNull { it.id == id } }
+                ?: sameSource.singleOrNull { it.name == artist.name && (it.id == null || artist.id == null || it.id == artist.id) }
+        }
         val accepted = merged.copy(artists = merged.artists.map { artist ->
             val previous = findArtist(old?.artists.orEmpty(), artist)
             val stored = findArtist(incoming.artists, artist)
             val ref = if (preferStoredRefs) stored?.ref ?: artist.ref ?: previous?.ref else previous?.ref ?: artist.ref
-            artist.copy(ref = ref ?: artist.id ?: ArtistIdentity.stableId(videoId, artist.name))
+            artist.copy(ref = if (artist.isChannel) ArtistIdentity.sourceId(videoId, artist)
+                else ref ?: ArtistIdentity.sourceId(videoId, artist))
         })
         if (accepted != old) {
             state.value = accepted
@@ -353,13 +373,26 @@ class ArtistCreditRepository internal constructor(
         sourceSongs[cacheKey]?.takeIf { cacheKey == key(videoId) }?.let { original ->
             val updated = apply(original, accepted)
             sourceSongs[cacheKey] = updated
+            val acceptedRefs = accepted.artists.mapNotNull { it.ref }.toSet()
+            old?.artists.orEmpty().filter { it.isChannel && it.ref !in acceptedRefs }.forEach { artist ->
+                artist.ref?.let { previousRef ->
+                    contexts[key(previousRef)]?.let { contextState ->
+                        contextState.value?.let { previous ->
+                            val remaining = previous.sourceSongs.filterNot { it.id == videoId }
+                            contextState.value = if (remaining.isEmpty()) null else previous.copy(sourceSongs = remaining)
+                        }
+                    }
+                }
+            }
             accepted.artists.forEach { artist ->
                 val artistId = artist.ref ?: return@forEach
                 val artistState = contexts.getOrPut(key(artistId)) { MutableStateFlow(null) }
                 val previous = artistState.value
                 artistState.value = ArtistContext(
-                    artistId, artist.name, artist.id ?: previous?.onlineId,
+                    artistId, artist.name, if (artist.isChannel) null else artist.id ?: previous?.onlineId,
                     (previous?.sourceSongs.orEmpty().filterNot { it.id == videoId } + updated).takeLast(30),
+                    isChannel = artist.isChannel,
+                    sourceChannelId = artist.sourceChannelId,
                 )
                 // A route opened before DB alias reconciliation must receive later updates too.
                 findArtist(old?.artists.orEmpty(), artist)?.ref?.takeIf { it != artistId }?.let { previousRef ->
@@ -376,9 +409,11 @@ class ArtistCreditRepository internal constructor(
         album = metadata.album ?: observeAlbum(metadata.id).value?.let { MediaMetadata.Album(it.id, it.name) },
         artists = if (credit.isEmptyByline()) metadata.artists else credit.artists.map {
             MediaMetadata.Artist(
-                id = it.ref ?: it.id ?: ArtistIdentity.stableId(metadata.id, it.name),
+                id = ArtistIdentity.sourceId(metadata.id, it),
                 name = it.name,
-                onlineId = it.id,
+                onlineId = if (it.isChannel) null else it.id,
+                isChannel = it.isChannel,
+                sourceChannelId = it.sourceChannelId,
             )
         },
     )

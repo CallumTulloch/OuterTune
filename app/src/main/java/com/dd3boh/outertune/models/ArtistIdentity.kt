@@ -25,6 +25,19 @@ object ArtistIdentity {
         return "LA" + digest.take(16).joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
+    /** Channel sources share an internal identity across videos, separate from online artists. */
+    fun channelId(sourceChannelId: String?, videoId: String, name: String): String {
+        val source = sourceChannelId?.takeIf(String::isNotBlank)
+            ?: "$videoId\u0000${normalizeLocalMetadataText(name)}"
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest("channel-source-v1\u0000$source".toByteArray(Charsets.UTF_8))
+        return "CS" + digest.take(16).joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
+    fun sourceId(videoId: String, artist: com.zionhuang.innertube.models.Artist): String =
+        if (artist.isChannel) channelId(artist.sourceChannelId, videoId, artist.name)
+        else artist.ref ?: onlineId(artist.id) ?: stableId(videoId, artist.name)
+
     fun onlineId(id: String?): String? = id?.takeIf {
         it.startsWith("UC") || it.startsWith("FEmusic_library_privately_owned_artist")
     }
@@ -32,12 +45,17 @@ object ArtistIdentity {
     fun withStableRefs(videoId: String, credit: ArtistCredit, previous: ArtistCredit? = null): ArtistCredit =
         credit.copy(artists = if (credit.status == ArtistCreditStatus.RAW) emptyList() else credit.artists.map { artist ->
             val previousArtist = previous?.artists?.firstOrNull {
-                normalizeLocalMetadataText(it.name) == normalizeLocalMetadataText(artist.name) ||
+                it.isChannel == artist.isChannel && (if (artist.isChannel)
+                    it.sourceChannelId == artist.sourceChannelId &&
+                        (artist.sourceChannelId != null || it.name == artist.name)
+                else normalizeLocalMetadataText(it.name) == normalizeLocalMetadataText(artist.name) ||
                     (onlineId(artist.id) != null && it.id == artist.id)
+                )
             }
             artist.copy(
-                id = onlineId(artist.id),
-                ref = previousArtist?.ref ?: artist.ref ?: onlineId(artist.id) ?: stableId(videoId, artist.name),
+                id = if (artist.isChannel) null else onlineId(artist.id),
+                ref = if (artist.isChannel) channelId(artist.sourceChannelId, videoId, artist.name)
+                    else previousArtist?.ref ?: sourceId(videoId, artist),
             )
         })
 }

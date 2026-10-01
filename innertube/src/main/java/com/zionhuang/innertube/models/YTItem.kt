@@ -13,6 +13,9 @@ data class Artist(
     val name: String,
     val id: String?,
     val ref: String? = null,
+    /** Uploader identity; this is not an online artist-page ID. */
+    val sourceChannelId: String? = null,
+    val isChannel: Boolean = sourceChannelId != null,
 ) : java.io.Serializable
 
 @kotlinx.serialization.Serializable

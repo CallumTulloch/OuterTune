@@ -72,7 +72,7 @@ fun ArtistMenu(
         LocalArtistLinksDialog(onlineArtistId = onlineId, onDismiss = { showLinkedSources = false })
     }
 
-    val linkSource = rawSource?.takeIf { it.artist.isLocal }
+    val linkSource = rawSource?.takeIf { it.artist.isLinkableSource }
     if (showLinkDialog && linkSource != null) {
         LocalArtistLinkDialog(
             localArtist = linkSource,
@@ -111,10 +111,10 @@ fun ArtistMenu(
             bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         )
     ) {
-        if (artist.artist.isLocal) {
+        if (linkSource != null) {
             GridMenuItem(
                 icon = Icons.Rounded.Link,
-                title = if (artist.localLink == null) R.string.local_artist_link_title
+                title = if (linkSource.localLink == null) R.string.local_artist_link_title
                     else R.string.local_artist_link_manage,
             ) { showLinkDialog = true }
         }

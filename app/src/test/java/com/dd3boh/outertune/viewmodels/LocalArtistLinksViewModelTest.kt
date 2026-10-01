@@ -21,6 +21,22 @@ import org.junit.Test
 
 class LocalArtistLinksViewModelTest {
     @Test
+    fun linkedChannelSourcesKeepOriginalChannelDetailsWhenOpenedForEditing() = fixture { f ->
+        f.vm.open("UC-destination")
+        f.run()
+        val local = f.source("CS-channel", 2)
+        val channel = local.copy(localArtist = local.localArtist.copy(artist = local.localArtist.artist.copy(
+            name = "Original channel", isLocal = false, isChannel = true, sourceChannelId = "UC-upload-channel")),
+            folders = emptyList())
+        f.reply(listOf(channel))
+        f.vm.edit("CS-channel")
+        assertEquals(channel.localArtist, f.vm.state.value.editing)
+        assertEquals("Original channel", f.vm.state.value.editing!!.artist.name)
+        assertEquals("UC-upload-channel", f.vm.state.value.editing!!.artist.sourceChannelId)
+        assertFalse(f.vm.state.value.editing!!.artist.isLocal)
+    }
+
+    @Test
     fun allLinksIncludeZeroSongAndHiddenSourcesAndPassTheOriginalArtistToTheEditor() = fixture { f ->
         f.vm.open(null)
         f.run()

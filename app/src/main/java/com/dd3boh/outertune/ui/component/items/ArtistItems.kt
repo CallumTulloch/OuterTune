@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.OfflinePin
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.surfaceColorAtElevation
@@ -45,6 +46,7 @@ fun ArtistThumbnail(
     thumbnailUrl: String?,
     isLocal: Boolean,
     modifier: Modifier = Modifier,
+    isChannel: Boolean = false,
 ) {
     val fallbackSurfaceColor = MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp)
 
@@ -81,7 +83,11 @@ fun ArtistThumbnail(
                 )
         ) {
             Icon(
-                imageVector = if (isLocal) Icons.Rounded.Folder else Icons.Rounded.Language,
+                imageVector = when {
+                    isLocal -> Icons.Rounded.Folder
+                    isChannel -> Icons.Rounded.VideoLibrary
+                    else -> Icons.Rounded.Language
+                },
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxSize(0.68f)
@@ -139,6 +145,7 @@ fun ArtistListItem(
         ArtistThumbnail(
             thumbnailUrl = artist.thumbnailUrl,
             isLocal = artist.artist.isLocal,
+            isChannel = artist.artist.isChannelSource,
             modifier = Modifier
                 .size(ListThumbnailSize)
         )
@@ -187,6 +194,7 @@ fun ArtistGridItem(
         ArtistThumbnail(
             thumbnailUrl = artist.thumbnailUrl,
             isLocal = artist.artist.isLocal,
+            isChannel = artist.artist.isChannelSource,
             modifier = Modifier
                 .fillMaxSize()
         )

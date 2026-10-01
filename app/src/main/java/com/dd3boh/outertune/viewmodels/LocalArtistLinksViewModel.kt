@@ -73,7 +73,7 @@ class LocalArtistLinksViewModel internal constructor(private val runtime: Runtim
         if (current.loading || current.failed || current.editing != null) return
         val source = current.sources.firstOrNull { it.localArtist.id == localArtistId } ?: return
         val artist = source.localArtist
-        if (!artist.artist.isLocal || artist.localLink == null) return
+        if (!artist.artist.isLinkableSource || artist.localLink == null) return
         mutableState.value = current.copy(editing = artist)
     }
 

@@ -255,7 +255,8 @@ fun YouTubeAlbumMenu(
         ArtistDialog(
             navController = navController,
             artists = (credit?.artists ?: albumItem.artists.orEmpty()).map { artist ->
-                MediaMetadata.Artist(artist.ref ?: artist.id, artist.name, onlineId = artist.id)
+                MediaMetadata.Artist(artist.ref ?: artist.id, artist.name, onlineId = artist.id,
+                    isChannel = artist.isChannel, sourceChannelId = artist.sourceChannelId)
             },
             rawText = album?.artistDisplayText() ?: albumItem.artistDisplayText(),
             onDismiss = { showSelectArtistDialog = false }

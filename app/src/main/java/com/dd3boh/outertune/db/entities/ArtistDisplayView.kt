@@ -33,6 +33,8 @@ import java.time.LocalDateTime
         CASE WHEN representative.id GLOB 'UC*' OR representative.id GLOB 'FEmusic_library_privately_owned_artist*'
             THEN representative.id ELSE NULL END AS onlineId,
         CASE WHEN representative.id GLOB 'AG*' THEN representative.id ELSE NULL END AS albumGroupId,
+        CASE WHEN link.localArtistId IS NOT NULL THEN 0 ELSE source.isChannel END AS isChannel,
+        CASE WHEN link.localArtistId IS NOT NULL THEN NULL ELSE source.sourceChannelId END AS sourceChannelId,
         representative.sourceRowId AS sortOrder
     FROM representatives representative
         JOIN artist source ON source.rowId = representative.sourceRowId
@@ -51,6 +53,8 @@ data class ArtistDisplayView(
     val onlineId: String?,
     val albumGroupId: String?,
     val sortOrder: Long,
+    val isChannel: Boolean,
+    val sourceChannelId: String?,
 )
 
 data class ArtistDisplayMapping(

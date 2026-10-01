@@ -1,7 +1,6 @@
 package com.zionhuang.innertube.pages
 
 import com.zionhuang.innertube.models.Album
-import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.BrowseEndpoint
 import com.zionhuang.innertube.models.PlaylistPanelVideoRenderer
 import com.zionhuang.innertube.models.SongItem
@@ -9,6 +8,7 @@ import com.zionhuang.innertube.models.WatchEndpoint
 import com.zionhuang.innertube.models.withVideoSource
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.artistBrowseIds
+import com.zionhuang.innertube.models.toArtist
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 import com.zionhuang.innertube.utils.parseTime
@@ -33,10 +33,7 @@ object NextPage {
             id = renderer.videoId ?: return null,
             title = renderer.title?.runs?.firstOrNull()?.text ?: return null,
             artists = longByLineRuns.firstOrNull()?.artistElements()?.map {
-                Artist(
-                    name = it.text,
-                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                )
+                it.toArtist()
             } ?: return null,
             album = longByLineRuns.getOrNull(1)?.firstOrNull()?.takeIf {
                 it.navigationEndpoint?.browseEndpoint != null

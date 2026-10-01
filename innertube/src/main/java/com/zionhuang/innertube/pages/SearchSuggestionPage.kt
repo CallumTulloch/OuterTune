@@ -2,7 +2,6 @@ package com.zionhuang.innertube.pages
 
 import com.zionhuang.innertube.models.Album
 import com.zionhuang.innertube.models.AlbumItem
-import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.SongItem
@@ -11,6 +10,7 @@ import com.zionhuang.innertube.models.withVideoSource
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.artistBrowseIds
 import com.zionhuang.innertube.models.toAlbumArtistCredit
+import com.zionhuang.innertube.models.toArtist
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
@@ -18,22 +18,18 @@ object SearchSuggestionPage {
     fun fromMusicResponsiveListItemRenderer(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
         return when {
             renderer.isSong -> {
+                val artistRuns = PageHelper.artistRuns(renderer.flexColumns)
                 SongItem(
                     endpoint = PageHelper.searchWatchEndpoint(renderer),
-                    artistCredit = (renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty().splitBySeparator().getOrNull(1).orEmpty()).toArtistCredit("SearchSuggestionPage", language).withVideoSource(renderer),
+                    artistCredit = artistRuns.toArtistCredit("SearchSuggestionPage", language).withVideoSource(renderer),
                     artistBrowseIds = renderer.menu.artistBrowseIds(),
                     id = renderer.playlistItemData?.videoId ?: return null,
                     title = renderer.flexColumns.firstOrNull()
                         ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
                         ?.text ?: return null,
-                    artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator()
-                            ?.getOrNull(1)?.artistElements()?.map {
-                            Artist(
-                                name = it.text,
-                                id = it.navigationEndpoint?.browseEndpoint?.browseId
-                            )
-                        } ?: return null,
-                    album = renderer.flexColumns.getOrNull(2)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()?.let {
+                    artists = artistRuns.artistElements().map { it.toArtist() },
+                    album = renderer.flexColumns.getOrNull(2)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
+                        ?.firstOrNull()?.takeIf { it.navigationEndpoint?.browseEndpoint?.isAlbumEndpoint == true }?.let {
                         Album(
                             name = it.text,
                             id = it.navigationEndpoint?.browseEndpoint?.browseId ?: return null
@@ -72,10 +68,7 @@ object SearchSuggestionPage {
                         ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
                         ?.text ?: return null,
                     artists = secondaryLine.getOrNull(1)?.artistElements()?.map {
-                        Artist(
-                            name = it.text,
-                            id = it.navigationEndpoint?.browseEndpoint?.browseId
-                        )
+                        it.toArtist()
                     } ?: return null,
                     year = secondaryLine.lastOrNull()?.firstOrNull()?.text?.toIntOrNull(),
                     thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,

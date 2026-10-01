@@ -88,10 +88,11 @@ interface ArtistsDao {
 
     @Transaction
     @Query("""
-        SELECT artist.*, COUNT(DISTINCT song.id) AS songCount, 0 AS downloadCount
-        FROM local_artist_link link JOIN artist ON artist.id = link.localArtistId AND artist.isLocal = 1
+        SELECT artist.*, COUNT(DISTINCT song.id) AS songCount,
+            COUNT(DISTINCT CASE WHEN song.dateDownload IS NOT NULL THEN song.id END) AS downloadCount
+        FROM local_artist_link link JOIN artist ON artist.id = link.localArtistId AND (artist.isLocal = 1 OR artist.isChannel = 1)
             LEFT JOIN song_artist_map sam ON sam.artistId = artist.id
-            LEFT JOIN song ON song.id = sam.songId AND song.isLocal = 1
+            LEFT JOIN song ON song.id = sam.songId AND (song.isLocal = 1 OR song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL)
         WHERE :onlineId IS NULL OR link.onlineArtistId = :onlineId
         GROUP BY artist.id ORDER BY artist.name COLLATE NOCASE, artist.id
     """)
@@ -99,6 +100,20 @@ interface ArtistsDao {
 
     fun localArtistLinkSources(onlineId: String? = null): Flow<List<LocalArtistLinkSource>> =
         localArtistLinkSourceRows(onlineId).map { rows -> rows.map(LocalArtistLinkSourceRow::toSource) }
+
+    @Transaction
+    @Query("""
+        SELECT artist.*, COUNT(DISTINCT song.id) AS songCount,
+            COUNT(DISTINCT CASE WHEN song.dateDownload IS NOT NULL THEN song.id END) AS downloadCount
+        FROM artist LEFT JOIN song_artist_map sam ON sam.artistId = artist.id
+            LEFT JOIN song ON song.id = sam.songId AND (song.isLocal = 1 OR song.inLibrary IS NOT NULL OR song.dateDownload IS NOT NULL)
+        WHERE artist.id = :id AND (artist.isLocal = 1 OR artist.isChannel = 1)
+        GROUP BY artist.id
+    """)
+    fun linkableArtistSourceRow(id: String): Flow<LocalArtistLinkSourceRow?>
+
+    fun linkableArtistSource(id: String): Flow<LocalArtistLinkSource?> =
+        linkableArtistSourceRow(id).map { it?.toSource() }
 
     @Query("SELECT * FROM artist WHERE id = :id")
     fun artistEntityByExactId(id: String): ArtistEntity?
@@ -131,8 +146,8 @@ interface ArtistsDao {
     @Transaction
     fun setLocalArtistLink(link: LocalArtistLink) {
         val artist = artistById(link.localArtistId)
-        require(artist != null && artist.id == link.localArtistId && artist.isLocal) {
-            "A local artist must exist before linking"
+        require(artist != null && artist.id == link.localArtistId && artist.isLinkableSource) {
+            "A folder or channel source artist must exist before linking"
         }
         require(Regex("^UC[A-Za-z0-9_-]{22}$").matches(link.onlineArtistId)) { "A public YouTube artist ID is required" }
         require(link.onlineName.isNotBlank()) { "The online artist name must not be blank" }
@@ -149,7 +164,7 @@ interface ArtistsDao {
     @Query("SELECT COALESCE((SELECT artistId FROM artist_alias WHERE aliasId = :id), :id)")
     fun resolveArtistId(id: String): String
 
-    @Query("""SELECT * FROM artist WHERE isLocal = 0 AND (onlineId = :onlineId OR id = :onlineId)
+    @Query("""SELECT * FROM artist WHERE isLocal = 0 AND isChannel = 0 AND (onlineId = :onlineId OR id = :onlineId)
         ORDER BY CASE WHEN id LIKE 'LA%' THEN 0 ELSE 1 END, rowId LIMIT 1""")
     fun artistByOnlineId(onlineId: String): ArtistEntity?
 
@@ -308,7 +323,7 @@ interface ArtistsDao {
     """)
     fun artistsByNameFuzzy(query: String, previewSize: Int = Int.MAX_VALUE): Flow<List<ArtistEntity>>
 
-    @Query("SELECT * FROM artist WHERE isLocal != 1")
+    @Query("SELECT * FROM artist WHERE isLocal != 1 AND isChannel = 0")
     fun allRemoteArtists(): Flow<List<ArtistEntity>>
 
     @Query("SELECT * FROM artist WHERE isLocal = 1")
@@ -404,7 +419,7 @@ interface ArtistsDao {
 
         return _getArtists(query).map { artists ->
             val filtered = if (filterUnsupportedArtists) {
-                artists.filter { it.artist.isYouTubeArtist || it.artist.isLocal || it.artist.albumGroupId != null }
+                artists.filter { it.artist.isYouTubeArtist || it.artist.isLinkableSource || it.artist.albumGroupId != null }
             } else {
                 artists
             }
@@ -503,7 +518,7 @@ interface ArtistsDao {
             channelId = COALESCE(NULLIF(TRIM(:channelId), ''), channelId),
             lastUpdateTime = CASE WHEN NULLIF(TRIM(:thumbnailUrl), '') IS NOT NULL
                 THEN :observedAt ELSE lastUpdateTime END
-        WHERE isLocal = 0 AND (onlineId = :onlineId OR id = :onlineId)
+        WHERE isLocal = 0 AND isChannel = 0 AND (onlineId = :onlineId OR id = :onlineId)
             AND (:onlineId GLOB 'UC*' OR :onlineId GLOB 'FEmusic_library_privately_owned_artist*')
     """)
     fun updateRemoteArtistProfile(onlineId: String, thumbnailUrl: String?, channelId: String?, observedAt: LocalDateTime): Int

@@ -15,6 +15,7 @@ import com.zionhuang.innertube.models.withVideoSource
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.artistBrowseIds
 import com.zionhuang.innertube.models.toAlbumArtistCredit
+import com.zionhuang.innertube.models.toArtist
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.utils.parseTime
 
@@ -94,10 +95,7 @@ data class LibraryPage(
                             ?.runs?.firstOrNull()?.text ?: return null,
                         artists = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.artistElements()
                             ?.map {
-                                Artist(
-                                    name = it.text,
-                                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                                )
+                                it.toArtist()
                             } ?: emptyList(),
                         album = renderer.flexColumns.getOrNull(2)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()
                             ?.let {
@@ -135,21 +133,8 @@ data class LibraryPage(
         }
 
         private fun parseArtists(runs: List<Run>?): List<Artist> {
-            val artists = mutableListOf<Artist>()
-
-            if (runs != null) {
-                for (run in runs) {
-                    if (run.navigationEndpoint != null) {
-                        artists.add(
-                            Artist(
-                                id = run.navigationEndpoint.browseEndpoint?.browseId!!,
-                                name = run.text
-                            )
-                        )
-                    }
-                }
-            }
-            return artists
+            return runs.orEmpty().filter { it.navigationEndpoint?.browseEndpoint?.isArtistEndpoint == true }
+                .map { it.toArtist() }
         }
     }
 }

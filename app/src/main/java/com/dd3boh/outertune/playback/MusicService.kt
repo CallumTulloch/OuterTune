@@ -445,14 +445,22 @@ class MusicService : MediaLibraryService(),
         val mediaMetadata = withContext(Dispatchers.Main) {
             player.findNextMediaItemById(mediaId)?.metadata
         } ?: return
+        val details = playbackData?.videoDetails ?: if (song?.song?.duration == -1 || mediaMetadata.duration == -1)
+            YTPlayerUtils.playerResponseForMetadata(mediaId).getOrNull()?.videoDetails else null
+        val recoveredMetadata = details?.let {
+            artistCredits.acceptUploader(mediaMetadata, it.author, it.channelId, it.musicVideoType)
+        } ?: mediaMetadata
         val duration = song?.song?.duration?.takeIf { it != -1 }
             ?: mediaMetadata.duration.takeIf { it != -1 }
-            ?: (playbackData?.videoDetails ?: YTPlayerUtils.playerResponseForMetadata(mediaId)
-                .getOrNull()?.videoDetails)?.lengthSeconds?.toInt()
+            ?: details?.lengthSeconds?.toInt()
             ?: -1
         database.query {
-            if (song == null) insert(mediaMetadata.copy(duration = duration))
-            else if (song.song.duration == -1) update(song.song.copy(duration = duration))
+            if (song == null) insert(recoveredMetadata.copy(duration = duration))
+            else {
+                if (song.song.duration == -1) update(song.song.copy(duration = duration))
+                if (recoveredMetadata.artistCredit != mediaMetadata.artistCredit)
+                    recoveredMetadata.artistCredit?.let { applyArtistCredit(mediaId, it) }
+            }
         }
         if (!database.hasRelatedSongs(mediaId)) {
             val requestLocale = YouTube.locale

@@ -319,8 +319,8 @@
     <string name="local_artist_link_context_changed">言語またはアカウントが変わりました。もう一度検索してアーティストを確認してください。</string>
     <string name="local_artist_link_changed">保存済みの紐付けが変わりました。現在の紐付け先を確認し、候補を選び直してください。</string>
     <string name="local_artist_links_title">アーティストの紐付け</string>
-    <string name="local_artist_links_sources">フォルダ由来の紐付け</string>
-    <string name="local_artist_links_description">ファイル内のアーティスト名と、現在の紐付け先を確認できます。変更・解除するには、各カードのボタンを押してください。</string>
+    <string name="local_artist_links_sources">紐付け元を確認</string>
+    <string name="local_artist_links_description">ファイルや動画のチャンネルに由来するアーティスト名と、現在の紐付け先を確認できます。変更・解除するには、各カードのボタンを押してください。</string>
     <string name="local_artist_links_file_name">ファイル内のアーティスト名</string>
     <string name="local_artist_links_no_songs">現在読み込まれている曲はありません</string>
     <string name="local_artist_links_show_folders">フォルダを表示（%1$d）</string>
@@ -329,4 +329,12 @@
     <string name="local_artist_links_empty">該当する紐付けはありません。</string>
     <string name="local_artist_links_load_failed">紐付けを読み込めませんでした。もう一度お試しください。</string>
     <string name="local_artist_links_close">閉じる</string>
+    <string name="channel_artist_link_source">チャンネル由来のアーティスト：%1$s（保存済み%2$d曲）</string>
+    <string name="channel_artist_source_name">元のチャンネル名</string>
+    <string name="channel_artist_source_id">チャンネルID：%1$s</string>
+    <string name="channel_artist_link_scope">紐付けは、ここに表示される保存済みの曲と、今後追加する同じチャンネル由来の曲にも適用されます。対象の曲を確認してから紐付けてください。</string>
+    <string name="channel_artist_link_video_scope">チャンネルIDがないため、紐付けはここに表示される曲にのみ適用されます。同じチャンネルのほかの動画は自動では対象になりません。</string>
+    <string name="channel_artist_show_songs">対象の曲を表示（%1$d曲）</string>
+    <string name="channel_artist_hide_songs">対象の曲を閉じる（%1$d曲）</string>
+    <string name="channel_artist_link_remove_confirmation">「%1$s」と「%2$s」の紐付けを解除しますか？曲と元のチャンネル情報は保持されます。</string>
 </resources>

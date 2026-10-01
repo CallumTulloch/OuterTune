@@ -125,6 +125,7 @@ fun LocalArtistLinksDialog(onlineArtistId: String? = null, onDismiss: () -> Unit
 @Composable
 private fun LocalArtistLinkSourceDetails(source: LocalArtistLinkSource, onEdit: () -> Unit) {
     val localArtist = source.localArtist
+    val sourceSongCount = if (localArtist.artist.isChannelSource) source.songs.size else localArtist.songCount
     var showFolders by rememberSaveable(localArtist.id) { mutableStateOf(false) }
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -136,7 +137,8 @@ private fun LocalArtistLinkSourceDetails(source: LocalArtistLinkSource, onEdit: 
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    stringResource(R.string.local_artist_links_file_name),
+                    stringResource(if (localArtist.artist.isChannelSource) R.string.channel_artist_source_name
+                        else R.string.local_artist_links_file_name),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -146,11 +148,11 @@ private fun LocalArtistLinkSourceDetails(source: LocalArtistLinkSource, onEdit: 
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    pluralStringResource(R.plurals.n_song, localArtist.songCount, localArtist.songCount),
+                    pluralStringResource(R.plurals.n_song, sourceSongCount, sourceSongCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (localArtist.songCount == 0) {
+                if (sourceSongCount == 0) {
                     Text(
                         stringResource(R.string.local_artist_links_no_songs),
                         style = MaterialTheme.typography.bodySmall,
@@ -193,7 +195,9 @@ private fun LocalArtistLinkSourceDetails(source: LocalArtistLinkSource, onEdit: 
                 }
             }
             HorizontalDivider()
-            if (source.folders.isEmpty()) {
+            if (localArtist.artist.isChannelSource) {
+                ChannelArtistSourceDetails(source)
+            } else if (source.folders.isEmpty()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

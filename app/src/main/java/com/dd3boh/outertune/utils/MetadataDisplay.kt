@@ -53,17 +53,17 @@ val AlbumEntity.displayTitle: String
     get() = if (isLocal) title else MetadataNames.resolve(OriginalNameKind.ALBUM, id, title)
 val ArtistEntity.displayName: String
     get() = ArtistDisplayProjection.resolve(id)?.name
-        ?: if (isLocal) name else MetadataNames.resolve(OriginalNameKind.ARTIST, onlineArtistId, name)
+        ?: if (isLinkableSource) name else MetadataNames.resolve(OriginalNameKind.ARTIST, onlineArtistId, name)
 val MediaMetadata.displayTitle: String
     get() = if (isLocal) title else MetadataNames.resolve(OriginalNameKind.SONG, id, title)
 val MediaMetadata.Artist.displayName: String
-    get() = ArtistDisplayProjection.resolve(id)?.name ?: if (isLocal) name else MetadataNames.resolve(OriginalNameKind.ARTIST,
+    get() = ArtistDisplayProjection.resolve(id)?.name ?: if (isLocal || isChannel) name else MetadataNames.resolve(OriginalNameKind.ARTIST,
         ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id), name)
 val MediaMetadata.Album.displayTitle: String
     get() = if (isLocal) title else MetadataNames.resolve(OriginalNameKind.ALBUM, id, title)
 val com.zionhuang.innertube.models.Artist.displayName: String
     get() = ArtistDisplayProjection.resolve(ref ?: id)?.name
-        ?: MetadataNames.resolve(OriginalNameKind.ARTIST, ArtistIdentity.onlineId(id), name)
+        ?: if (isChannel) name else MetadataNames.resolve(OriginalNameKind.ARTIST, ArtistIdentity.onlineId(id), name)
 val com.zionhuang.innertube.models.Album.displayTitle: String
     get() = MetadataNames.resolve(OriginalNameKind.ALBUM, id, name)
 
@@ -86,5 +86,5 @@ fun MediaMetadata.matchesMetadataQuery(query: String): Boolean =
         else artist.name.contains(query, ignoreCase = true)
     } ||
         (!isLocal && (MetadataNames.matches(OriginalNameKind.SONG, id, query) ||
-            artists.any { ArtistDisplayProjection.resolve(it.id) == null && MetadataNames.matches(OriginalNameKind.ARTIST,
+            artists.any { !it.isChannel && ArtistDisplayProjection.resolve(it.id) == null && MetadataNames.matches(OriginalNameKind.ARTIST,
                 ArtistIdentity.onlineId(it.onlineId) ?: ArtistIdentity.onlineId(it.id), query) }))

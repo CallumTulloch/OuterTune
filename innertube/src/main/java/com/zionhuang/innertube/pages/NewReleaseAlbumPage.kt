@@ -1,9 +1,9 @@
 package com.zionhuang.innertube.pages
 
 import com.zionhuang.innertube.models.AlbumItem
-import com.zionhuang.innertube.models.Artist
 import com.zionhuang.innertube.models.MusicTwoRowItemRenderer
 import com.zionhuang.innertube.models.toAlbumArtistCredit
+import com.zionhuang.innertube.models.toArtist
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
 
@@ -18,10 +18,7 @@ object NewReleaseAlbumPage {
                 ?.watchPlaylistEndpoint?.playlistId ?: return null,
             title = renderer.title.runs?.firstOrNull()?.text ?: return null,
             artists = renderer.subtitle?.runs?.splitBySeparator()?.getOrNull(1)?.artistElements()?.map {
-                Artist(
-                    name = it.text,
-                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                )
+                it.toArtist()
             } ?: return null,
             year = renderer.subtitle.runs.lastOrNull()?.text?.toIntOrNull(),
             thumbnail = renderer.thumbnailRenderer.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,

@@ -12,8 +12,10 @@ import com.zionhuang.innertube.models.withVideoSource
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.artistBrowseIds
 import com.zionhuang.innertube.models.toAlbumArtistCredit
+import com.zionhuang.innertube.models.toArtist
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.splitBySeparator
+import com.zionhuang.innertube.models.clean
 import com.zionhuang.innertube.utils.parseTime
 
 data class SearchResult(
@@ -24,25 +26,25 @@ data class SearchResult(
 object SearchPage {
     fun toYTItem(renderer: MusicResponsiveListItemRenderer, language: String = com.zionhuang.innertube.YouTube.locale.hl): YTItem? {
         val secondaryLine = renderer.flexColumns.getOrNull(1)
-            ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator()
+            ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.splitBySeparator()?.clean()
             ?: return null
         return when {
             renderer.isSong -> {
+                val artistRuns = PageHelper.artistRuns(renderer.flexColumns)
                 SongItem(
                     endpoint = PageHelper.searchWatchEndpoint(renderer),
-                    artistCredit = (secondaryLine.firstOrNull().orEmpty()).toArtistCredit("SearchPage", language).withVideoSource(renderer),
+                    artistCredit = artistRuns.toArtistCredit("SearchPage", language).withVideoSource(renderer),
                     artistBrowseIds = renderer.menu.artistBrowseIds(),
                     id = renderer.playlistItemData?.videoId ?: return null,
                     title = renderer.flexColumns.firstOrNull()
                         ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
                         ?.firstOrNull()?.text ?: return null,
-                    artists = secondaryLine.firstOrNull()?.artistElements()?.map {
-                        Artist(
-                            name = it.text,
-                            id = it.navigationEndpoint?.browseEndpoint?.browseId
-                        )
-                    } ?: return null,
-                    album = secondaryLine.getOrNull(1)?.firstOrNull()?.takeIf { it.navigationEndpoint?.browseEndpoint != null }?.let {
+                    artists = artistRuns.artistElements().map {
+                        it.toArtist()
+                    },
+                    album = secondaryLine.getOrNull(1)?.firstOrNull()?.takeIf {
+                        it.navigationEndpoint?.browseEndpoint?.isAlbumEndpoint == true
+                    }?.let {
                         Album(
                             name = it.text,
                             id = it.navigationEndpoint?.browseEndpoint?.browseId!!
@@ -77,10 +79,7 @@ object SearchPage {
                         ?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
                         ?.firstOrNull()?.text ?: return null,
                     artists = secondaryLine.getOrNull(1)?.artistElements()?.map {
-                        Artist(
-                            name = it.text,
-                            id = it.navigationEndpoint?.browseEndpoint?.browseId
-                        )
+                        it.toArtist()
                     } ?: return null,
                     year = secondaryLine.getOrNull(2)?.firstOrNull()?.text?.toIntOrNull(),
                     thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getThumbnailUrl() ?: return null,

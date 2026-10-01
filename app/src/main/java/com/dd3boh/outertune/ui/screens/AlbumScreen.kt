@@ -282,12 +282,16 @@ fun AlbumScreen(
                                                 item.ref ?: item.id, item.name,
                                                 isLocal = albumWithSongsLocal.album.isLocal,
                                                 onlineId = item.id,
+                                                isChannel = item.isChannel,
+                                                sourceChannelId = item.sourceChannelId,
                                             )
                                         } ?: albumWithSongsLocal.artists.map {
                                             MediaMetadata.Artist(
                                                 it.id, it.name,
                                                 isLocal = albumWithSongsLocal.album.isLocal || it.isLocal,
                                                 onlineId = it.onlineArtistId,
+                                                isChannel = it.isChannelSource,
+                                                sourceChannelId = it.sourceChannelId,
                                             )
                                         }).artistDisplayTargets(preserveLocalNames = albumWithSongsLocal.album.isLocal)
                                         artists.forEachIndexed { index, artist ->

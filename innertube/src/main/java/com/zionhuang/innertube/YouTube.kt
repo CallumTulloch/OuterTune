@@ -10,6 +10,7 @@ import com.zionhuang.innertube.models.isEmptyByline
 import com.zionhuang.innertube.models.merge
 import com.zionhuang.innertube.models.Run
 import com.zionhuang.innertube.models.toArtistCredit
+import com.zionhuang.innertube.models.isChannelByline
 import com.zionhuang.innertube.models.ArtistItem
 import com.zionhuang.innertube.models.ArtTrackOriginalMetadata
 import com.zionhuang.innertube.models.BrowseEndpoint
@@ -1081,8 +1082,8 @@ object YouTube {
         return try {
             var credit = ArtistCreditResolver.beginAttempt(song.artistCredit ?: ArtistCredit(
                 song.artists.joinToString("、") { it.name },
-                if (song.artists.size > 1 || song.artists.singleOrNull()?.id != null) song.artists else emptyList(),
-                if (song.artists.size > 1 || song.artists.singleOrNull()?.id != null)
+                if (song.artists.size > 1 || song.artists.singleOrNull()?.let { it.id != null || it.isChannel } == true) song.artists else emptyList(),
+                if (song.artists.size > 1 || song.artists.singleOrNull()?.let { it.id != null || it.isChannel } == true)
                     ArtistCreditStatus.COMPLETE else ArtistCreditStatus.RAW,
                 "song", requestLocale.hl))
             var album = song.album
@@ -1090,7 +1091,7 @@ object YouTube {
             val knownType = song.endpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType
             val videoSource = credit.evidence.any { it.startsWith("video-source:") } ||
                 (knownType != null && knownType != MUSIC_VIDEO_TYPE_ATV)
-            if ((videoSource && !credit.isEmptyByline()) ||
+            if (credit.isChannelByline() || (videoSource && !credit.isEmptyByline()) ||
                 (album != null && (credit.status == ArtistCreditStatus.CONFLICT ||
                     (credit.status == ArtistCreditStatus.COMPLETE && credit.artists.all { it.id != null }))))
                 return result()
@@ -1103,7 +1104,7 @@ object YouTube {
             queued?.artistCredit?.let { credit = credit.merge(it) }
             album = album ?: queued?.album
             // Repair only the directly supplied byline; do not infer video performers from other pages.
-            if (videoSource || credit.evidence.any { it.startsWith("video-source:") } || credit.status == ArtistCreditStatus.CONFLICT)
+            if (credit.isChannelByline() || videoSource || credit.evidence.any { it.startsWith("video-source:") } || credit.status == ArtistCreditStatus.CONFLICT)
                 return result()
             val candidateIds = (song.artistBrowseIds + queued?.artistBrowseIds.orEmpty()).distinct()
                 .filter { Regex("^UC[A-Za-z0-9_-]{22}$").matches(it) }.take(5)

@@ -44,7 +44,7 @@ interface ArtistCreditDao : ArtistsDao {
     fun refreshAlbumArtistGroups(artistIds: List<String>) {
         artistIds.distinct().forEach { id ->
             val artist = artistEntityByExactId(id) ?: return@forEach
-            if (artist.isLocal || artist.id.startsWith("AG")) return@forEach
+            if (artist.isLinkableSource || artist.id.startsWith("AG")) return@forEach
             // A resolved source keeps this provenance so later refreshes never physically join
             // its raw identity with a different member of its former provisional group.
             if (artist.onlineArtistId != null) return@forEach
@@ -98,9 +98,19 @@ interface ArtistCreditDao : ArtistsDao {
     }
 
     fun resolveCreditArtist(videoId: String, artist: Artist): ArtistEntity {
+        if (artist.isChannel) {
+            val sourceId = ArtistIdentity.channelId(artist.sourceChannelId, videoId, artist.name)
+            val existing = artistEntityByExactId(sourceId)
+            if (existing != null) {
+                require(existing.isChannel && existing.sourceChannelId == artist.sourceChannelId)
+                return existing
+            }
+            return ArtistEntity(id = sourceId, name = artist.name, isChannel = true,
+                sourceChannelId = artist.sourceChannelId).also(::insert)
+        }
         val remoteId = ArtistIdentity.onlineId(artist.id)
         val internalId = artist.ref ?: remoteId ?: ArtistIdentity.stableId(videoId, artist.name)
-        val byRef = artistById(internalId)?.takeUnless { it.isLocal }?.takeIf {
+        val byRef = artistById(internalId)?.takeUnless { it.isLinkableSource }?.takeIf {
             remoteId == null || it.onlineArtistId == null || it.onlineArtistId == remoteId
         }
         val byOnline = remoteId?.let(::artistByOnlineId)
@@ -171,7 +181,7 @@ interface ArtistCreditDao : ArtistsDao {
     @Transaction
     fun mergeArtistIdentity(canonical: ArtistEntity, duplicate: ArtistEntity): ArtistEntity {
         if (canonical.id == duplicate.id) return canonical
-        require(!canonical.isLocal && !duplicate.isLocal)
+        require(!canonical.isLinkableSource && !duplicate.isLinkableSource)
         require(canonical.onlineArtistId == null || duplicate.onlineArtistId == null ||
             canonical.onlineArtistId == duplicate.onlineArtistId)
         val combined = canonical.copy(

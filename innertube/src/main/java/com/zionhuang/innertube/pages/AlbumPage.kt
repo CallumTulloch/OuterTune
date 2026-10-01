@@ -13,6 +13,7 @@ import com.zionhuang.innertube.models.SectionListRenderer
 import com.zionhuang.innertube.models.withVideoSource
 import com.zionhuang.innertube.models.toArtistCredit
 import com.zionhuang.innertube.models.artistBrowseIds
+import com.zionhuang.innertube.models.toArtist
 import com.zionhuang.innertube.models.artistElements
 import com.zionhuang.innertube.models.response.BrowseResponse
 import com.zionhuang.innertube.models.splitBySeparator
@@ -39,7 +40,7 @@ data class AlbumPage(
         fun getArtistCredit(response: BrowseResponse, language: String = com.zionhuang.innertube.YouTube.locale.hl) = (
             getHeader(response)?.straplineTextOne?.runs
                 ?: response.header?.musicDetailHeaderRenderer?.subtitle?.runs?.splitBySeparator()?.getOrNull(1)
-            ).orEmpty().toArtistCredit("album-header", language)
+            ).orEmpty().toArtistCredit("album-header", language, allowChannelFallback = false)
 
         fun getPlaylistId(response: BrowseResponse): String? {
             var playlistId = response.microformat?.microformatDataRenderer?.urlCanonical
@@ -71,15 +72,9 @@ data class AlbumPage(
 
         fun getArtists(response: BrowseResponse): List<Artist> {
             val artists = getHeader(response)?.straplineTextOne?.runs?.artistElements()?.map {
-                Artist(
-                    name = it.text,
-                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                )
+                it.toArtist()
             } ?: response.header?.musicDetailHeaderRenderer?.subtitle?.runs?.splitBySeparator()?.getOrNull(1)?.artistElements()?.map {
-                Artist(
-                    name = it.text,
-                    id = it.navigationEndpoint?.browseEndpoint?.browseId
-                )
+                it.toArtist()
             } ?: emptyList()
 
             return artists
@@ -133,10 +128,7 @@ data class AlbumPage(
                 title = renderer.flexColumns.firstOrNull()?.musicResponsiveListItemFlexColumnRenderer?.text
                     ?.runs?.joinToString("") { it.text }?.takeIf { it.isNotBlank() } ?: return null,
                 artists = PageHelper.artistRuns(renderer.flexColumns).artistElements().map {
-                    Artist(
-                        name = it.text,
-                        id = it.navigationEndpoint?.browseEndpoint?.browseId
-                    )
+                    it.toArtist()
                 },
                 album = album?.let {
                     Album(it.title, it.browseId)

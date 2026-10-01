@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.dd3boh.outertune.db.MusicDatabase
 import com.dd3boh.outertune.db.entities.Artist
 import com.dd3boh.outertune.db.entities.LocalArtistLink
+import com.dd3boh.outertune.db.entities.LocalArtistLinkSource
 import com.dd3boh.outertune.repositories.LocalArtistLinkCandidate
 import com.dd3boh.outertune.repositories.LocalArtistLinkException
 import com.dd3boh.outertune.repositories.LocalArtistLinkFailure
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -36,6 +38,7 @@ class LocalArtistLinkViewModel internal constructor(private val runtime: Runtime
         preview = repository::preview,
         confirm = repository::confirm,
         unlink = repository::unlink,
+        sourceDetails = database::linkableArtistSource,
     ))
 
     internal class Runtime(
@@ -45,6 +48,7 @@ class LocalArtistLinkViewModel internal constructor(private val runtime: Runtime
         val preview: suspend (String) -> LocalArtistLinkCandidate,
         val confirm: suspend (String, LocalArtistLinkCandidate, String?) -> Unit,
         val unlink: suspend (String, String) -> Boolean,
+        val sourceDetails: (String) -> Flow<LocalArtistLinkSource?> = { flowOf(null) },
         val contextChanges: Flow<Unit> = combine(YouTube.localeUpdates, YouTube.authUpdates) { _, _ -> Unit },
         val dispatcher: CoroutineDispatcher = Dispatchers.IO,
         val scope: CoroutineScope? = null,
@@ -55,6 +59,7 @@ class LocalArtistLinkViewModel internal constructor(private val runtime: Runtime
     data class State(
         val artist: Artist? = null,
         val link: LocalArtistLink? = null,
+        val source: LocalArtistLinkSource? = null,
         val loaded: Boolean = false,
         val query: String = "",
         val candidates: List<ArtistItem> = emptyList(),
@@ -82,25 +87,35 @@ class LocalArtistLinkViewModel internal constructor(private val runtime: Runtime
 
     fun open(artist: Artist) {
         close()
-        if (!artist.artist.isLocal) return
+        if (!artist.artist.isLinkableSource) return
         val session = opening
         observedContext = runtime.contextToken()
         mutableState.value = State(artist = artist, query = artist.title, busy = Busy.LOADING)
         links = scope.launch {
             try {
-                runtime.links(artist.id).collect { link ->
+                val details = if (artist.artist.isChannelSource) runtime.sourceDetails(artist.id) else flowOf(null)
+                combine(runtime.links(artist.id), details) { link, source -> link to source }.collect { (link, source) ->
                     if (session != opening) return@collect
+                    if (artist.artist.isChannelSource && source == null) {
+                        invalidate(Failure.LOAD)
+                        mutableState.value = mutableState.value.copy(loaded = false, source = null)
+                        return@collect
+                    }
                     val previous = mutableState.value
                     if (previous.loaded && previous.link?.revision != link?.revision && !previous.saving) {
                         invalidate(Failure.LINK_CHANGED)
                     }
-                    mutableState.value = mutableState.value.copy(link = link, loaded = true,
+                    mutableState.value = mutableState.value.copy(link = link, source = source, loaded = true,
+                        failure = mutableState.value.failure.takeUnless { it == Failure.LOAD },
                         busy = if (mutableState.value.busy == Busy.LOADING) Busy.NONE else mutableState.value.busy)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                if (session == opening) mutableState.value = mutableState.value.copy(busy = Busy.NONE, failure = Failure.LOAD)
+                if (session == opening) {
+                    invalidate(Failure.LOAD)
+                    mutableState.value = mutableState.value.copy(loaded = false)
+                }
             }
         }
         contexts = scope.launch {
@@ -166,7 +181,7 @@ class LocalArtistLinkViewModel internal constructor(private val runtime: Runtime
         if (!before.loaded || before.busy != Busy.NONE) return
         if (before.link?.revision != previewRevision) return invalidate(Failure.LINK_CHANGED)
         if (candidate.contextToken != runtime.contextToken()) return invalidate(Failure.CONTEXT_CHANGED)
-        val localId = before.artist?.takeIf { it.artist.isLocal }?.id ?: return
+        val localId = before.artist?.takeIf { it.artist.isLinkableSource }?.id ?: return
         val expected = previewRevision
         runRequest(Busy.SAVING, Failure.SAVE) {
             runtime.confirm(localId, candidate, expected)
@@ -190,7 +205,7 @@ class LocalArtistLinkViewModel internal constructor(private val runtime: Runtime
         val before = mutableState.value
         if (!before.confirmUnlink || before.saving) return
         if (before.link?.revision != unlinkRevision) return invalidate(Failure.LINK_CHANGED)
-        val localId = before.artist?.takeIf { it.artist.isLocal }?.id ?: return
+        val localId = before.artist?.takeIf { it.artist.isLinkableSource }?.id ?: return
         val expected = unlinkRevision ?: return
         // Removing a saved link does not depend on the network or current account.
         runRequest(Busy.UNLINKING, Failure.UNLINK, checkContext = false) {

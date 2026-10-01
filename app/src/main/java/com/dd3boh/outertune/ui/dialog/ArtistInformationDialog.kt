@@ -36,7 +36,8 @@ fun ArtistInformationDialog(
     val resolved = rememberResolvedArtistMetadata(metadata, request = true, priority = true)
     val credit = resolved.artistCredit
     val artists = if (credit == null) resolved.artists else credit.artists.map { artist ->
-        MediaMetadata.Artist(id = artist.ref ?: artist.id, name = artist.name, onlineId = artist.id, isLocal = resolved.isLocal)
+        MediaMetadata.Artist(id = artist.ref ?: artist.id, name = artist.name, onlineId = artist.id,
+            isLocal = resolved.isLocal, isChannel = artist.isChannel, sourceChannelId = artist.sourceChannelId)
     }
     val targets = artists.artistDisplayTargets(preserveLocalNames = resolved.isLocal)
     ListDialog(onDismiss = onDismiss) {
@@ -64,7 +65,13 @@ fun ArtistInformationDialog(
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }
-            if (credit != null && artists.isNotEmpty()) {
+            if (artists.any { it.isChannel }) {
+                Text(
+                    text = stringResource(R.string.channel_artist_source_name),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+            } else if (credit != null && artists.isNotEmpty()) {
                 Text(
                     text = stringResource(
                         if (credit.source.contains("credit", ignoreCase = true) ||

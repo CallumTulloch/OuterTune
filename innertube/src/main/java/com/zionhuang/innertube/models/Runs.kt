@@ -46,6 +46,11 @@ private val durationMetadataRegex = Regex("""^\d+:[0-5]\d(?::[0-5]\d)?$""")
  * Duration runs do not have a navigation endpoint; keeping endpoint-backed values also avoids
  * rejecting an unusually named artist such as "4:44".
  */
-fun List<Run>.artistElements() = oddElements().filterNot { run ->
-    run.navigationEndpoint == null && durationMetadataRegex.matches(run.text.trim())
+fun List<Run>.artistElements(): List<Run> {
+    val names = oddElements().filterNot { run ->
+        run.navigationEndpoint == null && durationMetadataRegex.matches(run.text.trim())
+    }
+    return if (names.any { it.navigationEndpoint?.browseEndpoint?.isArtistEndpoint == true })
+        names.filterNot { it.navigationEndpoint?.browseEndpoint?.isChannelEndpoint == true }
+    else names
 }

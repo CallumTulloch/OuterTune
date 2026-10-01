@@ -65,7 +65,7 @@ fun ArtistEntity.displayArtistTarget(): ArtistDisplayTarget = ArtistDisplayProje
 
 fun MediaMetadata.Artist.displayArtistTarget(): ArtistDisplayTarget = ArtistDisplayProjection.resolve(id)
     ?: ArtistDisplayTarget(id, id, displayName, null,
-        onlineIdentity = ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id))
+        onlineIdentity = if (isChannel) null else ArtistIdentity.onlineId(onlineId) ?: ArtistIdentity.onlineId(id))
 
 /** Collapse only identities established by a manual link or an album-scoped provisional group. */
 private fun distinctProjectedTargets(targets: List<ArtistDisplayTarget>): List<ArtistDisplayTarget> {

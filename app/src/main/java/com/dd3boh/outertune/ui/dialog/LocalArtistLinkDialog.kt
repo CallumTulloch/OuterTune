@@ -47,9 +47,12 @@ fun LocalArtistLinkDialog(
     onDismiss: () -> Unit,
     onLinked: () -> Unit = {},
 ) {
-    if (!localArtist.artist.isLocal) return
+    if (!localArtist.artist.isLinkableSource) return
     val viewModel: LocalArtistLinkViewModel = hiltViewModel(key = "local-artist-link:${localArtist.id}")
     val state by viewModel.state.collectAsState()
+    val sourceArtist = state.source?.localArtist ?: localArtist
+    val sourceSongCount = if (sourceArtist.artist.isChannelSource) state.source?.songs?.size ?: sourceArtist.songCount
+        else sourceArtist.songCount
     val currentTarget = state.link?.let { link ->
         localArtist.artist.displayArtistTarget().takeIf { it.id == link.onlineArtistId }
     }
@@ -80,7 +83,11 @@ fun LocalArtistLinkDialog(
                 modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(stringResource(R.string.local_artist_link_source, localArtist.title, localArtist.songCount))
+                Text(stringResource(if (sourceArtist.artist.isChannelSource) R.string.channel_artist_link_source
+                    else R.string.local_artist_link_source, sourceArtist.title, sourceSongCount))
+                state.source?.takeIf { it.localArtist.artist.isChannelSource }?.let { source ->
+                    ChannelArtistSourceDetails(source)
+                }
                 state.link?.let { link ->
                     Text(stringResource(R.string.local_artist_link_current), style = MaterialTheme.typography.labelLarge)
                     ArtistLinkName(currentTarget?.name ?: link.onlineName, currentTarget?.thumbnailUrl ?: link.thumbnailUrl)
@@ -136,7 +143,7 @@ fun LocalArtistLinkDialog(
                         candidate.albumTitles.take(3).forEach { Text(it) }
                     }
                     Text(stringResource(R.string.local_artist_link_confirmation,
-                        localArtist.title, localArtist.songCount, candidate.name))
+                        sourceArtist.title, sourceSongCount, candidate.name))
                 }
                 if (state.candidates.isNotEmpty()) {
                     Text(stringResource(R.string.local_artist_link_candidates), style = MaterialTheme.typography.labelLarge)
@@ -168,8 +175,9 @@ fun LocalArtistLinkDialog(
             title = { Text(stringResource(R.string.local_artist_link_remove)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.local_artist_link_remove_confirmation,
-                        localArtist.title, currentTarget?.name ?: state.link?.onlineName.orEmpty()))
+                    Text(stringResource(if (sourceArtist.artist.isChannelSource) R.string.channel_artist_link_remove_confirmation
+                        else R.string.local_artist_link_remove_confirmation,
+                        sourceArtist.title, currentTarget?.name ?: state.link?.onlineName.orEmpty()))
                     if (state.busy == Busy.UNLINKING) {
                         Text(stringResource(R.string.local_artist_link_removing))
                     }

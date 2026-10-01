@@ -92,7 +92,7 @@ class MusicDatabase(
     fun close() = delegate.close()
 
     companion object {
-        const val MUSIC_DATABASE_VERSION = 30
+        const val MUSIC_DATABASE_VERSION = 31
     }
 }
 
@@ -158,6 +158,7 @@ class MusicDatabase(
         AutoMigration(from = 27, to = 28), // Preserve saved music while distinguishing confirmed album track lists.
         AutoMigration(from = 28, to = 29), // Persist completed name decisions independently of pending evidence.
         AutoMigration(from = 29, to = 30), // Track display changes without rereading the complete name cache.
+        AutoMigration(from = 30, to = 31), // Retain channel provenance and extend reversible manual artist links.
     ]
 )
 @TypeConverters(Converters::class)

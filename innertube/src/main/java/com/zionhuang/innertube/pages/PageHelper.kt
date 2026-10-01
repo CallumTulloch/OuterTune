@@ -3,8 +3,11 @@ package com.zionhuang.innertube.pages
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer.FlexColumn
 import com.zionhuang.innertube.models.MusicResponsiveListItemRenderer
 import com.zionhuang.innertube.models.Run
+import com.zionhuang.innertube.models.Runs
 import com.zionhuang.innertube.models.WatchEndpoint
 import com.zionhuang.innertube.models.artistBylineRuns
+import com.zionhuang.innertube.models.clean
+import com.zionhuang.innertube.models.splitBySeparator
 
 object PageHelper {
     /** Retain a supplied search playback endpoint, including its explicit music/video type. */
@@ -24,8 +27,22 @@ object PageHelper {
             column.musicResponsiveListItemFlexColumnRenderer.text?.runs.orEmpty().any {
                 it.navigationEndpoint?.browseEndpoint?.isArtistEndpoint == true
             }
+        } ?: columns.firstOrNull { column ->
+            column.musicResponsiveListItemFlexColumnRenderer.text?.runs.orEmpty().any {
+                it.navigationEndpoint?.browseEndpoint?.isChannelEndpoint == true
+            }
         } ?: columns.getOrNull(1)
-        return column?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty().artistBylineRuns()
+        return artistRuns(column?.musicResponsiveListItemFlexColumnRenderer?.text)
+    }
+
+    /** Use the same byline selection for card subtitles and responsive metadata columns. */
+    fun artistRuns(metadata: Runs?): List<Run> {
+        val sections = metadata?.runs.orEmpty().splitBySeparator().clean()
+        return (sections.firstOrNull { section -> section.any {
+            it.navigationEndpoint?.browseEndpoint?.isArtistEndpoint == true
+        } } ?: sections.firstOrNull { section -> section.any {
+            it.navigationEndpoint?.browseEndpoint?.isChannelEndpoint == true
+        } } ?: sections.firstOrNull()).orEmpty().artistBylineRuns()
     }
 
     fun extractRuns(columns: List<FlexColumn>, typeLike: String): List<Run> {

@@ -159,7 +159,7 @@ fun ArtistScreen(
     val suppliedArtistName = if (showLocal) {
         libraryArtist?.artist?.displayName ?: artistContext?.name ?: artistPage?.artist?.displayTitle
     } else artistPage?.artist?.displayTitle ?: libraryArtist?.artist?.displayName ?: artistContext?.name
-    val artistName = (if (showLocal && libraryArtist?.artist?.isLocal == true) {
+    val artistName = (if (showLocal && libraryArtist?.artist?.isLinkableSource == true) {
         suppliedArtistName.orEmpty()
     } else {
         MetadataNames.resolve(OriginalNameKind.ARTIST, onlineArtistId, suppliedArtistName.orEmpty())
@@ -207,6 +207,7 @@ fun ArtistScreen(
                         ArtistThumbnail(
                             thumbnailUrl = null,
                             isLocal = libraryArtist?.artist?.isLocal == true,
+                            isChannel = libraryArtist?.artist?.isChannelSource == true,
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .padding(top = WindowInsets.systemBars.asPaddingValues().calculateTopPadding() + AppBarHeight)
@@ -327,7 +328,9 @@ fun ArtistScreen(
                     if (librarySongs.isNotEmpty()) {
                         item {
                             NavigationTitle(
-                                title = stringResource(R.string.artist_local_songs),
+                                title = stringResource(if (libraryArtist?.artist?.isChannelSource == true ||
+                                    librarySongs.any { !it.song.isLocal })
+                                    R.string.songs else R.string.artist_local_songs),
                                 onClick = {
                                     navController.navigate("artist/${libraryArtist?.id ?: viewModel.artistId}/songs")
                                 }
@@ -613,6 +616,8 @@ fun ArtistScreen(
                                         id = it.id,
                                         name = it.name,
                                         onlineId = it.onlineId,
+                                        isChannel = it.isChannel,
+                                        sourceChannelId = it.sourceChannelId,
                                         thumbnailUrl = artistPage?.artist?.thumbnail,
                                     ).toggleLike())
                                 }
