@@ -88,3 +88,17 @@
 | REGRESSION-PERF-001 | 今回の対象外 | 通信可能なarm64実機と同一の比較データ/操作が揃った段階 |
 
 本番修正2件はそれぞれ追加テスト/記録とともにコミットし、Media3追加テストと全体記録を別コミットにまとめた。APK/ログ/合成バックアップはコミットしない。
+
+## 配布用coreRelease APK
+
+- ユーザーのrelease APK依頼により、`50b5eca4` と保全中の音声403対策を含む作業ツリーから生成。既存の最終テスト入力hashとの相違0を確認し、単体538件と既検証の結合結果を再利用した。製品ソース・version/schema・署名設定は変更していない。
+- `PASS`: `gradlew.bat :app:assembleCoreRelease --offline --console=plain`、3分8秒。R8・resource shrink・release vital lintを含め成功。証跡: `build/diagnostics/fork-release-20261001/`。
+- 成果物: `app/build/outputs/apk/core/release/OuterTune-0.10.2-b1-core-arm64-v8a-release-71.apk`。coreRelease / arm64-v8aのみ / versionName 0.10.2-b1 / versionCode 71、9,221,585 bytes。SHA-256 `3BFB338F90BDD397A904C996B66993D96DAD05AFA75DF50679BA0EBD33F4589B`。
+- `PASS`: apksigner verify（v2署名）とaapt2のmanifest確認。package `com.dd3boh.outertune`、非debuggable、APK内native ABIはarm64-v8aだけ。`release-apk.json` / `apk-signature.txt` / `apk-badging.txt`。
+- 端末: 専用read-only `Pixel_9_API_35` / emulator-5558 / ADB5039。arm64 APKをx86_64エミュレータのarm64対応で実行し、元AVD・通常ADB・実機には触れない。一時releaseパッケージだけを新規データへ初期化。
+- `PASS（実releaseの通常UI）`: 最終の合成4曲backupを通常DocumentsUIで復元し、PID4093→4827の実再起動を観測。release自身で作成したbackupを空の検証アプリへ復元し、PID5894→6279の実再起動後に再backupした。
+- `PASS`: release自身の復元前/後backupはZIPの全エントリ/CRC、SQLite integrity/FK/current31を満たす。全26テーブルの列/全行が相互一致し、元の合成expected JSONにも完全一致。人物リンク・正規English publication・歌詞/offset・混合キュー/shuffleを維持。設定はrelease自身の復元前/後で全バイト一致。元debug fixtureの設定全バイトとは異なり、起動時に追加する設定との差を示すものとして記録し、元設定ファイルとの全バイト一致とは扱わない。`release-backup-comparison.json`。
+- `PASS（画面）`: 保存済み4曲と日英名称を表示。`release-songs.png` / `release-songs.xml`。実音源・実転送の再生確認はこのrelease確認の対象外。
+- 途中の準備ではDocumentsUIの同名Downloads要素を選択できず復元が開始されなかった。また、外部保存直後の検証用初期化後に、親Activityを失ったPickerが残った。クラッシュはなく、該当状態とログを保全し、Pickerを閉じて新規の通常画面から最終シナリオを実行した。途中操作を製品の復元失敗件数へ加算しない。
+- 終了: 2026-10-01 21:57 JST、起動PID/引数を照合した一時セッション/専用ADB5039のみ終了、残存0、crash buffer空。`emulator-cleanup.json`。ユーザーへ通常操作可能と案内した。
+- release実通信は既知の環境制約に従って未検証。配布対象のAPKと上記の通信不要経路を確認した結果であり、実機負荷や実ネットワーク成功を示す結果ではない。
