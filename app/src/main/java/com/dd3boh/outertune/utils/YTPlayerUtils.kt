@@ -31,8 +31,6 @@ import com.zionhuang.innertube.models.YouTubeClient.Companion.WEB_REMIX
 import com.zionhuang.innertube.models.response.PlayerResponse
 import okhttp3.OkHttpClient
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 
 object YTPlayerUtils {
 
@@ -44,16 +42,7 @@ object YTPlayerUtils {
 
     private val poTokenGenerator = PoTokenGenerator()
 
-    /**
-     * The main client is used for metadata and initial streams.
-     * Do not use other clients for this because it can result in inconsistent metadata.
-     * For example other clients can have different normalization targets (loudnessDb).
-     *
-     * [com.zionhuang.innertube.models.YouTubeClient.ANDROID_VR_NO_AUTH] Is temporally used as it is out only working client
-     * [com.zionhuang.innertube.models.YouTubeClient.WEB_REMIX] should be preferred here because currently it is the only client which provides:
-     * - the correct metadata (like loudnessDb)
-     * - premium formats
-     */
+    /** Keep this client's metadata when its request succeeds, even if another client supplies audio. */
     private val MAIN_CLIENT: YouTubeClient = ANDROID_VR_NO_AUTH
 
     /**
@@ -65,7 +54,7 @@ object YTPlayerUtils {
         ANDROID,
         TVHTML5,
         TVHTML5_SIMPLY_EMBEDDED_PLAYER,
-        IOS, // recent api changes produce error 403 after 30 seconds
+        IOS,
     )
 
 
@@ -81,8 +70,8 @@ object YTPlayerUtils {
 
     /**
      * Custom player response intended to use for playback.
-     * Metadata like audioConfig and videoDetails are from [MAIN_CLIENT].
-     * Format & stream can be from [MAIN_CLIENT] or [STREAM_FALLBACK_CLIENTS].
+     * Metadata comes from [MAIN_CLIENT] when it answers. If its request fails, the client
+     * supplying the verified stream also supplies metadata. Every stream URL is verified.
      */
     suspend fun playerResponseForPlayback(
         videoId: String,
@@ -110,12 +99,7 @@ object YTPlayerUtils {
     ): PlaybackData {
         Log.d(TAG, "Playback info requested: $videoId")
 
-        /**
-         * This is required for some clients to get working streams however
-         * it should not be forced for the [MAIN_CLIENT] because the response of the [MAIN_CLIENT]
-         * is required even if the streams won't work from this client.
-         * This is why it is allowed to be null.
-         */
+        // Signature lookup is optional: some clients can supply audio without a timestamp.
         val signatureTimestamp = getSignatureTimestampOrNull(videoId)
 
         val isLoggedIn = !authentication.cookie.isNullOrBlank()
@@ -146,163 +130,70 @@ object YTPlayerUtils {
         }
         diagnostics.poTokenAvailable = webPlayerPot != null && webStreamingPot != null
 
-        val mainPlayerResponse =
-            YouTube.player(videoId, playlistId, MAIN_CLIENT, signatureTimestamp, webPlayerPot,
-                requestAuthentication = authentication)
-                .onFailure { failure ->
+        val resolution = resolvePlaybackStream(
+            clients = listOf(MAIN_CLIENT) + STREAM_FALLBACK_CLIENTS,
+            isLoggedIn = isLoggedIn,
+            audioQuality = audioQuality,
+            isMetered = connectivityManager.isActiveNetworkMetered,
+            requiredItag = requiredItag,
+            requestPlayer = { client ->
+                Log.d(TAG, "[$videoId] Trying client: ${client.clientName}")
+                YouTube.player(videoId, playlistId, client, signatureTimestamp, webPlayerPot,
+                    requestAuthentication = authentication)
+            },
+            resolveUrl = { format ->
+                NewPipeUtils.getStreamUrl(format, videoId).onFailure { failure ->
                     if (failure is CancellationException) throw failure
-                    diagnostics.record(MAIN_CLIENT.clientName, false, PlaybackFailureStage.REQUEST, failure = failure)
-                    failure.addSuppressed(diagnostics.asException())
+                    reportException(failure)
                 }
-                .getOrThrow()
-
-        val audioConfig = mainPlayerResponse.playerConfig?.audioConfig
-        val videoDetails = mainPlayerResponse.videoDetails
-        val playbackTracking = mainPlayerResponse.playbackTracking
-
-        var format: PlayerResponse.StreamingData.Format? = null
-        var streamUrl: String? = null
-        var streamExpiresInSeconds: Int? = null
-
-        var streamPlayerResponse: PlayerResponse? = null
-        for (clientIndex in (-1 until STREAM_FALLBACK_CLIENTS.size)) {
-            currentCoroutineContext().ensureActive()
-            // reset for each client
-            format = null
-            streamUrl = null
-            streamExpiresInSeconds = null
-
-            // decide which client to use for streams and load its player response
-            val client: YouTubeClient
-            if (clientIndex == -1) {
-                Log.d(TAG, "Trying client: ${MAIN_CLIENT.clientName}")
-                // try with streams from main client first
-                client = MAIN_CLIENT
-                streamPlayerResponse = mainPlayerResponse
-            } else {
-                Log.d(TAG, "Trying fallback client: ${STREAM_FALLBACK_CLIENTS[clientIndex].clientName}")
-                // after main client use fallback clients
-                client = STREAM_FALLBACK_CLIENTS[clientIndex]
-
-                if (client.loginRequired && !isLoggedIn) {
-                    // skip client if it requires login but user is not logged in
-                    diagnostics.record(client.clientName, false, PlaybackFailureStage.SKIPPED_LOGIN)
-                    continue
-                }
-
-                streamPlayerResponse =
-                    YouTube.player(videoId, playlistId, client, signatureTimestamp, webPlayerPot,
-                        requestAuthentication = authentication)
-                        .onFailure { failure ->
-                            if (failure is CancellationException) throw failure
-                            diagnostics.record(
-                                client.clientName,
-                                client.loginSupported && authentication.cookie != null,
-                                PlaybackFailureStage.REQUEST,
-                                failure = failure,
-                            )
-                        }
-                        .getOrNull()
-                if (streamPlayerResponse == null) continue
+            },
+            probeStream = ::validateStatus,
+            decorateUrl = { client, url ->
+                if (client.useWebPoTokens && webStreamingPot != null) "$url&pot=$webStreamingPot" else url
+            },
+            recordFailure = { attempt ->
+                diagnostics.record(
+                    attempt.client.clientName,
+                    attempt.client.loginSupported && authentication.cookie != null,
+                    attempt.stage,
+                    status = attempt.response?.playabilityStatus?.status,
+                    httpCode = attempt.httpCode,
+                    selectedItag = attempt.format?.itag,
+                    failure = attempt.failure,
+                )
+            },
+        )
+        if (resolution is PlaybackStreamResolution.Failure) {
+            val attempt = resolution.lastFailure
+            val diagnostic = diagnostics.asException()
+            if (attempt?.stage == PlaybackFailureStage.PLAYABILITY) {
+                throw PlaybackException(attempt.response?.playabilityStatus?.reason,
+                    diagnostic, PlaybackException.ERROR_CODE_REMOTE_ERROR)
             }
-
-            fun recordFailure(
-                stage: PlaybackFailureStage,
-                httpCode: Int? = null,
-                failure: Throwable? = null,
-            ) = diagnostics.record(
-                client.clientName,
-                client.loginSupported && authentication.cookie != null,
-                stage,
-                status = streamPlayerResponse?.playabilityStatus?.status,
-                httpCode = httpCode,
-                selectedItag = format?.itag,
-                failure = failure,
-            )
-
-            currentCoroutineContext().ensureActive()
-            Log.d(TAG, "[$videoId] stream client: ${client.clientName}, " +
-                    "playabilityStatus: ${streamPlayerResponse?.playabilityStatus?.let {
-                        it.status + (it.reason?.let { " - $it" } ?: "")
-                    }}")
-
-            // process current client response
-            if (streamPlayerResponse?.playabilityStatus?.status == "OK") {
-                format =
-                    findFormat(
-                        streamPlayerResponse,
-                        audioQuality,
-                        connectivityManager,
-                        requiredItag,
-                    )
-                if (format == null) {
-                    recordFailure(PlaybackFailureStage.FORMAT)
-                    continue
-                }
-                streamUrl = findUrlOrNull(format, videoId)
-                if (streamUrl == null) {
-                    recordFailure(PlaybackFailureStage.URL)
-                    continue
-                }
-                streamExpiresInSeconds = streamPlayerResponse.streamingData?.expiresInSeconds
-                if (streamExpiresInSeconds == null) {
-                    recordFailure(PlaybackFailureStage.EXPIRY)
-                    continue
-                }
-
-                if (client.useWebPoTokens && webStreamingPot != null) {
-                    streamUrl += "&pot=$webStreamingPot";
-                }
-
-                if (clientIndex == STREAM_FALLBACK_CLIENTS.size - 1) {
-                    /** skip [validateStatus] for last client */
-                    break
-                }
-                val streamStatus = validateStatus(streamUrl)
-                if (streamStatus.getOrNull()?.let { it in 200..299 } == true) {
-                    // working stream found
-                    Log.i(TAG, "[$videoId] [${client.clientName}] found working stream")
-                    break
-                } else {
-                    recordFailure(
-                        if (streamStatus.isSuccess) PlaybackFailureStage.STREAM_HTTP else PlaybackFailureStage.STREAM_NETWORK,
-                        httpCode = streamStatus.getOrNull(),
-                        failure = streamStatus.exceptionOrNull(),
-                    )
-                    Log.w(TAG, "[$videoId] [${client.clientName}] got bad http status code")
-                }
-            } else {
-                recordFailure(PlaybackFailureStage.PLAYABILITY)
+            val message = when (attempt?.stage) {
+                PlaybackFailureStage.FORMAT -> "Could not find format"
+                PlaybackFailureStage.URL -> "Could not find stream url"
+                PlaybackFailureStage.EXPIRY -> "Missing stream expire time"
+                PlaybackFailureStage.STREAM_HTTP -> "Stream rejected (HTTP ${attempt.httpCode})"
+                PlaybackFailureStage.STREAM_NETWORK -> "Could not verify stream url"
+                else -> "Bad stream player response"
             }
+            // Keep transport exceptions recognizable by MusicService's network error handling.
+            attempt?.failure?.let { failure ->
+                failure.addSuppressed(diagnostic)
+                throw failure
+            }
+            throw Exception(message, diagnostic)
         }
-
-        if (streamPlayerResponse == null) {
-            throw Exception("Bad stream player response", diagnostics.asException())
-        }
-        if (streamPlayerResponse.playabilityStatus.status != "OK") {
-            throw PlaybackException(
-                streamPlayerResponse.playabilityStatus.reason,
-                diagnostics.asException(),
-                PlaybackException.ERROR_CODE_REMOTE_ERROR
-            )
-        }
-        if (streamExpiresInSeconds == null) {
-            throw Exception("Missing stream expire time", diagnostics.asException())
-        }
-        if (format == null) {
-            throw Exception("Could not find format", diagnostics.asException())
-        }
-        if (streamUrl == null) {
-            throw Exception("Could not find stream url", diagnostics.asException())
-        }
-
+        resolution as PlaybackStreamResolution.Success
+        Log.i(TAG, "[$videoId] [${resolution.client.clientName}] found working stream")
         return PlaybackData(
-            audioConfig,
-            videoDetails,
-            playbackTracking,
-            format,
-            streamUrl,
-            streamExpiresInSeconds,
+            resolution.metadataResponse.playerConfig?.audioConfig,
+            resolution.metadataResponse.videoDetails,
+            resolution.metadataResponse.playbackTracking,
+            resolution.format,
+            resolution.streamUrl,
+            resolution.streamExpiresInSeconds,
             authentication.revision,
         )
     }
@@ -317,34 +208,10 @@ object YTPlayerUtils {
     ): Result<PlayerResponse> =
         YouTube.player(videoId, playlistId, client = WEB_REMIX) // ANDROID_VR does not work with history
 
-    private fun findFormat(
-        playerResponse: PlayerResponse,
-        audioQuality: AudioQuality,
-        connectivityManager: ConnectivityManager,
-        requiredItag: Int?,
-    ): PlayerResponse.StreamingData.Format? =
-        selectPlaybackFormat(
-            playerResponse.streamingData?.adaptiveFormats.orEmpty(),
-            audioQuality,
-            connectivityManager.isActiveNetworkMetered,
-            requiredItag,
-        )
-
     /**
      * Preserve HTTP status separately from transport failures for the error details.
      */
-    private fun validateStatus(url: String): Result<Int> {
-        try {
-            val requestBuilder = okhttp3.Request.Builder()
-                .head()
-                .url(url)
-            return Result.success(httpClient.newCall(requestBuilder.build()).execute().use { it.code })
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (e: Exception) {
-            return Result.failure(e)
-        }
-    }
+    private fun validateStatus(url: String): Result<Int> = probePlaybackStream(httpClient, url)
 
     /**
      * Wrapper around the [NewPipeUtils.getSignatureTimestamp] function which reports exceptions
@@ -354,20 +221,7 @@ object YTPlayerUtils {
     ): Int? {
         return NewPipeUtils.getSignatureTimestamp(videoId)
             .onFailure {
-                reportException(it)
-            }
-            .getOrNull()
-    }
-
-    /**
-     * Wrapper around the [NewPipeUtils.getStreamUrl] function which reports exceptions
-     */
-    private fun findUrlOrNull(
-        format: PlayerResponse.StreamingData.Format,
-        videoId: String
-    ): String? {
-        return NewPipeUtils.getStreamUrl(format, videoId)
-            .onFailure {
+                if (it is CancellationException) throw it
                 reportException(it)
             }
             .getOrNull()
